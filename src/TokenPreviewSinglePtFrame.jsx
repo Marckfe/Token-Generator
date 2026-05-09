@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
+// DIPENDENZA: npm install html-to-image   (usata per l'export PNG — gestisce meglio font custom e position:absolute rispetto a html2canvas)
 // ─────────────────────────────────────────────────────────────────────────────
 // ASSET IMPORTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,8 +161,8 @@ function DRBox({ box, onUpdate, editMode, accentColor = "#c9a227", label, childr
         </div>
       )}
 
-      {/* Contenuto */}
-      <div style={{ width: "100%", height: "100%", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-start", pointerEvents: editMode ? "none" : "auto" }}>
+      {/* Contenuto — overflow visible per non tagliare testo, hidden solo in export */}
+      <div style={{ width: "100%", height: "100%", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
         {children}
       </div>
 
@@ -214,13 +215,36 @@ function ArtLayer({ url, posX, posY, zoom, onUpdate }) {
 // INLINE EDIT — click singolo per entrare in editing
 // ─────────────────────────────────────────────────────────────────────────────
 function InlineEdit({ value, onChange, multiline, style }) {
-  const [ed, setEd] = useState(false);
   const ref = useRef();
-  useEffect(() => { if (ed && ref.current) { ref.current.focus(); ref.current.select?.(); } }, [ed]);
-  const inputStyle = { ...style, background: "rgba(0,0,0,.0)", border: "none", outline: "none", width: "100%", boxSizing: "border-box", resize: "none", padding: 0, margin: 0, lineHeight: "inherit", fontFamily: "inherit", cursor: "text" };
+  // Stile comune — trasparente, nessun bordo, eredita tutto dal parent
+  const inputStyle = {
+    ...style,
+    background: "transparent",
+    border: "none",
+    outline: "none",
+    boxShadow: "none",
+    width: "100%",
+    boxSizing: "border-box",
+    resize: "none",
+    padding: 0,
+    margin: 0,
+    lineHeight: style?.lineHeight || 1.3,
+    fontFamily: style?.fontFamily || "inherit",
+    fontSize: style?.fontSize || "inherit",
+    fontWeight: style?.fontWeight || "inherit",
+    color: style?.color || "inherit",
+    textAlign: style?.textAlign || "left",
+    textTransform: style?.textTransform || "none",
+    letterSpacing: style?.letterSpacing || "normal",
+    cursor: "text",
+    caretColor: "#c9a227",
+    // Importante: evita che il browser aggiunga stili nativi agli input
+    WebkitAppearance: "none",
+    appearance: "none",
+  };
   if (multiline) return (
     <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)}
-      style={{ ...inputStyle, height: "100%", wordBreak: "break-word", whiteSpace: "pre-wrap" }} />
+      style={{ ...inputStyle, height: "100%", wordBreak: "break-word", whiteSpace: "pre-wrap", overflowY: "hidden" }} />
   );
   return <input ref={ref} type="text" value={value} onChange={e => onChange(e.target.value)} style={inputStyle} />;
 }
@@ -448,17 +472,58 @@ export default function MagicTokenEditor() {
 
   const handleDownload = async () => {
     if (downloading) return;
-    const wasEdit = editMode; setEditMode(false);
+    // 1. Disattiva editMode per rimuovere bordi/overlay PRIMA di catturare
+    setEditMode(false);
     setDownloading(true);
-    await new Promise(r => setTimeout(r, 120));
+    // 2. Aspetta due frame di rendering per essere sicuri che il DOM sia aggiornato
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await new Promise(r => setTimeout(r, 80));
     try {
-      const lib = (await import("html2canvas")).default;
-      const canvas = await lib(cardRef.current, { scale: 4, useCORS: true, allowTaint: true, logging: false, backgroundColor: null });
+      const { toPng } = await import("html-to-image");
+      const dataUrl = await toPng(cardRef.current, {
+        pixelRatio: 4,
+        width: CW,
+        height: CH,
+        style: {
+          // Forza dimensioni esatte — evita che il browser scala la carta
+          width: CW + "px",
+          height: CH + "px",
+          borderRadius: "16px",
+          overflow: "hidden",
+        },
+        skipFonts: false,
+        cacheBust: true,
+      });
       const a = document.createElement("a");
       a.download = `${name.replace(/[^a-z0-9_]/gi, "_")}_token.png`;
-      a.href = canvas.toDataURL("image/png"); a.click();
-    } catch (err) { alert("Errore export: " + err.message); }
-    finally { setDownloading(false); setEditMode(wasEdit); }
+      a.href = dataUrl;
+      a.click();
+    } catch (err) {
+      // Fallback a html2canvas se html-to-image non disponibile
+      try {
+        const lib = (await import("html2canvas")).default;
+        const rect = cardRef.current.getBoundingClientRect();
+        const canvas = await lib(cardRef.current, {
+          scale: 4,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: null,
+          x: 0, y: 0,
+          width: CW,
+          height: CH,
+          windowWidth: CW,
+          windowHeight: CH,
+          scrollX: -rect.left,
+          scrollY: -rect.top,
+        });
+        const a = document.createElement("a");
+        a.download = `${name.replace(/[^a-z0-9_]/gi, "_")}_token.png`;
+        a.href = canvas.toDataURL("image/png");
+        a.click();
+      } catch (e2) { alert("Errore export: " + e2.message); }
+    }
+    finally { setDownloading(false); }
   };
 
   const fontFamily = (f) => f === "body" ? FB : FT;
@@ -498,7 +563,7 @@ export default function MagicTokenEditor() {
           </div>
 
           {/* CARTA */}
-          <div ref={cardRef} style={{ width: CW, height: CH, position: "relative", borderRadius: 16, overflow: "hidden", flexShrink: 0, background: "#080806", boxShadow: "0 10px 50px rgba(0,0,0,.85), 0 0 0 1px rgba(201,162,39,.15)" }}>
+          <div ref={cardRef} style={{ width: CW, height: CH, position: "relative", borderRadius: 16, overflow: "hidden", flexShrink: 0, background: "#080806", boxShadow: "0 10px 50px rgba(0,0,0,.85), 0 0 0 1px rgba(201,162,39,.15)", transform: "none", isolation: "isolate" }}>
 
             {/* ARTWORK z:1 */}
             <div style={{ position: "absolute", inset: 0, zIndex: 1 }}>
