@@ -1,0 +1,37 @@
+@font-face {
+  font-family: 'MatrixBold';
+  src: url('./Matrix-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'BelerenBold';
+  src: url('./Beleren2016-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'magic-font';
+  src: url('./magic-font.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Mplantin';
+  src: url('./Mplantin.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'MatrixBoldSmallCaps';
+  src: url('./MatrixBoldSmallCaps.ttf') format("truetype");
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Altri font... */
