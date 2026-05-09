@@ -20,43 +20,24 @@ function groupFramesBySet(all) {
   return map;
 }
 const FRAME_MAP = groupFramesBySet(ALL_FRAME_SETS);
-const framePT  = import.meta.glob("/src/assets/frames/pt/*.{png,jpg,jpeg,webp,svg}", { eager: true, import: "default" });
+const framePT   = import.meta.glob("/src/assets/frames/pt/*.{png,jpg,jpeg,webp,svg}", { eager: true, import: "default" });
 const PT_FRAMES = Object.entries(framePT).map(([p, url]) => ({ name: p.split("/").pop().replace(/\.[a-z]+$/, ""), url }));
 const SYMBOLS   = import.meta.glob("/src/assets/simbol/*.{svg,png,jpg,jpeg,webp}", { eager: true, import: "default" });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DIMENSIONI — usiamo direttamente 460px di larghezza display
-// Tutte le posizioni sono in percentuale o calcolate su questa base
+// DIMENSIONI CARTA — proporzione reale MTG 63×88mm
 // ─────────────────────────────────────────────────────────────────────────────
-const CW = 460;   // card width  (display)
-const CH = 660;   // card height (display) — proporzione MTG 2.5"×3.5" = 63×88mm ≈ 460×644, arrotondiamo a 660
+const CW = 460;
+const CH = Math.round(CW * 88 / 63); // 644px
 
-// Posizioni % rispetto a CW/CH — verificate empiricamente sui frame MTG
-const POS = {
-  // Barra nome: strip in cima al frame
-  namebar:  { top: pct(CH, 2.2),  left: pct(CW, 9.5), right: pct(CW, 13.5), h: pct(CH, 6.5) },
-  // Mana cost: angolo destra barra nome
-  manabar:  { top: pct(CH, 2.2),  right: pct(CW, 1.5), h: pct(CH, 6.5) },
-  // Riga tipo
-  typebar:  { top: pct(CH, 79.2), left: pct(CW, 7.5),  right: pct(CW, 10.5), h: pct(CH, 4.8) },
-  // Text box
-  textbox:  { top: pct(CH, 84.5), left: pct(CW, 6.5),  w: pct(CW, 87),       h: pct(CH, 12.8) },
-  // P/T frame
-  ptframe:  { bottom: pct(CH, 2.3), right: pct(CW, 1.8), w: pct(CW, 14.5),   h: pct(CH, 7.8) },
-  // Info
-  infoL:    { bottom: pct(CH, 0.8), left: pct(CW, 1.5) },
-  infoR:    { bottom: pct(CH, 0.8), right: pct(CW, 2.5) },
-};
-function pct(base, p) { return (base * p / 100); }
-
-// Font families MTG
-const FF_TITLE = "'Beleren','MatrixSC','Cinzel Decorative','Georgia',serif";
-const FF_BODY  = "'MPlantin','Palatino Linotype','Book Antiqua','Georgia',serif";
+// Font
+const FT = "'Beleren','MatrixSC','Cinzel','Georgia',serif";
+const FB = "'MPlantin','Palatino Linotype','Book Antiqua','Georgia',serif";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MANA SYMBOL PARSER
+// MANA PARSER
 // ─────────────────────────────────────────────────────────────────────────────
-function ManaLine({ text, fontSize, color }) {
+function ManaLine({ text, fontSize = 13, color = "#181818" }) {
   const rx = /{([^}]+)}/g;
   const parts = []; let last = 0, m;
   while ((m = rx.exec(text)) !== null) {
@@ -67,59 +48,127 @@ function ManaLine({ text, fontSize, color }) {
     last = rx.lastIndex;
   }
   if (last < text.length) parts.push({ t: "txt", v: text.slice(last) });
-  const sz = fontSize || 14;
   return (
-    <span style={{ fontSize: sz, color, fontFamily: FF_BODY, lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+    <span style={{ fontSize, color, fontFamily: FB, lineHeight: 1.4, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
       {parts.map((p, i) =>
         p.t === "txt" ? <span key={i}>{p.v}</span>
-        : p.url ? <img key={i} src={p.url} alt={`{${p.v}}`}
-            style={{ width: sz * 1.1, height: sz * 1.1, verticalAlign: "middle", display: "inline-block", margin: "0 1px", position: "relative", top: -1 }} />
-        : <span key={i} style={{ fontWeight: 700, color: "#c9a227" }}>{`{${p.v}}`}</span>
+        : p.url
+          ? <img key={i} src={p.url} alt={`{${p.v}}`}
+              style={{ width: fontSize * 1.1, height: fontSize * 1.1, verticalAlign: "middle", display: "inline-block", margin: "0 1px", position: "relative", top: -1 }} />
+          : <span key={i} style={{ color: "#c9a227", fontWeight: 700 }}>{`{${p.v}}`}</span>
       )}
     </span>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INLINE EDITABLE — doppio click sulla carta per modificare
+// DRAGGABLE + RESIZABLE TEXT BOX — il cuore del sistema
 // ─────────────────────────────────────────────────────────────────────────────
-function IE({ value, onChange, multiline, fillParent, children, style }) {
-  const [ed, setEd] = useState(false);
-  const ref = useRef();
-  useEffect(() => { if (ed && ref.current) ref.current.focus(); }, [ed]);
-  const base = {
-    ...style,
-    background: "rgba(0,0,0,.8)",
-    border: "2px solid #c9a227",
-    borderRadius: 3,
-    outline: "none",
-    color: style?.color || "#fff",
-    fontFamily: style?.fontFamily || FF_BODY,
-    fontSize: style?.fontSize || 14,
-    padding: "2px 5px",
-    resize: "none",
-    width: "100%",
-    boxSizing: "border-box",
-    lineHeight: style?.lineHeight || 1.4,
-  };
-  const wrap = {
-    width: "100%",
-    height: fillParent ? "100%" : "auto",
-    cursor: "text",
-    position: "relative",
-    display: "flex",
-    alignItems: "center",
-    ...(fillParent ? {} : {}),
-  };
-  return (
-    <div style={wrap} onDoubleClick={e => { e.stopPropagation(); setEd(true); }}
-      title={ed ? "" : "✏ Doppio click per modificare"}>
-      {ed
-        ? multiline
-          ? <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)} onBlur={() => setEd(false)} style={{ ...base, height: "100%", minHeight: 60 }} />
-          : <input ref={ref} type="text" value={value} onChange={e => onChange(e.target.value)} onBlur={() => setEd(false)} onKeyDown={e => e.key === "Enter" && setEd(false)} style={base} />
-        : children
+// box: { x, y, w, h } — tutte in px, relative alla carta
+// onUpdate(newBox)
+// editMode: true = mostra bordi/handle, false = solo testo
+function DRBox({ box, onUpdate, editMode, accentColor = "#c9a227", label, children }) {
+  const dragging = useRef(false);
+  const resizing = useRef(null); // quale handle: "se","sw","ne","nw","e","w","s","n"
+  const startRef = useRef({});
+  const boxRef   = useRef(box);
+  boxRef.current = box;
+
+  // ── DRAG ─────────────────────────────────────────────────────────────────
+  const startDrag = useCallback((e) => {
+    if (!editMode) return;
+    e.preventDefault(); e.stopPropagation();
+    dragging.current = true;
+    startRef.current = { mx: e.clientX, my: e.clientY, bx: box.x, by: box.y };
+  }, [editMode, box]);
+
+  // ── RESIZE ───────────────────────────────────────────────────────────────
+  const startResize = useCallback((e, handle) => {
+    if (!editMode) return;
+    e.preventDefault(); e.stopPropagation();
+    resizing.current = handle;
+    startRef.current = { mx: e.clientX, my: e.clientY, ...boxRef.current };
+  }, [editMode]);
+
+  useEffect(() => {
+    const MIN = 40;
+    const onMove = (e) => {
+      const dx = e.clientX - startRef.current.mx;
+      const dy = e.clientY - startRef.current.my;
+      if (dragging.current) {
+        onUpdate({
+          ...boxRef.current,
+          x: Math.max(0, Math.min(CW - boxRef.current.w, startRef.current.bx + dx)),
+          y: Math.max(0, Math.min(CH - boxRef.current.h, startRef.current.by + dy)),
+        });
+      } else if (resizing.current) {
+        const h = resizing.current;
+        let { x, y, w, ww: ow, h: oh } = { ...startRef.current, ww: startRef.current.w };
+        let nx = x, ny = y, nw = ow, nh = oh;
+        if (h.includes("e"))  nw = Math.max(MIN, ow + dx);
+        if (h.includes("w"))  { nw = Math.max(MIN, ow - dx); nx = x + (ow - nw); }
+        if (h.includes("s"))  nh = Math.max(MIN, oh + dy);
+        if (h.includes("n"))  { nh = Math.max(MIN, oh - dy); ny = y + (oh - nh); }
+        onUpdate({
+          x: Math.max(0, nx),
+          y: Math.max(0, ny),
+          w: Math.min(CW - Math.max(0, nx), nw),
+          h: Math.min(CH - Math.max(0, ny), nh),
+        });
       }
+    };
+    const onUp = () => { dragging.current = false; resizing.current = null; };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup",   onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [onUpdate]);
+
+  const handleStyle = (pos) => {
+    const SIZE = 10;
+    const half = SIZE / 2;
+    const base = { position: "absolute", width: SIZE, height: SIZE, background: accentColor, borderRadius: 2, zIndex: 20, cursor: `${pos}-resize` };
+    const corners = {
+      nw: { top: -half, left: -half }, ne: { top: -half, right: -half },
+      sw: { bottom: -half, left: -half }, se: { bottom: -half, right: -half },
+      n:  { top: -half, left: "50%", transform: "translateX(-50%)" },
+      s:  { bottom: -half, left: "50%", transform: "translateX(-50%)" },
+      e:  { right: -half, top: "50%", transform: "translateY(-50%)" },
+      w:  { left: -half, top: "50%", transform: "translateY(-50%)" },
+    };
+    return { ...base, ...corners[pos] };
+  };
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: box.x, top: box.y, width: box.w, height: box.h,
+        zIndex: editMode ? 10 : 4,
+        cursor: editMode ? "move" : "default",
+        boxSizing: "border-box",
+        border: editMode ? `2px dashed ${accentColor}99` : "none",
+        background: editMode ? `${accentColor}18` : "transparent",
+        borderRadius: 3,
+        userSelect: editMode ? "none" : "auto",
+      }}
+      onMouseDown={startDrag}
+    >
+      {/* Etichetta zona */}
+      {editMode && (
+        <div style={{ position: "absolute", top: -20, left: 0, fontSize: 9, fontWeight: 700, color: accentColor, background: "rgba(0,0,0,.75)", padding: "1px 5px", borderRadius: 3, whiteSpace: "nowrap", zIndex: 21, letterSpacing: ".04em", textTransform: "uppercase" }}>
+          {label}
+        </div>
+      )}
+
+      {/* Contenuto */}
+      <div style={{ width: "100%", height: "100%", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-start", pointerEvents: editMode ? "none" : "auto" }}>
+        {children}
+      </div>
+
+      {/* Resize handles — solo in editMode */}
+      {editMode && ["nw","ne","sw","se","n","s","e","w"].map(h => (
+        <div key={h} style={handleStyle(h)} onMouseDown={e => startResize(e, h)} />
+      ))}
     </div>
   );
 }
@@ -127,37 +176,34 @@ function IE({ value, onChange, multiline, fillParent, children, style }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // ARTWORK DRAG
 // ─────────────────────────────────────────────────────────────────────────────
-function ArtLayer({ url, posX, posY, scale, onUpdate }) {
-  const dragging = useRef(false);
-  const start    = useRef({});
-  const onDown = e => {
-    dragging.current = true;
-    start.current = { cx: e.clientX, cy: e.clientY, px: posX, py: posY };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup",   onUp);
-  };
-  const onMove = useCallback(e => {
-    if (!dragging.current) return;
-    // ogni 5px di spostamento mouse = ~1% di spostamento immagine
-    const dx = (start.current.cx - e.clientX) / 5;
-    const dy = (start.current.cy - e.clientY) / 5;
-    onUpdate(
-      Math.max(0, Math.min(100, start.current.px + dx)),
-      Math.max(0, Math.min(100, start.current.py + dy))
-    );
+function ArtLayer({ url, posX, posY, zoom, onUpdate }) {
+  const drag = useRef(false);
+  const s    = useRef({});
+  const onDown = useCallback(e => {
+    if (e.button !== 0) return;
+    drag.current = true;
+    s.current = { x: e.clientX, y: e.clientY, px: posX, py: posY };
+    e.preventDefault();
+  }, [posX, posY]);
+  useEffect(() => {
+    const mv = e => {
+      if (!drag.current) return;
+      const sens = 0.1;
+      onUpdate(
+        Math.max(0, Math.min(100, s.current.px + (s.current.x - e.clientX) * sens)),
+        Math.max(0, Math.min(100, s.current.py + (s.current.y - e.clientY) * sens))
+      );
+    };
+    const up = () => { drag.current = false; };
+    window.addEventListener("mousemove", mv);
+    window.addEventListener("mouseup",   up);
+    return () => { window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); };
   }, [onUpdate]);
-  const onUp = useCallback(() => {
-    dragging.current = false;
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("mouseup",   onUp);
-  }, [onMove]);
-  useEffect(() => () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); }, []);
-
   return (
-    <div style={{ position: "absolute", inset: 0, cursor: "move", overflow: "hidden" }} onMouseDown={onDown}>
+    <div onMouseDown={onDown} style={{ position: "absolute", inset: 0, cursor: "move", overflow: "hidden" }}>
       <img src={url} alt="art" draggable={false}
         style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-          width: `${scale}%`, height: `${scale}%`, minWidth: "100%", minHeight: "100%",
+          width: `${zoom}%`, height: `${zoom}%`, minWidth: "100%", minHeight: "100%",
           objectFit: "cover", objectPosition: `${posX}% ${posY}%`,
           userSelect: "none", pointerEvents: "none" }} />
     </div>
@@ -165,39 +211,52 @@ function ArtLayer({ url, posX, posY, scale, onUpdate }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UI COMPONENTS
+// INLINE EDIT — click singolo per entrare in editing
 // ─────────────────────────────────────────────────────────────────────────────
-const G = "#c9a227";   // gold accent
-const BG = "#1c1b19";  // panel bg
-const BR = "#2a2927";  // border
+function InlineEdit({ value, onChange, multiline, style }) {
+  const [ed, setEd] = useState(false);
+  const ref = useRef();
+  useEffect(() => { if (ed && ref.current) { ref.current.focus(); ref.current.select?.(); } }, [ed]);
+  const inputStyle = { ...style, background: "rgba(0,0,0,.0)", border: "none", outline: "none", width: "100%", boxSizing: "border-box", resize: "none", padding: 0, margin: 0, lineHeight: "inherit", fontFamily: "inherit", cursor: "text" };
+  if (multiline) return (
+    <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)}
+      style={{ ...inputStyle, height: "100%", wordBreak: "break-word", whiteSpace: "pre-wrap" }} />
+  );
+  return <input ref={ref} type="text" value={value} onChange={e => onChange(e.target.value)} style={inputStyle} />;
+}
 
-function Accordion({ icon, title, open: defaultOpen = false, children }) {
-  const [open, setOpen] = useState(defaultOpen);
+// ─────────────────────────────────────────────────────────────────────────────
+// UI PRIMITIVES
+// ─────────────────────────────────────────────────────────────────────────────
+const G = "#c9a227";
+const PBG = "#1c1b19";
+const BD = "#2a2927";
+
+function Acc({ icon, title, open: def = false, children }) {
+  const [open, setOpen] = useState(def);
   return (
-    <div style={{ background: BG, border: `1px solid ${BR}`, borderRadius: 10, overflow: "hidden", marginBottom: 5 }}>
-      <button onClick={() => setOpen(o => !o)}
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "11px 15px", background: "none", border: "none", color: G, fontWeight: 700, fontSize: ".88rem", cursor: "pointer" }}>
+    <div style={{ background: PBG, border: `1px solid ${BD}`, borderRadius: 10, overflow: "hidden", marginBottom: 5 }}>
+      <button onClick={() => setOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "11px 15px", background: "none", border: "none", color: G, fontWeight: 700, fontSize: ".87rem", cursor: "pointer" }}>
         <span>{icon} {title}</span>
         <span style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .2s", display: "inline-block" }}>▾</span>
       </button>
-      {open && <div style={{ padding: "13px 15px", borderTop: `1px solid ${BR}`, display: "flex", flexDirection: "column", gap: 10 }}>{children}</div>}
+      {open && <div style={{ padding: "12px 14px", borderTop: `1px solid ${BD}`, display: "flex", flexDirection: "column", gap: 9 }}>{children}</div>}
     </div>
   );
 }
-
-const Lbl = ({ children }) => <div style={{ fontSize: ".7rem", color: "#797876", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 3 }}>{children}</div>;
+const Lbl = ({ c, children }) => <div style={{ fontSize: ".7rem", color: c || "#797876", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 2 }}>{children}</div>;
 
 const TF = ({ value, onChange, multiline, rows, disabled, placeholder }) => {
-  const s = { background: "#252420", border: `1px solid ${BR}`, borderRadius: 6, color: "#cdccca", padding: "7px 10px", fontSize: ".83rem", width: "100%", outline: "none", fontFamily: "inherit", boxSizing: "border-box" };
-  if (multiline) return <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows||4} disabled={disabled} placeholder={placeholder} style={{ ...s, resize: "vertical", lineHeight: 1.5 }} />;
+  const s = { background: "#252420", border: `1px solid ${BD}`, borderRadius: 6, color: "#cdccca", padding: "7px 10px", fontSize: ".83rem", width: "100%", outline: "none", fontFamily: "inherit", boxSizing: "border-box" };
+  if (multiline) return <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows || 4} disabled={disabled} placeholder={placeholder} style={{ ...s, resize: "vertical", lineHeight: 1.5 }} />;
   return <input type="text" value={value} onChange={e => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} style={s} />;
 };
 
-const Slider = ({ label, value, onChange, min, max, step = 1 }) => (
+const Sld = ({ label, value, onChange, min, max, step = 1 }) => (
   <div>
     <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "#797876", marginBottom: 2 }}>
       <span>{label}</span>
-      <span style={{ color: G, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{typeof value === "number" ? value.toFixed(step < 1 ? 1 : 0) : value}</span>
+      <span style={{ color: G, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{Number(value).toFixed(step < 1 ? 1 : 0)}</span>
     </div>
     <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} style={{ width: "100%", accentColor: G }} />
   </div>
@@ -206,99 +265,179 @@ const Slider = ({ label, value, onChange, min, max, step = 1 }) => (
 const CP = ({ label, value, onChange }) => (
   <div>
     {label && <Lbl>{label}</Lbl>}
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <input type="color" value={value} onChange={e => onChange(e.target.value)}
-        style={{ width: 32, height: 28, border: `2px solid ${BR}`, borderRadius: 5, background: "none", cursor: "pointer", padding: 0, flexShrink: 0 }} />
-      <input type="text" value={value} onChange={e => onChange(e.target.value)}
-        style={{ background: "#252420", border: `1px solid ${BR}`, borderRadius: 6, color: "#cdccca", padding: "5px 8px", fontSize: ".78rem", width: 86, fontFamily: "monospace", outline: "none" }} />
+    <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+      <input type="color" value={value} onChange={e => onChange(e.target.value)} style={{ width: 32, height: 28, border: `2px solid ${BD}`, borderRadius: 4, background: "none", cursor: "pointer", padding: 0, flexShrink: 0 }} />
+      <input type="text" value={value} onChange={e => onChange(e.target.value)} style={{ background: "#252420", border: `1px solid ${BD}`, borderRadius: 6, color: "#cdccca", padding: "5px 8px", fontSize: ".78rem", width: 84, fontFamily: "monospace", outline: "none" }} />
     </div>
   </div>
 );
 
 const Chk = ({ label, checked, onChange }) => (
-  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: ".83rem", color: "#797876", userSelect: "none" }}>
+  <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", fontSize: ".83rem", color: "#797876", userSelect: "none" }}>
     <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ width: 14, height: 14, accentColor: G }} />
     {label}
   </label>
 );
 
-const GoldBtn = ({ onClick, disabled, children, full }) => (
-  <button onClick={onClick} disabled={disabled}
-    style={{ background: disabled ? "#2e2d2b" : G, color: disabled ? "#555" : "#0f0e0c", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: ".84rem", fontWeight: 900, cursor: disabled ? "not-allowed" : "pointer", width: full ? "100%" : "auto", transition: "filter .15s" }}
-    onMouseEnter={e => !disabled && (e.currentTarget.style.filter = "brightness(1.1)")}
-    onMouseLeave={e => e.currentTarget.style.filter = ""}>
-    {children}
-  </button>
-);
+const GBtn = ({ onClick, children, variant = "gold", full, disabled }) => {
+  const v = {
+    gold:  { background: G, color: "#0f0e0c", border: "none", fontWeight: 900 },
+    ghost: { background: "none", color: "#797876", border: `1px solid ${BD}`, fontWeight: 600 },
+    blue:  { background: "#1d4ed8", color: "#fff", border: "none", fontWeight: 700 },
+    teal:  { background: "#0d7377", color: "#fff", border: "none", fontWeight: 700 },
+  };
+  return (
+    <button onClick={onClick} disabled={disabled}
+      style={{ ...v[variant], borderRadius: 8, padding: "8px 14px", fontSize: ".82rem", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? .5 : 1, width: full ? "100%" : "auto", transition: "filter .15s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+      onMouseEnter={e => !disabled && (e.currentTarget.style.filter = "brightness(1.12)")}
+      onMouseLeave={e => e.currentTarget.style.filter = ""}>
+      {children}
+    </button>
+  );
+};
 
-const GhostBtn = ({ onClick, children }) => (
-  <button onClick={onClick}
-    style={{ background: "none", color: "#797876", border: `1px solid ${BR}`, borderRadius: 7, padding: "7px 12px", fontSize: ".78rem", fontWeight: 600, cursor: "pointer" }}>
-    {children}
-  </button>
-);
-
-const COLOR_PRESETS = ["#181818","#f5f5f0","#c9a227","#e8dfc8","#ffffff"];
+const CPRESETS = ["#181818","#f5f5f0","#c9a227","#e8dfc8","#ffffff"];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN EDITOR
+// DEFAULT BOX POSITIONS — percentuali convertite in px, facilmente modificabili
+// ─────────────────────────────────────────────────────────────────────────────
+const pct = (base, p) => Math.round(base * p / 100);
+const DEFAULT_BOXES = {
+  name: { x: pct(CW, 9),  y: pct(CH, 2.8), w: pct(CW, 72), h: pct(CH, 6.5) },
+  type: { x: pct(CW, 7.5),y: pct(CH, 79),  w: pct(CW, 72), h: pct(CH, 5.5) },
+  text: { x: pct(CW, 7),  y: pct(CH, 85),  w: pct(CW, 86), h: pct(CH, 12.5) },
+  pt:   { x: pct(CW, 83), y: pct(CH, 90),  w: pct(CW, 13), h: pct(CH, 7) },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN
 // ─────────────────────────────────────────────────────────────────────────────
 export default function MagicTokenEditor() {
   const allSets = Object.keys(FRAME_MAP);
 
-  // STATO
-  const [name,        setName]        = useState("CONSTRUCT");
-  const [nameFs,      setNameFs]      = useState(20);
-  const [nameColor,   setNameColor]   = useState("#181818");
-  const [nameOffX,    setNameOffX]    = useState(0);
+  // Boxes — ogni testo ha la sua posizione/dimensione draggabile
+  const [boxes, setBoxes] = useState({ ...DEFAULT_BOXES });
+  const updateBox = (key, b) => setBoxes(prev => ({ ...prev, [key]: b }));
+  const resetBoxes = () => setBoxes({ ...DEFAULT_BOXES });
+  const exportLayout = () => {
+    const data = JSON.stringify(boxes, null, 2);
+    navigator.clipboard.writeText(data).then(
+      () => alert("✅ Layout copiato negli appunti!"),
+      () => {
+        // fallback: download file
+        const blob = new Blob([data], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `layout_${name.replace(/[^a-z0-9_]/gi,"_")}.json`;
+        a.click();
+      }
+    );
+  };
 
-  const [manaCost,    setManaCost]    = useState("{5}");
-  const [showMana,    setShowMana]    = useState(false);
+  const importLayout = () => {
+    const s = prompt("📥 Incolla il JSON del layout:");
+    if (!s) return;
+    try {
+      const parsed = JSON.parse(s);
+      // Valida che abbia le chiavi giuste
+      const required = ["name","type","text","pt"];
+      for (const k of required) {
+        if (!parsed[k] || typeof parsed[k].x !== "number") throw new Error(`Chiave mancante: ${k}`);
+      }
+      setBoxes(parsed);
+    } catch (e) { alert("❌ JSON non valido: " + e.message); }
+  };
 
-  const [type,        setType]        = useState("Token Artifact Creature — Construct");
-  const [typeFs,      setTypeFs]      = useState(15);
-  const [typeColor,   setTypeColor]   = useState("#181818");
+  const saveLayoutFile = () => {
+    const data = JSON.stringify(boxes, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `layout_${name.replace(/[^a-z0-9_]/gi,"_") || "token"}.json`;
+    a.click();
+  };
 
-  const [ability,     setAbility]     = useState("This creature gets +1/+1 for each artifact you control.\n{T}: Add {G} or {R}.");
-  const [abilityFs,   setAbilityFs]   = useState(11);
-  const [abilityColor,setAbilityColor]= useState("#181818");
-  const [showAbility, setShowAbility] = useState(true);
+  const loadLayoutFile = (e) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        const required = ["name","type","text","pt"];
+        for (const k of required) {
+          if (!parsed[k] || typeof parsed[k].x !== "number") throw new Error(`Chiave mancante: ${k}`);
+        }
+        setBoxes(parsed);
+        alert("✅ Layout importato!");
+      } catch (ex) { alert("❌ File non valido: " + ex.message); }
+    };
+    reader.readAsText(file); e.target.value = null;
+  };
 
-  const [flavor,      setFlavor]      = useState("");
-  const [showFlavor,  setShowFlavor]  = useState(false);
-  const [flavorFs,    setFlavorFs]    = useState(10);
 
-  const [power,       setPower]       = useState("0");
-  const [toughness,   setToughness]   = useState("0");
-  const [ptFs,        setPtFs]        = useState(22);
-  const [ptColor,     setPtColor]     = useState("#181818");
-  const [showPT,      setShowPT]      = useState(true);
+  // Modalità edit overlay
+  const [editMode, setEditMode] = useState(true); // default ON per guidare l'utente
+  const [activeBox, setActiveBox] = useState(null); // quale pannello è aperto
 
-  const [frameSet,    setFrameSet]    = useState(allSets[0] || "");
-  const [frameIdx,    setFrameIdx]    = useState(0);
-  const [ptFrameIdx,  setPtFrameIdx]  = useState(0);
+  // Testo
+  const [name,         setName]          = useState("CONSTRUCT");
+  const [nameFs,       setNameFs]         = useState(20);
+  const [nameColor,    setNameColor]      = useState("#181818");
+  const [nameAlign,    setNameAlign]      = useState("center");
+  const [nameBold,     setNameBold]       = useState(true);
+  const [nameFont,     setNameFont]       = useState("title"); // title|body
 
-  const [artUrl,      setArtUrl]      = useState("");
-  const [artX,        setArtX]        = useState(50);
-  const [artY,        setArtY]        = useState(30);
-  const [artZoom,     setArtZoom]     = useState(100);
+  const [manaCost,     setManaCost]       = useState("{5}");
+  const [showMana,     setShowMana]       = useState(false);
 
-  const [year,        setYear]        = useState("2025");
-  const [rarity,      setRarity]      = useState("P");
-  const [setCode,     setSetCode]     = useState("MTG");
-  const [lang,        setLang]        = useState("EN");
-  const [artist,      setArtist]      = useState("Jn Avon");
-  const [showInfo,    setShowInfo]    = useState(true);
-  const [showCopy,    setShowCopy]    = useState(true);
-  const [infoFs,      setInfoFs]      = useState(8);
+  const [type,         setType]           = useState("Token Artifact Creature — Construct");
+  const [typeFs,       setTypeFs]         = useState(14);
+  const [typeColor,    setTypeColor]      = useState("#181818");
+  const [typeAlign,    setTypeAlign]      = useState("left");
 
-  const [downloading, setDownloading] = useState(false);
+  const [ability,      setAbility]        = useState("This creature gets +1/+1 for each artifact you control.\n{T}: Add {G} or {R}.");
+  const [abilityFs,    setAbilityFs]      = useState(11);
+  const [abilityColor, setAbilityColor]   = useState("#181818");
+  const [showAbility,  setShowAbility]    = useState(true);
+
+  const [flavor,       setFlavor]         = useState("");
+  const [showFlavor,   setShowFlavor]     = useState(false);
+  const [flavorFs,     setFlavorFs]       = useState(10);
+
+  const [power,        setPower]          = useState("0");
+  const [toughness,    setToughness]      = useState("0");
+  const [ptFs,         setPtFs]           = useState(22);
+  const [ptColor,      setPtColor]        = useState("#181818");
+  const [showPT,       setShowPT]         = useState(true);
+
+  // Frame
+  const [frameSet,     setFrameSet]       = useState(allSets[0] || "");
+  const [frameIdx,     setFrameIdx]       = useState(0);
+  const [ptFrameIdx,   setPtFrameIdx]     = useState(0);
+
+  // Artwork
+  const [artUrl,       setArtUrl]         = useState("");
+  const [artX,         setArtX]           = useState(50);
+  const [artY,         setArtY]           = useState(30);
+  const [artZoom,      setArtZoom]        = useState(100);
+
+  // Info
+  const [year,         setYear]           = useState("2025");
+  const [rarity,       setRarity]         = useState("T");
+  const [setCode,      setSetCode]        = useState("MTG");
+  const [lang,         setLang]           = useState("EN");
+  const [artist,       setArtist]         = useState("Jn Avon");
+  const [showInfo,     setShowInfo]       = useState(true);
+  const [showCopy,     setShowCopy]       = useState(true);
+  const [infoFs,       setInfoFs]         = useState(8);
+
+  const [downloading,  setDownloading]    = useState(false);
 
   const artInput = useRef();
+  const layoutFileInput = useRef();
   const cardRef  = useRef();
-
-  const frame   = FRAME_MAP[frameSet]?.[frameIdx];
-  const ptFrame = PT_FRAMES[ptFrameIdx];
+  const frame    = FRAME_MAP[frameSet]?.[frameIdx];
+  const ptFrame  = PT_FRAMES[ptFrameIdx];
 
   const handleArt = e => {
     const f = e.target.files?.[0]; if (!f) return;
@@ -308,341 +447,329 @@ export default function MagicTokenEditor() {
   };
 
   const handleDownload = async () => {
-    if (!cardRef.current || downloading) return;
+    if (downloading) return;
+    const wasEdit = editMode; setEditMode(false);
     setDownloading(true);
+    await new Promise(r => setTimeout(r, 120));
     try {
-      const el = cardRef.current;
       const lib = (await import("html2canvas")).default;
-      const canvas = await lib(el, {
-        scale: 4,           // 4× → 1840×2640px, stampa perfetta a 300dpi
-        useCORS: true, allowTaint: true, logging: false, backgroundColor: null,
-      });
+      const canvas = await lib(cardRef.current, { scale: 4, useCORS: true, allowTaint: true, logging: false, backgroundColor: null });
       const a = document.createElement("a");
-      a.download = `${name.replace(/[^a-z0-9_]/gi,"_")}_token.png`;
+      a.download = `${name.replace(/[^a-z0-9_]/gi, "_")}_token.png`;
       a.href = canvas.toDataURL("image/png"); a.click();
-    } catch (e) { alert("Errore: " + e.message); }
-    finally { setDownloading(false); }
+    } catch (err) { alert("Errore export: " + err.message); }
+    finally { setDownloading(false); setEditMode(wasEdit); }
   };
 
-  // ─ Stili posizioni carta ─────────────────────────────────────────
-  const namebarStyle = {
-    position: "absolute",
-    top:    POS.namebar.top,
-    left:   POS.namebar.left + nameOffX,
-    right:  POS.namebar.right - nameOffX,
-    height: POS.namebar.h,
-    display: "flex", alignItems: "center", justifyContent: "center",
-    zIndex: 3,
-  };
-  const typebarStyle = {
-    position: "absolute",
-    top:    POS.typebar.top,
-    left:   POS.typebar.left,
-    right:  POS.typebar.right,
-    height: POS.typebar.h,
-    display: "flex", alignItems: "center",
-    zIndex: 3,
-  };
-  const textboxStyle = {
-    position: "absolute",
-    top:    POS.textbox.top,
-    left:   POS.textbox.left,
-    width:  POS.textbox.w,
-    height: POS.textbox.h,
-    overflow: "hidden",
-    zIndex: 3,
-    display: "flex", flexDirection: "column", justifyContent: "flex-start",
-  };
-  const ptFrameStyle = {
-    position: "absolute",
-    bottom: POS.ptframe.bottom,
-    right:  POS.ptframe.right,
-    width:  POS.ptframe.w,
-    height: POS.ptframe.h,
-    zIndex: 3,
-  };
-  const ptTextStyle = {
-    position: "absolute",
-    bottom: POS.ptframe.bottom,
-    right:  POS.ptframe.right,
-    width:  POS.ptframe.w,
-    height: POS.ptframe.h,
-    display: "flex", alignItems: "center", justifyContent: "center",
-    zIndex: 4,
-  };
-  const infoLStyle = {
-    position: "absolute",
-    bottom: POS.infoL.bottom,
-    left:   POS.infoL.left,
-    zIndex: 3, lineHeight: 1.4,
-  };
-  const infoRStyle = {
-    position: "absolute",
-    bottom: POS.infoR.bottom,
-    right:  POS.infoR.right,
-    zIndex: 3,
-  };
+  const fontFamily = (f) => f === "body" ? FB : FT;
 
-  const fonts = `
+  const FONTS = `
     @font-face{font-family:'Beleren';src:url('/src/assets/fonts/Beleren2016-Bold.ttf') format('truetype');font-weight:bold}
     @font-face{font-family:'MPlantin';src:url('/src/assets/fonts/Mplantin.ttf') format('truetype')}
     @font-face{font-family:'MatrixSC';src:url('/src/assets/fonts/MatrixBoldSmallCaps Bold.ttf') format('truetype')}
     @keyframes spin{to{transform:rotate(360deg)}}
+    * { box-sizing: border-box; }
   `;
+
+  // ── Info position (bottom della carta, non draggabile) ────────────────────
+  const infoPx = pct(CH, 1);
 
   return (
     <>
-      <style>{fonts}</style>
-      <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
+      <style>{FONTS}</style>
+      <div style={{ display: "flex", gap: 22, alignItems: "flex-start", flexWrap: "wrap" }}>
 
-        {/* ══════════════ CARTA ══════════════ */}
+        {/* ═══════════ CARTA ═══════════ */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center", flexShrink: 0 }}>
 
-          {/* Carta: larghezza fissa CW, altezza fissa CH, tutto in px assoluti — nessun scale */}
-          <div ref={cardRef} style={{ width: CW, height: CH, position: "relative", borderRadius: 16, overflow: "hidden", boxShadow: "0 10px 50px rgba(0,0,0,.85), 0 0 0 1px rgba(201,162,39,.2)", background: "#080806", flexShrink: 0 }}>
+          {/* Toolbar sopra la carta */}
+          <div style={{ display: "flex", gap: 8, width: CW, alignItems: "center", flexWrap: "wrap" }}>
+            <GBtn variant={editMode ? "blue" : "ghost"} onClick={() => setEditMode(e => !e)}>
+              {editMode ? "✅ Layout ON" : "📐 Modifica layout"}
+            </GBtn>
+            {editMode && <GBtn variant="ghost" onClick={resetBoxes}>↺ Reset posizioni</GBtn>}
+            {editMode && <GBtn variant="teal" onClick={exportLayout}>📋 Copia layout</GBtn>}
+            {editMode && <GBtn variant="ghost" onClick={saveLayoutFile}>⬇ Salva .json</GBtn>}
+            {editMode && <GBtn variant="ghost" onClick={() => layoutFileInput.current.click()}>📂 Carica .json</GBtn>}
+            <input ref={layoutFileInput} type="file" accept=".json,application/json" style={{display:"none"}} onChange={loadLayoutFile} />
+            <div style={{ marginLeft: "auto", fontSize: ".7rem", color: editMode ? "#60a5fa" : "#3a3937" }}>
+              {editMode ? "Trascina e ridimensiona ogni zona testo" : "✏ Doppio click sui testi per editare"}
+            </div>
+          </div>
 
-            {/* ARTWORK — strato base a tutta carta */}
-            <div style={{ position: "absolute", inset: 0, zIndex: 1, overflow: "hidden" }}>
+          {/* CARTA */}
+          <div ref={cardRef} style={{ width: CW, height: CH, position: "relative", borderRadius: 16, overflow: "hidden", flexShrink: 0, background: "#080806", boxShadow: "0 10px 50px rgba(0,0,0,.85), 0 0 0 1px rgba(201,162,39,.15)" }}>
+
+            {/* ARTWORK z:1 */}
+            <div style={{ position: "absolute", inset: 0, zIndex: 1 }}>
               {artUrl
-                ? <ArtLayer url={artUrl} posX={artX} posY={artY} scale={artZoom} onUpdate={(x, y) => { setArtX(x); setArtY(y); }} />
-                : <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.2)", gap: 10, cursor: "pointer" }}
-                    onClick={() => artInput.current.click()}>
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                ? <ArtLayer url={artUrl} posX={artX} posY={artY} zoom={artZoom} onUpdate={(x, y) => { setArtX(x); setArtY(y); }} />
+                : <div onClick={() => artInput.current.click()} style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.22)", gap: 10, cursor: "pointer" }}>
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                     <span style={{ fontSize: 13, fontStyle: "italic" }}>Clicca per caricare artwork</span>
                   </div>
               }
             </div>
 
-            {/* FRAME — sopra all'artwork */}
-            {frame && (
-              <img src={frame.url} alt="frame" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "fill", zIndex: 2, pointerEvents: "none" }} />
-            )}
+            {/* FRAME z:2 */}
+            {frame && <img src={frame.url} alt="frame" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "fill", zIndex: 2, pointerEvents: "none" }} />}
 
-            {/* NOME */}
-            <div style={namebarStyle}>
-              <IE value={name} onChange={setName}
-                style={{ fontSize: nameFs, color: nameColor, fontFamily: FF_TITLE, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", lineHeight: 1, whiteSpace: "nowrap" }}>
-                <span style={{ fontFamily: FF_TITLE, fontSize: nameFs, fontWeight: 700, color: nameColor, textTransform: "uppercase", letterSpacing: ".04em", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%", display: "block" }}>
-                  {name}
-                </span>
-              </IE>
-            </div>
+            {/* ── NOME ── */}
+            <DRBox box={boxes.name} onUpdate={b => updateBox("name", b)} editMode={editMode} accentColor="#c9a227" label="Nome">
+              <InlineEdit value={name} onChange={setName}
+                style={{ fontSize: nameFs, color: nameColor, fontFamily: fontFamily(nameFont), fontWeight: nameBold ? 700 : 400, textTransform: "uppercase", letterSpacing: ".03em", lineHeight: 1.2, textAlign: nameAlign, width: "100%" }} />
+            </DRBox>
 
-            {/* MANA COST */}
+            {/* ── MANA (solo in editMode o se attivo) ── */}
             {showMana && (
-              <div style={{ position: "absolute", top: POS.manabar.top, right: POS.manabar.right, height: POS.manabar.h, display: "flex", alignItems: "center", gap: 1, zIndex: 3 }}>
-                <ManaLine text={manaCost} fontSize={nameFs * 0.85} color={nameColor} />
+              <div style={{ position: "absolute", left: boxes.name.x + boxes.name.w, top: boxes.name.y, height: boxes.name.h, display: "flex", alignItems: "center", paddingLeft: 4, zIndex: editMode ? 10 : 4 }}>
+                <ManaLine text={manaCost} fontSize={nameFs * 0.9} color={nameColor} />
               </div>
             )}
 
-            {/* RIGA TIPO */}
-            <div style={typebarStyle}>
-              <IE value={type} onChange={setType}
-                style={{ fontSize: typeFs, color: typeColor, fontFamily: FF_TITLE, fontWeight: 700, lineHeight: 1 }}>
-                <span style={{ fontFamily: FF_TITLE, fontSize: typeFs, fontWeight: 700, color: typeColor, lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%", display: "block" }}>
-                  {type}
-                </span>
-              </IE>
-            </div>
+            {/* ── TIPO ── */}
+            <DRBox box={boxes.type} onUpdate={b => updateBox("type", b)} editMode={editMode} accentColor="#60a5fa" label="Tipo">
+              <InlineEdit value={type} onChange={setType}
+                style={{ fontSize: typeFs, color: typeColor, fontFamily: FT, fontWeight: 700, lineHeight: 1.2, textAlign: typeAlign, width: "100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} />
+            </DRBox>
 
-            {/* TEXT BOX */}
+            {/* ── TEXTBOX ABILITÀ ── */}
             {showAbility && (
-              <div style={textboxStyle}>
-                <IE value={ability} onChange={setAbility} multiline fillParent
-                  style={{ fontSize: abilityFs, color: abilityColor, fontFamily: FF_BODY, lineHeight: 1.45, width: "100%" }}>
-                  <div style={{ width: "100%" }}>
-                    {ability.split("\n").map((line, i, arr) => (
-                      <div key={i} style={{ marginBottom: i < arr.length - 1 ? 4 : 0 }}>
-                        <ManaLine text={line} fontSize={abilityFs} color={abilityColor} />
-                      </div>
-                    ))}
-                    {showFlavor && flavor && (
-                      <div style={{ marginTop: 5, paddingTop: 4, borderTop: `1px solid ${abilityColor}55` }}>
-                        <span style={{ fontFamily: FF_BODY, fontSize: flavorFs, color: abilityColor, fontStyle: "italic", lineHeight: 1.35 }}>{flavor}</span>
-                      </div>
-                    )}
-                  </div>
-                </IE>
-              </div>
+              <DRBox box={boxes.text} onUpdate={b => updateBox("text", b)} editMode={editMode} accentColor="#4ade80" label="Abilità">
+                {/* In editMode mostra textarea semplice, altrimenti renderizza con mana symbols */}
+                {editMode
+                  ? <InlineEdit value={ability} onChange={setAbility} multiline
+                      style={{ fontSize: abilityFs, color: abilityColor, fontFamily: FB, fontWeight: 400, lineHeight: 1.45, width: "100%", height: "100%" }} />
+                  : <div style={{ width: "100%", overflow: "hidden" }}>
+                      {ability.split("\n").map((line, i, arr) => (
+                        <div key={i} style={{ marginBottom: i < arr.length - 1 ? 4 : 0 }}>
+                          <ManaLine text={line} fontSize={abilityFs} color={abilityColor} />
+                        </div>
+                      ))}
+                      {showFlavor && flavor && (
+                        <div style={{ marginTop: 5, paddingTop: 4, borderTop: `1px solid ${abilityColor}55` }}>
+                          <span style={{ fontFamily: FB, fontSize: flavorFs, color: abilityColor, fontStyle: "italic", lineHeight: 1.35 }}>{flavor}</span>
+                        </div>
+                      )}
+                    </div>
+                }
+              </DRBox>
             )}
 
-            {/* P/T FRAME */}
+            {/* ── P/T FRAME (non draggabile — posizione = box.pt) ── */}
             {showPT && ptFrame && (
-              <img src={ptFrame.url} alt="pt" style={{ ...ptFrameStyle, objectFit: "fill", pointerEvents: "none" }} />
+              <img src={ptFrame.url} alt="pt"
+                style={{ position: "absolute", left: boxes.pt.x, top: boxes.pt.y, width: boxes.pt.w, height: boxes.pt.h, objectFit: "fill", zIndex: 3, pointerEvents: "none" }} />
             )}
 
-            {/* P/T TESTO */}
+            {/* ── P/T TESTO ── */}
             {showPT && (
-              <div style={ptTextStyle}>
-                <span style={{ fontFamily: FF_TITLE, fontSize: ptFs, fontWeight: 700, color: ptColor, lineHeight: 1, whiteSpace: "nowrap" }}>
-                  {power}/{toughness}
-                </span>
-              </div>
+              <DRBox box={boxes.pt} onUpdate={b => updateBox("pt", b)} editMode={editMode} accentColor="#f87171" label="P/T">
+                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <InlineEdit value={`${power}/${toughness}`} onChange={v => {
+                    const parts = v.split("/");
+                    setPower(parts[0] || "0");
+                    setToughness(parts[1] !== undefined ? parts[1] : toughness);
+                  }}
+                  style={{ fontSize: ptFs, color: ptColor, fontFamily: FT, fontWeight: 700, lineHeight: 1, textAlign: "center", width: "100%" }} />
+                </div>
+              </DRBox>
             )}
 
-            {/* INFO SINISTRA */}
+            {/* ── INFO BASSA ── */}
             {showInfo && (
-              <div style={infoLStyle}>
-                <div style={{ fontSize: infoFs, color: "#909090", fontFamily: "monospace", lineHeight: 1.35 }}>{year} {rarity}</div>
-                <div style={{ fontSize: infoFs, color: "#909090", fontFamily: "monospace", lineHeight: 1.35 }}>{setCode} • {lang}</div>
-                <div style={{ fontSize: infoFs, color: "#909090", fontFamily: "monospace", lineHeight: 1.35 }}>Illus. {artist}</div>
+              <div style={{ position: "absolute", bottom: infoPx, left: pct(CW, 1.5), zIndex: 5, lineHeight: 1.35, pointerEvents: "none" }}>
+                <div style={{ fontSize: infoFs, color: "#909090", fontFamily: "monospace" }}>{rarity} {setCode} • {lang}</div>
+                <div style={{ fontSize: infoFs, color: "#909090", fontFamily: "monospace" }}>Illus. {artist}</div>
               </div>
             )}
-
-            {/* COPYRIGHT */}
             {showCopy && (
-              <div style={infoRStyle}>
-                <span style={{ fontSize: infoFs, color: "#909090", fontFamily: "monospace" }}>© {year} Wizards of the Coast</span>
+              <div style={{ position: "absolute", bottom: infoPx, right: pct(CW, 2), zIndex: 5, pointerEvents: "none" }}>
+                <span style={{ fontSize: infoFs, color: "#909090", fontFamily: "monospace" }}>™ & © {year} Wizards of the Coast</span>
               </div>
             )}
           </div>
 
-          <p style={{ fontSize: ".7rem", color: "#3a3937", textAlign: "center", maxWidth: CW, margin: 0 }}>
-            ✏ Doppio click su nome/tipo/abilità per modificare · 🖱 Trascina artwork per riposizionare
+          <p style={{ fontSize: ".68rem", color: "#3a3937", textAlign: "center", maxWidth: CW, margin: 0 }}>
+            {editMode
+              ? "📐 Trascina le zone colorate · Ridimensiona dai bordi/angoli · Disattiva Layout per editare il testo"
+              : "✏ Clicca su un campo per modificare il testo · 🖱 Trascina artwork per riposizionarlo"}
           </p>
 
-          <GoldBtn onClick={handleDownload} disabled={downloading} full>
+          <GBtn onClick={handleDownload} disabled={downloading} full>
             {downloading
-              ? <><span style={{ width: 14, height: 14, border: "2px solid #555", borderTopColor: G, borderRadius: "50%", animation: "spin .6s linear infinite", display: "inline-block", marginRight: 8 }} />Generazione…</>
+              ? <><span style={{ width: 14, height: 14, border: "2px solid #555", borderTopColor: G, borderRadius: "50%", animation: "spin .6s linear infinite", display: "inline-block" }} />Generazione…</>
               : "⬇ Scarica PNG UHD (4×)"}
-          </GoldBtn>
+          </GBtn>
         </div>
 
-        {/* ══════════════ PANNELLO ══════════════ */}
+        {/* ═══════════ PANNELLO CONTROLLI ═══════════ */}
         <div style={{ flex: 1, minWidth: 280, maxWidth: 420 }}>
 
+          {/* Avviso modalità */}
+          <div style={{ background: editMode ? "#1d3461" : "#1c2918", border: `1px solid ${editMode ? "#2d5be3" : "#2d4a1e"}`, borderRadius: 10, padding: "10px 14px", marginBottom: 8, fontSize: ".78rem", color: editMode ? "#93c5fd" : "#86efac" }}>
+            {editMode
+              ? "📐 Modalità Layout: trascina e ridimensiona le zone sulla carta. Qui configura stile testo."
+              : "✏ Modalità Testo: clicca sui campi sulla carta per modificare."}
+          </div>
+
           {/* FRAME */}
-          <Accordion icon="🖼" title="Frame & Artwork" open={true}>
+          <Acc icon="🖼" title="Frame & Artwork" open={true}>
             <Lbl>Set Frame</Lbl>
             <select value={frameSet} onChange={e => { setFrameSet(e.target.value); setFrameIdx(0); }}
-              style={{ background: "#252420", border: `1px solid ${BR}`, borderRadius: 6, color: "#cdccca", padding: "7px 10px", fontSize: ".83rem", width: "100%", outline: "none" }}>
+              style={{ background: "#252420", border: `1px solid ${BD}`, borderRadius: 6, color: "#cdccca", padding: "7px 10px", fontSize: ".83rem", width: "100%", outline: "none" }}>
               {allSets.map(k => <option key={k} value={k}>{k}</option>)}
             </select>
-
-            {(FRAME_MAP[frameSet]||[]).length > 0 && <>
+            {(FRAME_MAP[frameSet] || []).length > 0 && <>
               <Lbl>Frame specifico</Lbl>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {(FRAME_MAP[frameSet]||[]).map((f, i) => (
+                {(FRAME_MAP[frameSet] || []).map((f, i) => (
                   <button key={f.url} onClick={() => setFrameIdx(i)} title={f.name}
-                    style={{ padding: 2, borderRadius: 4, border: `2px solid ${frameIdx===i?G:BR}`, background: "#1a1a17", cursor: "pointer", transition: "border-color .15s" }}>
+                    style={{ padding: 2, borderRadius: 4, border: `2px solid ${frameIdx === i ? G : BD}`, background: "#1a1a17", cursor: "pointer" }}>
                     <img src={f.url} alt={f.name} style={{ width: 38, height: 54, objectFit: "cover", borderRadius: 2, display: "block" }} />
                   </button>
                 ))}
               </div>
             </>}
-
             {PT_FRAMES.length > 0 && <>
               <Lbl>Frame P/T</Lbl>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {PT_FRAMES.map((f, i) => (
                   <button key={f.url} onClick={() => setPtFrameIdx(i)} title={f.name}
-                    style={{ padding: 2, borderRadius: 4, border: `2px solid ${ptFrameIdx===i?G:BR}`, background: "#1a1a17", cursor: "pointer", transition: "border-color .15s" }}>
+                    style={{ padding: 2, borderRadius: 4, border: `2px solid ${ptFrameIdx === i ? G : BD}`, background: "#1a1a17", cursor: "pointer" }}>
                     <img src={f.url} alt={f.name} style={{ width: 52, height: 32, objectFit: "cover", borderRadius: 2, display: "block" }} />
                   </button>
                 ))}
               </div>
             </>}
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <GoldBtn onClick={() => artInput.current.click()}>🖼 {artUrl ? "Cambia artwork" : "Carica artwork"}</GoldBtn>
-              {artUrl && <GhostBtn onClick={() => setArtUrl("")}>✕ Rimuovi</GhostBtn>}
+            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+              <GBtn onClick={() => artInput.current.click()}>🖼 {artUrl ? "Cambia artwork" : "Carica artwork"}</GBtn>
+              {artUrl && <GBtn variant="ghost" onClick={() => setArtUrl("")}>✕ Rimuovi</GBtn>}
             </div>
             <input ref={artInput} type="file" accept="image/*" style={{ display: "none" }} onChange={handleArt} />
-
             {artUrl && (
-              <div style={{ background: "#252420", borderRadius: 8, padding: "11px 12px", border: `1px solid ${BR}`, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ background: "#252420", borderRadius: 8, padding: "10px 12px", border: `1px solid ${BD}`, display: "flex", flexDirection: "column", gap: 7 }}>
                 <Lbl>🎯 Posizione artwork (o trascina sulla carta)</Lbl>
-                <Slider label="Orizzontale X" value={artX} onChange={setArtX} min={0} max={100} />
-                <Slider label="Verticale Y"   value={artY} onChange={setArtY} min={0} max={100} />
-                <Slider label="Zoom %"        value={artZoom} onChange={setArtZoom} min={100} max={250} />
-                <GhostBtn onClick={() => { setArtX(50); setArtY(30); setArtZoom(100); }}>↺ Reset posizione</GhostBtn>
+                <Sld label="Orizzontale X" value={artX} onChange={setArtX} min={0} max={100} />
+                <Sld label="Verticale Y"   value={artY} onChange={setArtY} min={0} max={100} />
+                <Sld label="Zoom %"        value={artZoom} onChange={setArtZoom} min={100} max={250} />
+                <GBtn variant="ghost" onClick={() => { setArtX(50); setArtY(30); setArtZoom(100); }}>↺ Reset</GBtn>
               </div>
             )}
-          </Accordion>
+          </Acc>
 
           {/* NOME */}
-          <Accordion icon="✏️" title="Nome carta" open={true}>
-            <Lbl>Testo</Lbl>
-            <TF value={name} onChange={setName} />
-            <Slider label="Dimensione" value={nameFs} onChange={setNameFs} min={10} max={38} />
+          <Acc icon="✏️" title="Nome carta" open={true}>
+            <TF value={name} onChange={setName} placeholder="Nome carta…" />
+            <Sld label="Dimensione font" value={nameFs} onChange={setNameFs} min={8} max={40} />
             <CP label="Colore" value={nameColor} onChange={setNameColor} />
-            <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
-              {COLOR_PRESETS.map(c => (
-                <button key={c} onClick={() => setNameColor(c)} title={c}
-                  style={{ width: 22, height: 22, borderRadius: 4, background: c, border: nameColor===c ? `2px solid ${G}` : `2px solid ${BR}`, cursor: "pointer", flexShrink: 0 }} />
-              ))}
-              <span style={{ fontSize: ".7rem", color: "#4a4948" }}>preset rapidi</span>
+            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+              {CPRESETS.map(c => <button key={c} onClick={() => setNameColor(c)} style={{ width: 22, height: 22, borderRadius: 4, background: c, border: nameColor === c ? `2px solid ${G}` : `2px solid ${BD}`, cursor: "pointer" }} />)}
+              <span style={{ fontSize: ".7rem", color: "#4a4948", marginLeft: 4 }}>preset</span>
             </div>
-            <div style={{ background: "#252420", borderRadius: 8, padding: "10px 12px", border: `1px solid ${BR}` }}>
-              <Lbl>Allineamento fine nome (se il frame ha barra asimmetrica)</Lbl>
-              <div style={{ marginTop: 5 }}>
-                <Slider label="Offset orizzontale" value={nameOffX} onChange={setNameOffX} min={-80} max={80} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <Lbl>Allineamento</Lbl>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {["left","center","right"].map(a => (
+                    <button key={a} onClick={() => setNameAlign(a)} style={{ flex: 1, background: nameAlign === a ? G : "#252420", color: nameAlign === a ? "#000" : "#797876", border: `1px solid ${BD}`, borderRadius: 5, padding: "4px 0", fontSize: ".75rem", cursor: "pointer" }}>{a === "left" ? "←" : a === "center" ? "↔" : "→"}</button>
+                  ))}
+                </div>
               </div>
-              <div style={{ marginTop: 6 }}>
-                <GhostBtn onClick={() => setNameOffX(0)}>↺ Centra</GhostBtn>
+              <div style={{ flex: 1 }}>
+                <Lbl>Font</Lbl>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[["title","MTG"], ["body","Serif"]].map(([v, l]) => (
+                    <button key={v} onClick={() => setNameFont(v)} style={{ flex: 1, background: nameFont === v ? G : "#252420", color: nameFont === v ? "#000" : "#797876", border: `1px solid ${BD}`, borderRadius: 5, padding: "4px 0", fontSize: ".72rem", cursor: "pointer" }}>{l}</button>
+                  ))}
+                </div>
               </div>
             </div>
-          </Accordion>
+            <Chk label="Grassetto" checked={nameBold} onChange={setNameBold} />
+          </Acc>
 
           {/* MANA */}
-          <Accordion icon="🔮" title="Costo Mana">
-            <Chk label="Mostra costo mana (es. carte non-token)" checked={showMana} onChange={setShowMana} />
-            <Lbl>Notazione — es: {"{2}{W}{U}"} {"{X}{R}{R}"}</Lbl>
+          <Acc icon="🔮" title="Costo Mana">
+            <Chk label="Mostra costo mana" checked={showMana} onChange={setShowMana} />
+            <p style={{ fontSize: ".7rem", color: "#4a4948", margin: 0 }}>es: {"{2}{W}{U}"} · {"{X}{R}{R}"}</p>
             <TF value={manaCost} onChange={setManaCost} disabled={!showMana} />
-          </Accordion>
+          </Acc>
 
           {/* TIPO */}
-          <Accordion icon="📋" title="Riga Tipo">
+          <Acc icon="📋" title="Riga Tipo">
             <TF value={type} onChange={setType} />
-            <Slider label="Dimensione" value={typeFs} onChange={setTypeFs} min={8} max={24} />
+            <Sld label="Dimensione font" value={typeFs} onChange={setTypeFs} min={8} max={22} />
             <CP label="Colore" value={typeColor} onChange={setTypeColor} />
-          </Accordion>
+            <div style={{ display: "flex", gap: 4 }}>
+              {["left","center","right"].map(a => (
+                <button key={a} onClick={() => setTypeAlign(a)} style={{ flex: 1, background: typeAlign === a ? G : "#252420", color: typeAlign === a ? "#000" : "#797876", border: `1px solid ${BD}`, borderRadius: 5, padding: "4px 0", fontSize: ".75rem", cursor: "pointer" }}>{a === "left" ? "←" : a === "center" ? "↔" : "→"}</button>
+              ))}
+            </div>
+          </Acc>
 
           {/* ABILITÀ */}
-          <Accordion icon="⚡" title="Testo & Abilità">
+          <Acc icon="⚡" title="Testo & Abilità">
             <Chk label="Mostra testo abilità" checked={showAbility} onChange={setShowAbility} />
             <p style={{ fontSize: ".7rem", color: "#4a4948", margin: 0, lineHeight: 1.5 }}>
-              Simboli: {"{W}"} {"{U}"} {"{B}"} {"{R}"} {"{G}"} {"{T}"} {"{2}"} {"{X}"} …<br/>
-              Invio = nuovo paragrafo abilità.
+              Simboli: {"{W}"} {"{U}"} {"{B}"} {"{R}"} {"{G}"} {"{T}"} {"{2}"} {"{X}"}<br/>Invio = paragrafo separato.
             </p>
             <TF value={ability} onChange={setAbility} multiline rows={5} disabled={!showAbility} />
-            <Slider label="Dimensione" value={abilityFs} onChange={setAbilityFs} min={6} max={18} step={0.5} />
+            <Sld label="Dimensione font" value={abilityFs} onChange={setAbilityFs} min={6} max={18} step={0.5} />
             <CP label="Colore testo" value={abilityColor} onChange={setAbilityColor} />
-            <div style={{ borderTop: `1px solid ${BR}`, paddingTop: 8 }}>
-              <Chk label="Flavor text (in corsivo)" checked={showFlavor} onChange={setShowFlavor} />
+            <div style={{ borderTop: `1px solid ${BD}`, paddingTop: 8 }}>
+              <Chk label="Flavor text (corsivo)" checked={showFlavor} onChange={setShowFlavor} />
               {showFlavor && <>
                 <TF value={flavor} onChange={setFlavor} multiline rows={2} placeholder="Testo flavor…" />
-                <Slider label="Dim. flavor" value={flavorFs} onChange={setFlavorFs} min={6} max={16} step={0.5} />
+                <Sld label="Dim. flavor" value={flavorFs} onChange={setFlavorFs} min={6} max={16} step={0.5} />
               </>}
             </div>
-          </Accordion>
+          </Acc>
 
           {/* P/T */}
-          <Accordion icon="⚔️" title="Power / Toughness">
+          <Acc icon="⚔️" title="Power / Toughness">
             <Chk label="Mostra P/T" checked={showPT} onChange={setShowPT} />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 20px 1fr", gap: 8, alignItems: "end" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 16px 1fr", gap: 8, alignItems: "end" }}>
               <div><Lbl>Power</Lbl><TF value={power} onChange={setPower} /></div>
               <div style={{ textAlign: "center", color: "#797876", fontSize: "1.1rem", paddingBottom: 7 }}>/</div>
               <div><Lbl>Toughness</Lbl><TF value={toughness} onChange={setToughness} /></div>
             </div>
-            <Slider label="Dimensione font" value={ptFs} onChange={setPtFs} min={14} max={44} />
+            <Sld label="Dimensione font P/T" value={ptFs} onChange={setPtFs} min={10} max={44} />
             <CP label="Colore P/T" value={ptColor} onChange={setPtColor} />
-          </Accordion>
+          </Acc>
+
+          {/* LAYOUT EXPORT/IMPORT */}
+          <Acc icon="📐" title="Salva / Carica layout posizioni">
+            <p style={{ fontSize: ".75rem", color: "#797876", margin: 0, lineHeight: 1.5 }}>
+              Salva le posizioni di nome, tipo, abilità e P/T per riusarle con lo stesso frame in futuro. Ogni frame MTG ha posizioni diverse — salvale una volta, caricale sempre.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <GBtn variant="teal" onClick={exportLayout}>📋 Copia JSON</GBtn>
+              <GBtn variant="ghost" onClick={saveLayoutFile}>⬇ Scarica .json</GBtn>
+              <GBtn variant="ghost" onClick={() => layoutFileInput.current.click()}>📂 Carica .json</GBtn>
+              <GBtn variant="ghost" onClick={resetBoxes}>↺ Reset default</GBtn>
+            </div>
+            <div style={{ background: "#252420", borderRadius: 8, padding: "10px 12px", border: `1px solid ${BD}`, marginTop: 2 }}>
+              <Lbl>Layout corrente (px)</Lbl>
+              <pre style={{ fontSize: ".68rem", color: "#4ade80", margin: 0, lineHeight: 1.6, overflow: "auto", maxHeight: 160, fontFamily: "monospace" }}>
+                {JSON.stringify(boxes, null, 2)}
+              </pre>
+            </div>
+          </Acc>
 
           {/* INFO */}
-          <Accordion icon="ℹ️" title="Info & Copyright">
+          <Acc icon="ℹ️" title="Info & Copyright">
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <div><Lbl>Anno</Lbl><TF value={year} onChange={setYear} /></div>
-              <div><Lbl>Rarità</Lbl><TF value={rarity} onChange={setRarity} placeholder="P/C/U/R/M" /></div>
+              <div><Lbl>Rarità</Lbl><TF value={rarity} onChange={setRarity} placeholder="T/C/U/R/M" /></div>
               <div><Lbl>Set</Lbl><TF value={setCode} onChange={setSetCode} /></div>
               <div><Lbl>Lingua</Lbl><TF value={lang} onChange={setLang} /></div>
             </div>
             <Lbl>Illustratore</Lbl>
             <TF value={artist} onChange={setArtist} />
-            <Slider label="Dimensione font info" value={infoFs} onChange={setInfoFs} min={6} max={14} />
-            <Chk label="Mostra info set/rarità/artista" checked={showInfo} onChange={setShowInfo} />
-            <Chk label="Mostra © copyright" checked={showCopy} onChange={setShowCopy} />
-          </Accordion>
+            <Sld label="Dim. font info" value={infoFs} onChange={setInfoFs} min={6} max={14} />
+            <Chk label="Mostra info" checked={showInfo} onChange={setShowInfo} />
+            <Chk label="Mostra copyright" checked={showCopy} onChange={setShowCopy} />
+          </Acc>
 
         </div>
       </div>
