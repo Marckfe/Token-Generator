@@ -294,12 +294,14 @@ function TFArea({ value, onChange, placeholder, disabled, rows = 3 }) {
   );
 }
 function Sld({ label, value, onChange, min, max, step = 0.5 }) {
+  const numVal = Number(value) || 0;
   return (
     <div style={{ marginBottom: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#797876", marginBottom: 2 }}>
-        <span>{label}</span><span style={{ color: G }}>{typeof value === "number" ? value.toFixed(1) : value}</span>
+        <span>{label}</span><span style={{ color: G }}>{numVal.toFixed(1)}</span>
       </div>
-      <input type="range" min={min} max={max} step={step} value={value}
+      <input type="range" min={min} max={max} step={step} value={numVal}
+        key={numVal}
         onChange={e => onChange(Number(e.target.value))}
         style={{ width: "100%", accentColor: G }} />
     </div>
