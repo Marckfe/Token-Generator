@@ -417,98 +417,101 @@ export default function TokenEditor() {
 
   // ── Export: il canvas ha già tutto renderizzato — basta scaricarlo ──────────
   const handleDownload = async () => {
-    // ── Bleed tipografico 3mm ─────────────────────────────────────────────────
-    // Bleed: 3mm proporzionato al canvas 620×890 = ~21px per lato
-    const BLEED = 21;
-    const TW = CW + BLEED * 2;   // 662 px
-    const TH = CH + BLEED * 2;   // 932 px
-    const S  = 4;                 // 4× export scale → 2648×3728 px
-    const EW = TW * S;
-    const EH = TH * S;
-    const OX = BLEED * S;         // offset carta nell'area bleed
-    const OY = BLEED * S;
-
-    const exportCanvas = document.createElement("canvas");
-    exportCanvas.width  = EW;
-    exportCanvas.height = EH;
-    const ctx = exportCanvas.getContext("2d");
-    ctx.clearRect(0, 0, EW, EH);
-
     if (downloading) return;
     setDownloading(true);
-
     try {
-      // 1. ARTWORK — esteso sull'intera area bleed (nessun bordo bianco)
+      // Bleed tipografico: 3mm → ~21px sul canvas 620×890
+      const BLEED = 21;   // px nel sistema canvas nativo
+      const S     = 4;    // export scale 4× → qualità UHD
+
+      // Canvas finale: carta + bleed su tutti i lati, scalato 4×
+      const EW = (CW + BLEED * 2) * S;
+      const EH = (CH + BLEED * 2) * S;
+
+      const exportCanvas = document.createElement("canvas");
+      exportCanvas.width  = EW;
+      exportCanvas.height = EH;
+      const ctx = exportCanvas.getContext("2d");
+      ctx.clearRect(0, 0, EW, EH);
+
+      // Trick: translate + scale → renderCard disegna come al solito su 620×890
+      // ma il canvas risultante è spostato di BLEED*S e scalato S volte
+      // Tutte le posizioni testi/frame rimangono IDENTICHE alla preview
+      ctx.save();
+      ctx.translate(BLEED * S, BLEED * S);
+      ctx.scale(S, S);
+
+      // Artwork esteso all'area bleed: torna al sistema originale per coprire tutto
+      ctx.save();
+      ctx.translate(-BLEED, -BLEED);
       if (artUrl) {
-        const img = await loadImg(artUrl);
-        ctx.drawImage(img, 0, 0, EW, EH);
+        try {
+          const img = await loadImg(artUrl);
+          ctx.drawImage(img, 0, 0, CW + BLEED * 2, CH + BLEED * 2);
+        } catch {}
       }
-
-      // 2. FRAME — anch'esso esteso sull'intera area bleed
       if (frame) {
-        const img = await loadImg(frame.url);
-        ctx.drawImage(img, 0, 0, EW, EH);
+        try {
+          const img = await loadImg(frame.url);
+          ctx.drawImage(img, 0, 0, CW + BLEED * 2, CH + BLEED * 2);
+        } catch {}
       }
+      ctx.restore();
 
-      // 3. NOME
-      {
-        const fs = nameStyle.fontSize * S;
-        ctx.save();
-        ctx.font         = `bold ${fs}px ${FT}`;
-        ctx.fillStyle    = nameStyle.color;
-        ctx.textBaseline = "middle";
-        ctx.textAlign    = nameStyle.align || "center";
-        const nameX = nameStyle.align === "left"  ? OX + 10
-                    : nameStyle.align === "right" ? OX + CW * S - 10
-                    : OX + (CW * S) / 2;
-        ctx.fillText(name.toUpperCase(), nameX, OY + nameStyle.y * S);
-        ctx.restore();
-      }
+      // Ora disegna tutti gli elementi della carta usando le coordinate native
+      // esattamente come le vedi in preview — translate+scale fa il resto
 
-      // 4. TIPO
-      {
-        const fs = typeStyle.fontSize * S;
-        ctx.save();
-        ctx.font         = `bold ${fs}px ${FT}`;
-        ctx.fillStyle    = typeStyle.color;
-        ctx.textBaseline = "middle";
-        ctx.textAlign    = "left";
-        ctx.fillText(type, OX + typeStyle.x * S, OY + typeStyle.y * S);
-        ctx.restore();
-      }
+      // NOME
+      ctx.save();
+      ctx.font         = `bold ${nameStyle.fontSize}px ${FT}`;
+      ctx.fillStyle    = nameStyle.color;
+      ctx.textBaseline = "middle";
+      ctx.textAlign    = nameStyle.align || "center";
+      const nameBoxW   = CW;
+      const nameX      = nameStyle.align === "left"  ? nameStyle.x + 10
+                       : nameStyle.align === "right" ? nameStyle.x + nameBoxW - 10
+                       : nameStyle.x + nameBoxW / 2;
+      ctx.fillText(name.toUpperCase(), nameX, nameStyle.y);
+      ctx.restore();
 
-      // 5. ABILITÀ con simboli mana
+      // TIPO
+      ctx.save();
+      ctx.font         = `bold ${typeStyle.fontSize}px ${FT}`;
+      ctx.fillStyle    = typeStyle.color;
+      ctx.textBaseline = "middle";
+      ctx.textAlign    = "left";
+      ctx.fillText(type, typeStyle.x, typeStyle.y);
+      ctx.restore();
+
+      // ABILITÀ con simboli mana
       if (showAbility && ability) {
-        const lines2 = ability.split("\n");
-        const fs     = abilityStyle.fontSize * S;
-        let   curY   = OY + abilityStyle.y * S;
-        for (const line of lines2) {
+        const abLines = ability.split("\n");
+        let curY = abilityStyle.y;
+        for (const line of abLines) {
           curY = await drawManaText(
             ctx, line,
-            OX + abilityStyle.x * S, curY,
-            fs, abilityStyle.color, FB,
-            (CW - abilityStyle.x - 20) * S
+            abilityStyle.x, curY,
+            abilityStyle.fontSize, abilityStyle.color, FB,
+            CW - abilityStyle.x - 20
           );
-          curY += fs * 1.45 + 2;
+          curY += abilityStyle.fontSize * 1.45 + 2;
         }
       }
 
-      // 6. Frame P/T
+      // FRAME P/T
       if (showPT && ptFrame) {
-        const img = await loadImg(ptFrame.url);
-        ctx.drawImage(img,
-          OX + ptStyle.frameX * S, OY + ptStyle.frameY * S,
-          ptStyle.width * S, ptStyle.height * S
-        );
+        try {
+          const img = await loadImg(ptFrame.url);
+          ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height);
+        } catch {}
       }
 
-      // 7. Testo P/T
+      // TESTO P/T
       if (showPT) {
-        const fs   = ptStyle.fontSize * S;
-        const ptCX = OX + (ptStyle.frameX + ptStyle.width / 2 + (ptStyle.powerOffsetX || 0)) * S;
-        const ptCY = OY + (ptStyle.frameY + ptStyle.height / 2) * S;
+        const ptCX = ptStyle.frameX + ptStyle.width / 2 + (ptStyle.powerOffsetX || 0);
+        const ptCY = ptStyle.frameY + ptStyle.height / 2;
         ctx.save();
-        ctx.font         = `bold ${fs}px ${FT}`;
+        ctx.font         = `bold ${ptStyle.fontSize}px ${FT}`;
         ctx.fillStyle    = ptStyle.color;
         ctx.textBaseline = "middle";
         ctx.textAlign    = "center";
@@ -516,57 +519,67 @@ export default function TokenEditor() {
         ctx.restore();
       }
 
-      // 8. Info bassa sinistra
+      // INFO BASSA SINISTRA
       if (showInfoLeft) {
-        const fs  = infoLeft.fontSize * S;
-        const ix  = OX + infoLeft.x * S;
-        const iy1 = OY + CH * S - infoLeft.y * S - fs * 1.2;
-        const iy2 = OY + CH * S - infoLeft.y * S;
+        const iy1 = CH - infoLeft.y - infoLeft.fontSize * 1.2;
+        const iy2 = CH - infoLeft.y;
         ctx.save();
-        ctx.font         = `${fs}px ${FB}`;
+        ctx.font         = `${infoLeft.fontSize}px ${FB}`;
         ctx.fillStyle    = "#9a9a9a";
         ctx.textBaseline = "bottom";
         ctx.textAlign    = "left";
-        ctx.fillText(`${infoLeft.rarity} ${infoLeft.setCode} • ${infoLeft.lang}`, ix, iy1);
-        if (showArtist) ctx.fillText(`Illus. ${infoLeft.artist}`, ix, iy2);
+        ctx.fillText(`${infoLeft.rarity} ${infoLeft.setCode} • ${infoLeft.lang}`, infoLeft.x, iy1);
+        if (showArtist) ctx.fillText(`Illus. ${infoLeft.artist}`, infoLeft.x, iy2);
         ctx.restore();
       }
 
-      // 9. Copyright
+      // COPYRIGHT
       if (showCopyright) {
-        const fs = copyright.fontSize * 0.85 * S;
         ctx.save();
-        ctx.font         = `${fs}px ${FB}`;
+        ctx.font         = `${copyright.fontSize * 0.85}px ${FB}`;
         ctx.fillStyle    = copyright.color;
         ctx.textBaseline = "bottom";
         ctx.textAlign    = "right";
         ctx.fillText(`™ & © ${copyright.year} Wizards of the Coast`,
-          OX + CW * S - copyright.x * S,
-          OY + CH * S - copyright.y * S
+          CW - copyright.x,
+          CH - copyright.y
         );
         ctx.restore();
       }
 
-      // 10. Crop marks agli angoli (bordo taglio reale)
-      {
-        const MARK = 15 * S, GAP = 4 * S;
-        ctx.save();
-        ctx.strokeStyle = "#808080";
-        ctx.lineWidth   = 0.8 * S;
-        const corners = [
-          { x: OX, y: OY },
-          { x: OX + CW * S, y: OY },
-          { x: OX, y: OY + CH * S },
-          { x: OX + CW * S, y: OY + CH * S },
-        ];
-        for (const c of corners) {
-          const sx = c.x === OX ? -1 : 1;
-          const sy = c.y === OY ? -1 : 1;
-          ctx.beginPath(); ctx.moveTo(c.x + sx * GAP, c.y); ctx.lineTo(c.x + sx * (GAP + MARK), c.y); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(c.x, c.y + sy * GAP); ctx.lineTo(c.x, c.y + sy * (GAP + MARK)); ctx.stroke();
-        }
-        ctx.restore();
+      ctx.restore(); // fine translate+scale
+
+      // CROP MARKS — disegnati nel sistema EW×EH (fuori dalla carta)
+      // Posizione angoli nel sistema scalato
+      const bx = BLEED * S, by = BLEED * S;
+      const cw = CW * S,    ch = CH * S;
+      const MARK = 12 * S,  GAP = 3 * S;
+      const corners = [
+        { x: bx,      y: by      },
+        { x: bx + cw, y: by      },
+        { x: bx,      y: by + ch },
+        { x: bx + cw, y: by + ch },
+      ];
+      const ctxOuter = exportCanvas.getContext("2d");
+      ctxOuter.save();
+      ctxOuter.strokeStyle = "#666666";
+      ctxOuter.lineWidth   = 1 * S;
+      ctxOuter.lineCap     = "round";
+      for (const c of corners) {
+        const sx = c.x === bx ? -1 : 1;
+        const sy = c.y === by ? -1 : 1;
+        // Linea orizzontale
+        ctxOuter.beginPath();
+        ctxOuter.moveTo(c.x + sx * GAP, c.y);
+        ctxOuter.lineTo(c.x + sx * (GAP + MARK), c.y);
+        ctxOuter.stroke();
+        // Linea verticale
+        ctxOuter.beginPath();
+        ctxOuter.moveTo(c.x, c.y + sy * GAP);
+        ctxOuter.lineTo(c.x, c.y + sy * (GAP + MARK));
+        ctxOuter.stroke();
       }
+      ctxOuter.restore();
 
       // DOWNLOAD
       const link = document.createElement("a");
