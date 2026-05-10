@@ -416,9 +416,7 @@ export default function TokenEditor() {
       const ctx = exportCanvas.getContext("2d");
       ctx.clearRect(0, 0, EW, EH);
 
-      if (snap.artUrl) {
-        try { const img = await loadImg(snap.artUrl); ctx.drawImage(img, 0, 0, EW, EH); } catch {}
-      }
+      // Disegna solo cardCanvas — artwork già incluso dentro renderCard, non va ridisegnato
       ctx.drawImage(cardCanvas, 0, 0, CW, CH, BLEED * S, BLEED * S, CW * S, CH * S);
 
       const bx = BLEED * S, by = BLEED * S;
