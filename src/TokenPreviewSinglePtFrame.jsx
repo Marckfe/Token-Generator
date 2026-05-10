@@ -235,34 +235,59 @@ function DragBox({ label, style, onUpdate, color, children }) {
   const dispX = style.x / SCALE;
   const dispY = style.y / SCALE;
 
+  // ── Ottieni coordinate normalizzate da mouse O touch ──────────────────────
+  const getXY = (e) => {
+    if (e.touches && e.touches.length > 0) {
+      return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+    }
+    return { clientX: e.clientX, clientY: e.clientY };
+  };
+
   const onDown = (e) => {
     e.preventDefault();
     drag.current = true;
-    start.current = { mx: e.clientX, my: e.clientY, sx: style.x, sy: style.y };
+    const { clientX, clientY } = getXY(e);
+    start.current = { mx: clientX, my: clientY, sx: style.x, sy: style.y };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onUp);
   };
+
   const onMove = useCallback((e) => {
     if (!drag.current) return;
-    const dx = (e.clientX - start.current.mx) * SCALE;
-    const dy = (e.clientY - start.current.my) * SCALE;
+    e.preventDefault();
+    const { clientX, clientY } = getXY(e);
+    const dx = (clientX - start.current.mx) * SCALE;
+    const dy = (clientY - start.current.my) * SCALE;
     onUpdate({ x: Math.round(start.current.sx + dx), y: Math.round(start.current.sy + dy) });
   }, [onUpdate]);
+
   const onUp = useCallback(() => {
     drag.current = false;
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
+    window.removeEventListener("touchmove", onMove);
+    window.removeEventListener("touchend", onUp);
   }, [onMove]);
 
   return (
-    <div onMouseDown={onDown} title={`Trascina: ${label}`}
-      style={{ position: "absolute", left: dispX, top: dispY, cursor: "move",
+    <div
+      onMouseDown={onDown}
+      onTouchStart={onDown}
+      title={`Trascina: ${label}`}
+      style={{
+        position: "absolute", left: dispX, top: dispY, cursor: "move",
         border: `1.5px dashed ${color}`, background: `${color}18`,
-        borderRadius: 3, padding: "1px 4px", userSelect: "none", zIndex: 10,
-        minWidth: 30, minHeight: 16 }}>
-      <span style={{ position: "absolute", top: -14, left: 0, fontSize: 9,
-        background: "rgba(0,0,0,.8)", color, padding: "1px 4px",
-        borderRadius: 2, whiteSpace: "nowrap", pointerEvents: "none" }}>{label}</span>
+        borderRadius: 3, padding: "4px 8px", userSelect: "none", zIndex: 10,
+        minWidth: 36, minHeight: 36,
+        touchAction: "none",          // blocca scroll su touch durante drag
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+      <span style={{ position: "absolute", top: -18, left: 0, fontSize: 10,
+        background: "rgba(0,0,0,.85)", color, padding: "2px 6px",
+        borderRadius: 3, whiteSpace: "nowrap", pointerEvents: "none",
+        fontWeight: 700 }}>{label}</span>
       {children}
     </div>
   );
