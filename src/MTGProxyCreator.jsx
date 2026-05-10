@@ -262,10 +262,16 @@ export default function MTGProxyCreator() {
   const pages   = Math.max(1, Math.ceil(images.length / perPage));
 
   // ── STYLES ────────────────────────────────────────────────────────────────
+  const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 700);
+  React.useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 700);
+    window.addEventListener("resize", fn); return () => window.removeEventListener("resize", fn);
+  }, []);
+
   const s = {
-    shell: { display:"grid", gridTemplateColumns:"220px 1fr", minHeight:"100vh" },
-    sidebar: { display:"flex", flexDirection:"column", background:"var(--surface)", borderRight:"1px solid var(--border)", padding:"20px 12px", position:"sticky", top:0, height:"100vh", overflowY:"auto" },
-    main: { display:"flex", flexDirection:"column", padding:"28px 32px", gap:"20px", overflowX:"hidden" },
+    shell: { display:"flex", flexDirection:"column", minHeight:"100vh" },
+    sidebar: { display:"flex", flexDirection:"column", background:"var(--surface)", borderRight:"1px solid var(--border)", padding:"20px 12px", position:"sticky", top:0, height:"100vh", overflowY:"auto", width:220, flexShrink:0 },
+    main: { display:"flex", flexDirection:"column", padding: isMobile ? "14px 12px" : "28px 32px", gap:"20px", overflowX:"hidden", flex:1, minWidth:0 },
     navBtn: (active) => ({ display:"flex", alignItems:"center", gap:10, padding:"10px 13px", borderRadius:"var(--r-lg)", color: active?"var(--primary)":"var(--muted)", background: active?"var(--primary-hl)":"transparent", fontSize:".85rem", fontWeight: active?700:500, cursor:"pointer", border:"none", width:"100%", textAlign:"left", transition:"all var(--tr)" }),
     btn: (v) => ({ display:"inline-flex", alignItems:"center", gap:7, padding:"8px 16px", borderRadius:"var(--r-lg)", fontSize:".83rem", fontWeight:600, cursor:"pointer", border:"none", transition:"all var(--tr)", whiteSpace:"nowrap", background: v==="primary"?"var(--primary)":v==="accent"?"rgba(79,152,163,.15)":"transparent", color: v==="primary"?"#0f0e0c":v==="accent"?"var(--accent)":"var(--muted)", ...(v==="ghost"?{border:"1px solid var(--border)"}:{}), ...(v==="accent"?{border:"1px solid rgba(79,152,163,.35)"}:{}) }),
     card: { position:"relative", aspectRatio:"63/88", borderRadius:"var(--r-md)", overflow:"hidden", background:"var(--surf-off)", boxShadow:"var(--sh-sm)", cursor:"grab", transition:"transform var(--tr),box-shadow var(--tr)" },
@@ -273,32 +279,65 @@ export default function MTGProxyCreator() {
 
   return (
     <div style={s.shell}>
-      {/* SIDEBAR */}
-      <aside style={s.sidebar}>
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:28, paddingBottom:20, borderBottom:"1px solid var(--divider)" }}>
-          <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
-            <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" stroke="#c9a227" strokeWidth="2"/>
-            <polygon points="16,7 25,12 25,20 16,25 7,20 7,12" fill="rgba(201,162,39,.12)" stroke="#c9a227" strokeWidth="1"/>
-            <text x="16" y="20" textAnchor="middle" fill="#c9a227" fontSize="10" fontWeight="900" fontFamily="serif">P</text>
-          </svg>
-          <span style={{ fontSize:"1.05rem", fontWeight:900, color:"var(--primary)", letterSpacing:"-.02em" }}>MTG Proxy</span>
-        </div>
-        <nav style={{ display:"flex", flexDirection:"column", gap:3, flex:1 }}>
-          {[
-            ["proxy","Proxy Stampa","M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"],
-            ["token","Token Creator","M2 3h20v14H2zM8 21h8M12 17v4"]
-          ].map(([id,label,d]) => (
-            <button key={id} style={s.navBtn(tab===id)} onClick={() => setTab(id)}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={d}/></svg>
-              {label}
-            </button>
-          ))}
-        </nav>
-        <div style={{ paddingTop:16, borderTop:"1px solid var(--divider)", fontSize:".72rem", color:"var(--faint)", textAlign:"center" }}>by Marco Feoli</div>
-      </aside>
 
-      {/* MAIN */}
-      <main style={s.main}>
+      {/* TOPBAR MOBILE */}
+      {isMobile && (
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+          background:"var(--surface)", borderBottom:"1px solid var(--border)",
+          padding:"10px 14px", gap:8, flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+              <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" stroke="#c9a227" strokeWidth="2"/>
+              <polygon points="16,7 25,12 25,20 16,25 7,20 7,12" fill="rgba(201,162,39,.12)" stroke="#c9a227" strokeWidth="1"/>
+              <text x="16" y="20" textAnchor="middle" fill="#c9a227" fontSize="10" fontWeight="900" fontFamily="serif">P</text>
+            </svg>
+            <span style={{ fontWeight:900, color:"var(--primary)", fontSize:"1rem", letterSpacing:"-.02em" }}>MTG Proxy</span>
+          </div>
+          <div style={{ display:"flex", gap:4 }}>
+            {[["proxy","🖨 Proxy"],["token","🃏 Token"]].map(([id,label]) => (
+              <button key={id} onClick={() => setTab(id)}
+                style={{ padding:"7px 13px", borderRadius:"var(--r-lg)", border:"none",
+                  background: tab===id ? "var(--primary-hl)" : "transparent",
+                  color: tab===id ? "var(--primary)" : "var(--muted)",
+                  fontWeight: tab===id ? 700 : 500, fontSize:".83rem", cursor:"pointer" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* LAYOUT ROW: sidebar desktop + main */}
+      <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
+
+        {/* SIDEBAR DESKTOP */}
+        {!isMobile && (
+          <aside style={s.sidebar}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:28, paddingBottom:20, borderBottom:"1px solid var(--divider)" }}>
+              <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+                <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" stroke="#c9a227" strokeWidth="2"/>
+                <polygon points="16,7 25,12 25,20 16,25 7,20 7,12" fill="rgba(201,162,39,.12)" stroke="#c9a227" strokeWidth="1"/>
+                <text x="16" y="20" textAnchor="middle" fill="#c9a227" fontSize="10" fontWeight="900" fontFamily="serif">P</text>
+              </svg>
+              <span style={{ fontSize:"1.05rem", fontWeight:900, color:"var(--primary)", letterSpacing:"-.02em" }}>MTG Proxy</span>
+            </div>
+            <nav style={{ display:"flex", flexDirection:"column", gap:3, flex:1 }}>
+              {[
+                ["proxy","Proxy Stampa","M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"],
+                ["token","Token Creator","M2 3h20v14H2zM8 21h8M12 17v4"]
+              ].map(([id,label,d]) => (
+                <button key={id} style={s.navBtn(tab===id)} onClick={() => setTab(id)}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={d}/></svg>
+                  {label}
+                </button>
+              ))}
+            </nav>
+            <div style={{ paddingTop:16, borderTop:"1px solid var(--divider)", fontSize:".72rem", color:"var(--faint)", textAlign:"center" }}>by Marco Feoli</div>
+          </aside>
+        )}
+
+        {/* MAIN */}
+        <main style={s.main}>
         {tab === "proxy" && (
           <>
             <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:14, flexWrap:"wrap" }}>
@@ -380,7 +419,8 @@ export default function MTGProxyCreator() {
         {tab === "token" && (
           <TokenPreviewSinglePtFrame />
         )}
-      </main>
+        </main>
+      </div>{/* fine layout row */}
 
       {/* MODAL IMPOSTAZIONI STAMPA */}
       {printOpen && (

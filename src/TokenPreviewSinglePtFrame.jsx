@@ -600,279 +600,339 @@ export default function TokenEditor() {
 
   const allFrameKeys = Object.keys(FRAME_MAP);
 
+  // ── responsive: detecta mobile via CSS media query simulata ──────────────
+  const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 700);
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+  React.useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 700);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+
+  const tabs = [
+    { id: "frame",   label: "🖼", full: "Frame" },
+    { id: "testo",   label: "✏️", full: "Testo" },
+    { id: "ability", label: "⚡", full: "Abilità" },
+    { id: "pt",      label: "⚔️", full: "P/T" },
+    { id: "info",    label: "ℹ️", full: "Info" },
+    { id: "pos",     label: "📐", full: "Pos." },
+  ];
+
+  const PanelContent = () => (
+    <div style={{ padding: 12, flex: 1, overflowY: "auto", maxHeight: isMobile ? "60vh" : undefined }}>
+
+      {activeTab === "frame" && (
+        <div>
+          <Lbl>Set Frame</Lbl>
+          <select value={frameSet} onChange={e => { setFrameSet(e.target.value); setFrameIdx(0); }}
+            style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
+              borderRadius: 5, padding: "6px 8px", marginBottom: 10, fontSize: 13 }}>
+            {allFrameKeys.map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <Lbl>Frame carta</Lbl>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+            {(FRAME_MAP[frameSet] || []).map((f, i) => (
+              <img key={f.url} src={f.url} alt={f.name} title={f.name} onClick={() => setFrameIdx(i)}
+                style={{ width: 52, height: 74, objectFit: "cover", borderRadius: 4, cursor: "pointer",
+                  border: i === frameIdx ? `2px solid ${G}` : `2px solid transparent`,
+                  opacity: i === frameIdx ? 1 : 0.55 }} />
+            ))}
+          </div>
+          <Lbl>Frame P/T</Lbl>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+            {PT_FRAMES.map((f, i) => (
+              <img key={f.url} src={f.url} alt={f.name} title={f.name} onClick={() => setPtFrameIdx(i)}
+                style={{ width: 52, height: 36, objectFit: "cover", borderRadius: 4, cursor: "pointer",
+                  border: i === ptFrameIdx ? `2px solid ${G}` : `2px solid transparent`,
+                  opacity: i === ptFrameIdx ? 1 : 0.55 }} />
+            ))}
+          </div>
+          <Lbl>Artwork</Lbl>
+          <Btn onClick={() => artInput.current.click()} color="#6366f1" style={{ width: "100%", marginBottom: 6 }}>
+            📁 Carica immagine
+          </Btn>
+          <input ref={artInput} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+            const f = e.target.files?.[0]; if (!f) return;
+            const r = new FileReader(); r.onloadend = () => setArtUrl(r.result); r.readAsDataURL(f);
+            e.target.value = null;
+          }} />
+          {artUrl && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <img src={artUrl} alt="art" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 4 }} />
+              <Btn small onClick={() => setArtUrl("")} color="#7a1e1e">✕ Rimuovi</Btn>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "testo" && (
+        <div>
+          <Lbl>Nome carta</Lbl>
+          <TF value={name} onChange={setName} placeholder="Es. CONSTRUCT" />
+          <Lbl>Allineamento nome</Lbl>
+          <AlignBtns value={nameStyle.align || "center"} onChange={v => setNameStyle(s => ({ ...s, align: v }))} />
+          <Sld label="Font size nome" value={nameStyle.fontSize} onChange={v => setNameStyle(s => ({ ...s, fontSize: v }))} min={10} max={50} />
+          <CP label="Colore nome" value={nameStyle.color} onChange={v => setNameStyle(s => ({ ...s, color: v }))} />
+          <div style={{ height: 1, background: BD, margin: "10px 0" }} />
+          <Lbl>Tipo carta</Lbl>
+          <TF value={type} onChange={setType} placeholder="Es. Token Artifact Creature" />
+          <Sld label="Font size tipo" value={typeStyle.fontSize} onChange={v => setTypeStyle(s => ({ ...s, fontSize: v }))} min={10} max={40} />
+          <CP label="Colore tipo" value={typeStyle.color} onChange={v => setTypeStyle(s => ({ ...s, color: v }))} />
+        </div>
+      )}
+
+      {activeTab === "ability" && (
+        <div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+            cursor: "pointer", fontSize: 13, color: showAbility ? "#cdccca" : "#4a4948" }}>
+            <input type="checkbox" checked={showAbility} onChange={e => setShowAbility(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: G }} />
+            Mostra testo abilità
+          </label>
+          <TFArea value={ability} onChange={setAbility}
+            placeholder={"Es. Flying\nWhen this enters…\nUsa {T} {W} {G} {2} ecc."}
+            disabled={!showAbility} rows={5} />
+          <Sld label="Font size" value={Number(abilityStyle.fontSize)} onChange={v => setAbilityStyle(s => ({ ...s, fontSize: Number(v) }))} min={8} max={30} />
+          <CP label="Colore testo" value={abilityStyle.color} onChange={v => setAbilityStyle(s => ({ ...s, color: v }))} />
+        </div>
+      )}
+
+      {activeTab === "pt" && (
+        <div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+            cursor: "pointer", fontSize: 13, color: showPT ? "#cdccca" : "#4a4948" }}>
+            <input type="checkbox" checked={showPT} onChange={e => setShowPT(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: G }} />
+            Mostra P/T
+          </label>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>Power</Lbl><TF value={pt.power} onChange={v => setPt(p => ({ ...p, power: v }))} disabled={!showPT} /></div>
+            <div style={{ flex: 1 }}><Lbl>Toughness</Lbl><TF value={pt.toughness} onChange={v => setPt(p => ({ ...p, toughness: v }))} disabled={!showPT} /></div>
+          </Row>
+          <Sld label="Font size" value={ptStyle.fontSize} onChange={v => setPtStyle(s => ({ ...s, fontSize: v }))} min={14} max={60} />
+          <CP label="Colore" value={ptStyle.color} onChange={v => setPtStyle(s => ({ ...s, color: v }))} />
+        </div>
+      )}
+
+      {activeTab === "info" && (
+        <div>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>Rarità</Lbl><TF value={infoLeft.rarity} onChange={v => setInfoLeft(s => ({ ...s, rarity: v }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Set</Lbl><TF value={infoLeft.setCode} onChange={v => setInfoLeft(s => ({ ...s, setCode: v }))} /></div>
+          </Row>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>Anno</Lbl><TF value={infoLeft.year} onChange={v => setInfoLeft(s => ({ ...s, year: v }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Lingua</Lbl><TF value={infoLeft.lang} onChange={v => setInfoLeft(s => ({ ...s, lang: v }))} /></div>
+          </Row>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer", fontSize: 13 }}>
+            <input type="checkbox" checked={showInfoLeft} onChange={e => setShowInfoLeft(e.target.checked)} style={{ accentColor: G }} />
+            Mostra info bassa
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer", fontSize: 13 }}>
+            <input type="checkbox" checked={showArtist} onChange={e => setShowArtist(e.target.checked)} style={{ accentColor: G }} />
+            Mostra artista
+          </label>
+          <Lbl>Artista</Lbl>
+          <TF value={infoLeft.artist || ""} onChange={v => setInfoLeft(s => ({ ...s, artist: v }))} disabled={!showArtist} placeholder="Nome artista…" />
+          <div style={{ height: 1, background: BD, margin: "10px 0" }} />
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer", fontSize: 13 }}>
+            <input type="checkbox" checked={showCopyright} onChange={e => setShowCopyright(e.target.checked)} style={{ accentColor: G }} />
+            Mostra copyright
+          </label>
+          <Lbl>Anno copyright</Lbl>
+          <TF value={copyright.year} onChange={v => setCopyright(s => ({ ...s, year: v }))} disabled={!showCopyright} />
+        </div>
+      )}
+
+      {activeTab === "pos" && (
+        <div>
+          <Lbl>Nome — posizione</Lbl>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={nameStyle.x} onChange={v => setNameStyle(s => ({ ...s, x: Number(v) }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={nameStyle.y} onChange={v => setNameStyle(s => ({ ...s, y: Number(v) }))} /></div>
+          </Row>
+          <Lbl>Tipo — posizione</Lbl>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={typeStyle.x} onChange={v => setTypeStyle(s => ({ ...s, x: Number(v) }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={typeStyle.y} onChange={v => setTypeStyle(s => ({ ...s, y: Number(v) }))} /></div>
+          </Row>
+          <Lbl>Abilità — posizione</Lbl>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={abilityStyle.x} onChange={v => setAbilityStyle(s => ({ ...s, x: Number(v) }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={abilityStyle.y} onChange={v => setAbilityStyle(s => ({ ...s, y: Number(v) }))} /></div>
+          </Row>
+          <Lbl>P/T frame — posizione</Lbl>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={ptStyle.frameX} onChange={v => setPtStyle(s => ({ ...s, frameX: Number(v), x: Number(v) }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={ptStyle.frameY} onChange={v => setPtStyle(s => ({ ...s, frameY: Number(v), y: Number(v) }))} /></div>
+          </Row>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>W</Lbl><TF type="number" value={ptStyle.width} onChange={v => setPtStyle(s => ({ ...s, width: Number(v) }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>H</Lbl><TF type="number" value={ptStyle.height} onChange={v => setPtStyle(s => ({ ...s, height: Number(v) }))} /></div>
+          </Row>
+          <div style={{ height: 1, background: BD, margin: "10px 0" }} />
+          <button onClick={() => setShowGrid(g => !g)}
+            style={{ width: "100%", background: showGrid ? G : "#252420", color: showGrid ? "#000" : "#797876",
+              border: `1px solid ${BD}`, borderRadius: 5, padding: "7px", fontSize: 12,
+              cursor: "pointer", fontWeight: 600, marginBottom: 6 }}>
+            {showGrid ? "✅ Box drag ON" : "📐 Box drag OFF"}
+          </button>
+          <p style={{ fontSize: 11, color: "#4a4948", margin: 0 }}>
+            Attiva i box colorati sulla preview per trascinare gli elementi.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── TAB BAR (condivisa tra mobile e desktop) ─────────────────────────────
+  const TabBar = ({ horizontal }) => (
+    <div style={{ display: "flex", flexDirection: horizontal ? "row" : "row",
+      background: "#151413", borderTop: horizontal ? `1px solid ${BD}` : undefined,
+      borderBottom: !horizontal ? `1px solid ${BD}` : undefined,
+      flexWrap: "nowrap", overflowX: "auto" }}>
+      {tabs.map(t => (
+        <button key={t.id}
+          onClick={() => { setActiveTab(t.id); if (isMobile) setDrawerOpen(true); }}
+          style={{ flex: "1 0 auto", padding: horizontal ? "10px 4px" : "8px 4px",
+            fontSize: horizontal ? 20 : 11, fontWeight: 600,
+            background: activeTab === t.id && (!isMobile || drawerOpen) ? SURFACE : "transparent",
+            color: activeTab === t.id && (!isMobile || drawerOpen) ? G : "#797876",
+            border: "none",
+            borderTop: horizontal && activeTab === t.id && drawerOpen ? `2px solid ${G}` : horizontal ? "2px solid transparent" : "none",
+            borderBottom: !horizontal && activeTab === t.id ? `2px solid ${G}` : !horizontal ? "2px solid transparent" : "none",
+            cursor: "pointer", whiteSpace: "nowrap", minWidth: 44 }}>
+          <div>{t.label}</div>
+          {!horizontal && <div style={{ fontSize: 9, marginTop: 1 }}>{t.full}</div>}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <div style={{ ...P, display: "flex", flexDirection: "column", minHeight: "100vh", background: "#111" }}>
+    <div style={{ ...P, display: "flex", flexDirection: "column", minHeight: "100vh",
+      minHeight: "100dvh", background: "#111" }}>
 
       {/* ── TOPBAR ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: "#1a1917", borderBottom: `1px solid ${BD}`, padding: "8px 16px", flexWrap: "wrap", gap: 8 }}>
+        background: "#1a1917", borderBottom: `1px solid ${BD}`,
+        padding: "8px 12px", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
         <span style={{ fontWeight: 700, fontSize: 15, color: G, letterSpacing: ".05em" }}>🃏 Token Generator</span>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Btn onClick={handleSaveState} color="#1e3a2f" style={{ border: `1px solid ${G}`, color: G }}>💾 Salva JSON</Btn>
-          <Btn onClick={() => stateInput.current.click()} color="#1e3a2f" style={{ border: `1px solid ${G}`, color: G }}>📂 Carica JSON</Btn>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <Btn small onClick={handleSaveState} color="#1e3a2f" style={{ border: `1px solid ${G}`, color: G }}>💾 Salva</Btn>
+          <Btn small onClick={() => stateInput.current.click()} color="#1e3a2f" style={{ border: `1px solid ${G}`, color: G }}>📂 Carica</Btn>
           <input ref={stateInput} type="file" accept=".json" style={{ display: "none" }} onChange={handleLoadState} />
-          <Btn onClick={handleDownload} disabled={downloading}
+          <Btn small onClick={handleDownload} disabled={downloading}
             color={downloading ? "#333" : "#c9a227"}
             style={{ color: downloading ? "#666" : "#000", fontWeight: 700 }}>
-            {downloading ? "⏳ Export…" : "⬇ PNG UHD 4×"}
+            {downloading ? "⏳…" : "⬇ PNG 4×"}
           </Btn>
         </div>
       </div>
 
-      {/* ── BODY ── */}
-      <div style={{ display: "flex", flex: 1, flexWrap: "wrap", gap: 0, overflow: "hidden" }}>
-
-        {/* ── PANNELLO SINISTRO ── */}
-        <div style={{ width: 280, minWidth: 260, maxWidth: "100%", background: "#1a1917",
-          borderRight: `1px solid ${BD}`, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-
-          {/* TAB NAV */}
-          {(() => {
-            const tabs = [
-              { id: "frame",   label: "🖼 Frame" },
-              { id: "testo",   label: "✏️ Testo" },
-              { id: "ability", label: "⚡ Abilità" },
-              { id: "pt",      label: "⚔️ P/T" },
-              { id: "info",    label: "ℹ️ Info" },
-              { id: "pos",     label: "📐 Pos." },
-            ];
-            return (
-              <>
-                <div style={{ display: "flex", flexWrap: "wrap", borderBottom: `1px solid ${BD}`, background: "#151413" }}>
-                  {tabs.map(t => (
-                    <button key={t.id} onClick={() => setActiveTab(t.id)}
-                      style={{ flex: "1 1 auto", padding: "8px 4px", fontSize: 11, fontWeight: 600,
-                        background: activeTab === t.id ? SURFACE : "transparent",
-                        color: activeTab === t.id ? G : "#797876",
-                        border: "none", borderBottom: activeTab === t.id ? `2px solid ${G}` : "2px solid transparent",
-                        cursor: "pointer", whiteSpace: "nowrap" }}>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div style={{ padding: 12, flex: 1 }}>
-
-                  {/* ── TAB: FRAME ── */}
-                  {activeTab === "frame" && (
-                    <div>
-                      <Lbl>Set Frame</Lbl>
-                      <select value={frameSet} onChange={e => { setFrameSet(e.target.value); setFrameIdx(0); }}
-                        style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
-                          borderRadius: 5, padding: "6px 8px", marginBottom: 10, fontSize: 13 }}>
-                        {allFrameKeys.map(k => <option key={k} value={k}>{k}</option>)}
-                      </select>
-                      <Lbl>Frame carta</Lbl>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
-                        {(FRAME_MAP[frameSet] || []).map((f, i) => (
-                          <img key={f.url} src={f.url} alt={f.name} title={f.name} onClick={() => setFrameIdx(i)}
-                            style={{ width: 52, height: 74, objectFit: "cover", borderRadius: 4, cursor: "pointer",
-                              border: i === frameIdx ? `2px solid ${G}` : `2px solid transparent`,
-                              opacity: i === frameIdx ? 1 : 0.55 }} />
-                        ))}
-                      </div>
-                      <Lbl>Frame P/T</Lbl>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
-                        {PT_FRAMES.map((f, i) => (
-                          <img key={f.url} src={f.url} alt={f.name} title={f.name} onClick={() => setPtFrameIdx(i)}
-                            style={{ width: 52, height: 36, objectFit: "cover", borderRadius: 4, cursor: "pointer",
-                              border: i === ptFrameIdx ? `2px solid ${G}` : `2px solid transparent`,
-                              opacity: i === ptFrameIdx ? 1 : 0.55 }} />
-                        ))}
-                      </div>
-                      <Lbl>Artwork</Lbl>
-                      <Btn onClick={() => artInput.current.click()} color="#6366f1" style={{ width: "100%", marginBottom: 6 }}>
-                        📁 Carica immagine
-                      </Btn>
-                      <input ref={artInput} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
-                        const f = e.target.files?.[0]; if (!f) return;
-                        const r = new FileReader(); r.onloadend = () => setArtUrl(r.result); r.readAsDataURL(f);
-                        e.target.value = null;
-                      }} />
-                      {artUrl && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                          <img src={artUrl} alt="art" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 4 }} />
-                          <Btn small onClick={() => setArtUrl("")} color="#7a1e1e">✕ Rimuovi</Btn>
-                        </div>
-                      )}
-                    </div>
+      {/* ── LAYOUT DESKTOP ── */}
+      {!isMobile && (
+        <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+          {/* Pannello sinistro */}
+          <div style={{ width: 280, minWidth: 260, background: "#1a1917",
+            borderRight: `1px solid ${BD}`, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <TabBar horizontal={false} />
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              <PanelContent />
+            </div>
+          </div>
+          {/* Preview */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+            justifyContent: "flex-start", padding: "20px 10px", gap: 16, overflowY: "auto", background: "#0e0e0e" }}>
+            <div style={{ position: "relative", width: DISPLAY_W, height: DISPLAY_H,
+              borderRadius: 14, overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,.8)", flexShrink: 0 }}>
+              <canvas ref={canvasRef} style={{ display: "block", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14 }} />
+              {showGrid && (
+                <>
+                  <DragBox label="NOME" style={nameStyle} color="#c9a227"
+                    onUpdate={d => setNameStyle(s => ({ ...s, x: d.x, y: d.y }))}>
+                    <span style={{ fontSize: 9, color: "#c9a227", whiteSpace: "nowrap" }}>{name.toUpperCase()}</span>
+                  </DragBox>
+                  <DragBox label="TIPO" style={typeStyle} color="#60a5fa"
+                    onUpdate={d => setTypeStyle(s => ({ ...s, x: d.x, y: d.y }))}>
+                    <span style={{ fontSize: 9, color: "#60a5fa", whiteSpace: "nowrap" }}>{type.slice(0, 28)}</span>
+                  </DragBox>
+                  {showAbility && (
+                    <DragBox label="ABILITÀ" style={abilityStyle} color="#4ade80"
+                      onUpdate={d => setAbilityStyle(s => ({ ...s, x: d.x, y: d.y }))}>
+                      <span style={{ fontSize: 9, color: "#4ade80", whiteSpace: "nowrap" }}>Abilità…</span>
+                    </DragBox>
                   )}
-
-                  {/* ── TAB: TESTO ── */}
-                  {activeTab === "testo" && (
-                    <div>
-                      <Lbl>Nome carta</Lbl>
-                      <TF value={name} onChange={setName} placeholder="Es. CONSTRUCT" />
-                      <Lbl>Allineamento nome</Lbl>
-                      <AlignBtns value={nameStyle.align || "center"} onChange={v => setNameStyle(s => ({ ...s, align: v }))} />
-                      <Sld label="Font size nome" value={nameStyle.fontSize} onChange={v => setNameStyle(s => ({ ...s, fontSize: v }))} min={10} max={50} />
-                      <CP label="Colore nome" value={nameStyle.color} onChange={v => setNameStyle(s => ({ ...s, color: v }))} />
-                      <div style={{ height: 1, background: BD, margin: "10px 0" }} />
-                      <Lbl>Tipo carta</Lbl>
-                      <TF value={type} onChange={setType} placeholder="Es. Token Artifact Creature" />
-                      <Sld label="Font size tipo" value={typeStyle.fontSize} onChange={v => setTypeStyle(s => ({ ...s, fontSize: v }))} min={10} max={40} />
-                      <CP label="Colore tipo" value={typeStyle.color} onChange={v => setTypeStyle(s => ({ ...s, color: v }))} />
-                    </div>
+                  {showPT && (
+                    <DragBox label="P/T" style={{ x: ptStyle.frameX, y: ptStyle.frameY }} color="#f87171"
+                      onUpdate={d => setPtStyle(s => ({ ...s, frameX: d.x, frameY: d.y, x: d.x, y: d.y }))}>
+                      <span style={{ fontSize: 9, color: "#f87171" }}>{pt.power}/{pt.toughness}</span>
+                    </DragBox>
                   )}
-
-                  {/* ── TAB: ABILITÀ ── */}
-                  {activeTab === "ability" && (
-                    <div>
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
-                        cursor: "pointer", fontSize: 13, color: showAbility ? "#cdccca" : "#4a4948" }}>
-                        <input type="checkbox" checked={showAbility} onChange={e => setShowAbility(e.target.checked)}
-                          style={{ width: 16, height: 16, accentColor: G }} />
-                        Mostra testo abilità
-                      </label>
-                      <TFArea value={ability} onChange={setAbility}
-                        placeholder={"Es. Flying\nWhen this enters…\nUsa {T} {W} {G} {2} ecc."}
-                        disabled={!showAbility} rows={5} />
-                      <Sld label="Font size" value={Number(abilityStyle.fontSize)} onChange={v => setAbilityStyle(s => ({ ...s, fontSize: Number(v) }))} min={8} max={30} />
-                      <CP label="Colore testo" value={abilityStyle.color} onChange={v => setAbilityStyle(s => ({ ...s, color: v }))} />
-                    </div>
-                  )}
-
-                  {/* ── TAB: P/T ── */}
-                  {activeTab === "pt" && (
-                    <div>
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
-                        cursor: "pointer", fontSize: 13, color: showPT ? "#cdccca" : "#4a4948" }}>
-                        <input type="checkbox" checked={showPT} onChange={e => setShowPT(e.target.checked)}
-                          style={{ width: 16, height: 16, accentColor: G }} />
-                        Mostra P/T
-                      </label>
-                      <Row>
-                        <div style={{ flex: 1 }}>
-                          <Lbl>Power</Lbl>
-                          <TF value={pt.power} onChange={v => setPt(p => ({ ...p, power: v }))} disabled={!showPT} />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <Lbl>Toughness</Lbl>
-                          <TF value={pt.toughness} onChange={v => setPt(p => ({ ...p, toughness: v }))} disabled={!showPT} />
-                        </div>
-                      </Row>
-                      <Sld label="Font size" value={ptStyle.fontSize} onChange={v => setPtStyle(s => ({ ...s, fontSize: v }))} min={14} max={60} />
-                      <CP label="Colore" value={ptStyle.color} onChange={v => setPtStyle(s => ({ ...s, color: v }))} />
-                    </div>
-                  )}
-
-                  {/* ── TAB: INFO ── */}
-                  {activeTab === "info" && (
-                    <div>
-                      <Row>
-                        <div style={{ flex: 1 }}><Lbl>Rarità</Lbl><TF value={infoLeft.rarity} onChange={v => setInfoLeft(s => ({ ...s, rarity: v }))} /></div>
-                        <div style={{ flex: 1 }}><Lbl>Set</Lbl><TF value={infoLeft.setCode} onChange={v => setInfoLeft(s => ({ ...s, setCode: v }))} /></div>
-                      </Row>
-                      <Row>
-                        <div style={{ flex: 1 }}><Lbl>Anno</Lbl><TF value={infoLeft.year} onChange={v => setInfoLeft(s => ({ ...s, year: v }))} /></div>
-                        <div style={{ flex: 1 }}><Lbl>Lingua</Lbl><TF value={infoLeft.lang} onChange={v => setInfoLeft(s => ({ ...s, lang: v }))} /></div>
-                      </Row>
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer", fontSize: 13 }}>
-                        <input type="checkbox" checked={showInfoLeft} onChange={e => setShowInfoLeft(e.target.checked)} style={{ accentColor: G }} />
-                        Mostra info bassa
-                      </label>
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer", fontSize: 13 }}>
-                        <input type="checkbox" checked={showArtist} onChange={e => setShowArtist(e.target.checked)} style={{ accentColor: G }} />
-                        Mostra artista
-                      </label>
-                      <Lbl>Artista</Lbl>
-                      <TF value={infoLeft.artist || ""} onChange={v => setInfoLeft(s => ({ ...s, artist: v }))} disabled={!showArtist} placeholder="Nome artista…" />
-                      <div style={{ height: 1, background: BD, margin: "10px 0" }} />
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer", fontSize: 13 }}>
-                        <input type="checkbox" checked={showCopyright} onChange={e => setShowCopyright(e.target.checked)} style={{ accentColor: G }} />
-                        Mostra copyright
-                      </label>
-                      <Lbl>Anno copyright</Lbl>
-                      <TF value={copyright.year} onChange={v => setCopyright(s => ({ ...s, year: v }))} disabled={!showCopyright} />
-                    </div>
-                  )}
-
-                  {/* ── TAB: POSIZIONI ── */}
-                  {activeTab === "pos" && (
-                    <div>
-                      <Lbl>Nome — posizione</Lbl>
-                      <Row>
-                        <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={nameStyle.x} onChange={v => setNameStyle(s => ({ ...s, x: Number(v) }))} /></div>
-                        <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={nameStyle.y} onChange={v => setNameStyle(s => ({ ...s, y: Number(v) }))} /></div>
-                      </Row>
-                      <Lbl>Tipo — posizione</Lbl>
-                      <Row>
-                        <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={typeStyle.x} onChange={v => setTypeStyle(s => ({ ...s, x: Number(v) }))} /></div>
-                        <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={typeStyle.y} onChange={v => setTypeStyle(s => ({ ...s, y: Number(v) }))} /></div>
-                      </Row>
-                      <Lbl>Abilità — posizione</Lbl>
-                      <Row>
-                        <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={abilityStyle.x} onChange={v => setAbilityStyle(s => ({ ...s, x: Number(v) }))} /></div>
-                        <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={abilityStyle.y} onChange={v => setAbilityStyle(s => ({ ...s, y: Number(v) }))} /></div>
-                      </Row>
-                      <Lbl>P/T frame — posizione</Lbl>
-                      <Row>
-                        <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={ptStyle.frameX} onChange={v => setPtStyle(s => ({ ...s, frameX: Number(v), x: Number(v) }))} /></div>
-                        <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={ptStyle.frameY} onChange={v => setPtStyle(s => ({ ...s, frameY: Number(v), y: Number(v) }))} /></div>
-                      </Row>
-                      <Row>
-                        <div style={{ flex: 1 }}><Lbl>W</Lbl><TF type="number" value={ptStyle.width} onChange={v => setPtStyle(s => ({ ...s, width: Number(v) }))} /></div>
-                        <div style={{ flex: 1 }}><Lbl>H</Lbl><TF type="number" value={ptStyle.height} onChange={v => setPtStyle(s => ({ ...s, height: Number(v) }))} /></div>
-                      </Row>
-                      <div style={{ height: 1, background: BD, margin: "10px 0" }} />
-                      <button onClick={() => setShowGrid(g => !g)}
-                        style={{ width: "100%", background: showGrid ? G : "#252420", color: showGrid ? "#000" : "#797876",
-                          border: `1px solid ${BD}`, borderRadius: 5, padding: "7px", fontSize: 12,
-                          cursor: "pointer", fontWeight: 600, marginBottom: 6 }}>
-                        {showGrid ? "✅ Box drag ON" : "📐 Box drag OFF"}
-                      </button>
-                      <p style={{ fontSize: 11, color: "#4a4948", margin: 0 }}>
-                        Attiva i box colorati sulla preview per trascinare gli elementi con il mouse.
-                      </p>
-                    </div>
-                  )}
-
-                </div>
-              </>
-            );
-          })()}
+                </>
+              )}
+            </div>
+            <p style={{ fontSize: 11, color: "#3a3938", margin: 0 }}>
+              Preview {DISPLAY_W}×{DISPLAY_H}px — Export 4× ({CW * 4}×{CH * 4}px)
+            </p>
+          </div>
         </div>
+      )}
 
-        {/* ── PREVIEW CENTRALE ── */}
-        <div style={{ flex: 1, minWidth: 300, display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "flex-start", padding: "20px 10px", gap: 16,
-          overflowY: "auto", background: "#0e0e0e" }}>
+      {/* ── LAYOUT MOBILE ── */}
+      {isMobile && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-          <div style={{ position: "relative", width: DISPLAY_W, height: DISPLAY_H,
-            borderRadius: 14, overflow: "hidden",
-            boxShadow: "0 8px 40px rgba(0,0,0,.8)", flexShrink: 0 }}>
-            <canvas ref={canvasRef} style={{ display: "block", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14 }} />
-            {showGrid && (
-              <>
-                <DragBox label="NOME" style={nameStyle} color="#c9a227"
-                  onUpdate={d => setNameStyle(s => ({ ...s, x: d.x, y: d.y }))}>
-                  <span style={{ fontSize: 9, color: "#c9a227", whiteSpace: "nowrap" }}>{name.toUpperCase()}</span>
-                </DragBox>
-                <DragBox label="TIPO" style={typeStyle} color="#60a5fa"
-                  onUpdate={d => setTypeStyle(s => ({ ...s, x: d.x, y: d.y }))}>
-                  <span style={{ fontSize: 9, color: "#60a5fa", whiteSpace: "nowrap" }}>{type.slice(0, 28)}</span>
-                </DragBox>
-                {showAbility && (
-                  <DragBox label="ABILITÀ" style={abilityStyle} color="#4ade80"
-                    onUpdate={d => setAbilityStyle(s => ({ ...s, x: d.x, y: d.y }))}>
-                    <span style={{ fontSize: 9, color: "#4ade80", whiteSpace: "nowrap" }}>Abilità…</span>
-                  </DragBox>
-                )}
-                {showPT && (
-                  <DragBox label="P/T" style={{ x: ptStyle.frameX, y: ptStyle.frameY }} color="#f87171"
-                    onUpdate={d => setPtStyle(s => ({ ...s, frameX: d.x, frameY: d.y, x: d.x, y: d.y }))}>
-                    <span style={{ fontSize: 9, color: "#f87171" }}>{pt.power}/{pt.toughness}</span>
-                  </DragBox>
-                )}
-              </>
-            )}
+          {/* Preview scrollabile */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+            justifyContent: "flex-start", padding: "12px 8px", gap: 10, overflowY: "auto",
+            background: "#0e0e0e", paddingBottom: drawerOpen ? "0" : "70px" }}>
+            {/* Scala la carta per stare nel viewport mobile */}
+            {(() => {
+              const vw = Math.min(window.innerWidth - 16, 460);
+              const scale = vw / DISPLAY_W;
+              const scaledH = Math.round(DISPLAY_H * scale);
+              return (
+                <div style={{ position: "relative",
+                  width: vw, height: scaledH,
+                  borderRadius: 14, overflow: "hidden",
+                  boxShadow: "0 8px 40px rgba(0,0,0,.8)", flexShrink: 0 }}>
+                  <div style={{ transform: `scale(${scale})`, transformOrigin: "top left",
+                    width: DISPLAY_W, height: DISPLAY_H }}>
+                    <canvas ref={canvasRef} style={{ display: "block", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14 }} />
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
-          <p style={{ fontSize: 11, color: "#3a3938", margin: 0 }}>
-            Preview {DISPLAY_W}×{DISPLAY_H}px — Export 4× ({CW*4}×{CH*4}px)
-          </p>
+          {/* Drawer bottom */}
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+            background: "#1a1917", borderTop: `1px solid ${BD}`,
+            maxHeight: drawerOpen ? "65vh" : "56px",
+            transition: "max-height .3s cubic-bezier(.4,0,.2,1)",
+            display: "flex", flexDirection: "column", overflow: "hidden",
+            boxShadow: "0 -4px 24px rgba(0,0,0,.6)" }}>
+
+            {/* Handle + TabBar */}
+            <div style={{ flexShrink: 0 }}>
+              {/* Handle bar */}
+              <div onClick={() => setDrawerOpen(o => !o)}
+                style={{ display: "flex", justifyContent: "center", padding: "6px 0", cursor: "pointer" }}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: drawerOpen ? G : "#3a3938" }} />
+              </div>
+              <TabBar horizontal={true} />
+            </div>
+
+            {/* Contenuto drawer */}
+            {drawerOpen && (
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                <PanelContent />
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
