@@ -420,14 +420,14 @@ export default function TokenEditor() {
         infoLeft, showInfoLeft, showArtist,
         copyright, showCopyright,
       };
-      const S     = 4;    // scala UHD 4x
-      const BLEED = 21;   // ~3mm a 72dpi nello spazio canvas 620x890
+      const S     = 4;
+      const BLEED = 21; // ~3mm
 
-      // 1. Renderizza carta completa su canvas nativo isolato
+      // 1. Disegna la carta normale su canvas 620x890
       const cardCanvas = document.createElement("canvas");
       await renderCard(cardCanvas, snap);
 
-      // 2. Export canvas con bleed sui 4 lati
+      // 2. Export canvas con bleed: stessa carta stretchata su (620+42)x(890+42)
       const EW = (CW + BLEED * 2) * S;
       const EH = (CH + BLEED * 2) * S;
       const exportCanvas = document.createElement("canvas");
@@ -435,47 +435,27 @@ export default function TokenEditor() {
       exportCanvas.height = EH;
       const ctx = exportCanvas.getContext("2d");
 
-      // 3. Sfondo bleed: artwork scalato cover su tutto l'export canvas
-      //    (il bleed è la parte di artwork che "fuoriesce" oltre i bordi carta)
-      if (snap.artUrl) {
-        try {
-          const img = await loadImg(snap.artUrl);
-          // cover: scala mantenendo aspect ratio coprendo tutto EW x EH
-          const scale = Math.max(EW / img.width, EH / img.height);
-          const dw = img.width * scale;
-          const dh = img.height * scale;
-          const dx = (EW - dw) / 2;
-          const dy = (EH - dh) / 2;
-          ctx.drawImage(img, dx, dy, dw, dh);
-        } catch {
-          ctx.fillStyle = "#1a1a1a";
-          ctx.fillRect(0, 0, EW, EH);
-        }
-      } else {
-        ctx.fillStyle = "#1a1a1a";
-        ctx.fillRect(0, 0, EW, EH);
-      }
+      // Sfondo bleed = cardCanvas stretchato sull'intero export canvas
+      ctx.drawImage(cardCanvas, 0, 0, EW, EH);
 
-      // 4. Carta centrata sopra il bleed — UNA SOLA drawImage
+      // Carta centrata sopra, scalata 4x con offset bleed
       ctx.drawImage(cardCanvas, 0, 0, CW, CH, BLEED * S, BLEED * S, CW * S, CH * S);
 
-      // 5. Crop marks sul bordo taglio reale
+      // 3. Crop marks
       const bx = BLEED * S, by = BLEED * S;
-      const cw = CW * S,    ch = CH * S;
-      const MARK = 10 * S,  GAP = 3 * S;
+      const cw = CW * S, ch = CH * S;
+      const MARK = 10 * S, GAP = 3 * S;
       ctx.save();
       ctx.strokeStyle = "#444";
-      ctx.lineWidth   = S * 0.5;
-      ctx.lineCap     = "square";
-      for (const [px, py] of [[bx, by], [bx+cw, by], [bx, by+ch], [bx+cw, by+ch]]) {
-        const sx = px === bx ? -1 : 1;
-        const sy = py === by ? -1 : 1;
-        ctx.beginPath(); ctx.moveTo(px + sx*GAP, py); ctx.lineTo(px + sx*(GAP+MARK), py); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(px, py + sy*GAP); ctx.lineTo(px, py + sy*(GAP+MARK)); ctx.stroke();
+      ctx.lineWidth = S * 0.5;
+      ctx.lineCap = "square";
+      for (const [px, py] of [[bx,by],[bx+cw,by],[bx,by+ch],[bx+cw,by+ch]]) {
+        const sx = px === bx ? -1 : 1, sy = py === by ? -1 : 1;
+        ctx.beginPath(); ctx.moveTo(px+sx*GAP, py); ctx.lineTo(px+sx*(GAP+MARK), py); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(px, py+sy*GAP); ctx.lineTo(px, py+sy*(GAP+MARK)); ctx.stroke();
       }
       ctx.restore();
 
-      // 6. Download
       const link = document.createElement("a");
       link.download = `${(snap.name || "token").replace(/[^a-z0-9_]/gi, "_")}_PRINT.png`;
       link.href = exportCanvas.toDataURL("image/png");
