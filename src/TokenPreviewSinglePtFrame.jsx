@@ -402,45 +402,55 @@ export default function TokenEditor() {
     setDownloading(true);
     try {
       const snap = stateRef.current;
-      const S = 4; // scala UHD
+      const S     = 4;       // scala UHD 4x
+      const BLEED = 21;      // ~3mm in px canvas (620x890)
 
-      // 1. Disegna la carta su canvas nativo 620x890
+      // 1. Disegna carta completa su canvas nativo 620x890
       const cardCanvas = document.createElement("canvas");
       await renderCard(cardCanvas, snap);
 
-      // 2. Export canvas = carta scalata 4x (niente bleed extra che causa doppia carta)
-      const EW = CW * S;
-      const EH = CH * S;
+      // 2. Export canvas con bleed su tutti i lati
+      const EW = (CW + BLEED * 2) * S;
+      const EH = (CH + BLEED * 2) * S;
       const exportCanvas = document.createElement("canvas");
       exportCanvas.width  = EW;
       exportCanvas.height = EH;
       const ctx = exportCanvas.getContext("2d");
       ctx.clearRect(0, 0, EW, EH);
 
-      // 3. Scala la carta 4x sul canvas export — una sola drawImage, zero duplicati
-      ctx.drawImage(cardCanvas, 0, 0, CW, CH, 0, 0, EW, EH);
+      // 3. Sfondo bleed: SOLO l'artwork esteso a tutto il canvas export
+      //    (non la carta intera, solo l'immagine artwork come sfondo)
+      if (snap.artUrl) {
+        try {
+          const img = await loadImg(snap.artUrl);
+          ctx.drawImage(img, 0, 0, EW, EH);
+        } catch {}
+      } else {
+        // sfondo nero se non c'è artwork
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, EW, EH);
+      }
 
-      // 4. Crop marks agli angoli
-      const MARK = 10 * S, GAP = 3 * S;
+      // 4. Incolla la carta scalata 4x centrata (offset = BLEED * S)
+      ctx.drawImage(cardCanvas, 0, 0, CW, CH, BLEED * S, BLEED * S, CW * S, CH * S);
+
+      // 5. Crop marks sul bordo taglio reale (bordo della carta, non del bleed)
+      const bx = BLEED * S, by = BLEED * S;
+      const cw = CW * S,    ch = CH * S;
+      const MARK = 10 * S,  GAP = 3 * S;
       ctx.save();
       ctx.strokeStyle = "#555555";
       ctx.lineWidth   = S * 0.6;
       ctx.lineCap     = "square";
-      const corners = [
-        { x: 0,  y: 0  },
-        { x: EW, y: 0  },
-        { x: 0,  y: EH },
-        { x: EW, y: EH },
-      ];
-      for (const c of corners) {
-        const sx = c.x === 0 ? 1 : -1;
-        const sy = c.y === 0 ? 1 : -1;
+      for (const c of [{ x: bx, y: by }, { x: bx + cw, y: by }, { x: bx, y: by + ch }, { x: bx + cw, y: by + ch }]) {
+        const sx = c.x === bx ? -1 : 1;
+        const sy = c.y === by ? -1 : 1;
         ctx.beginPath(); ctx.moveTo(c.x + sx * GAP, c.y); ctx.lineTo(c.x + sx * (GAP + MARK), c.y); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(c.x, c.y + sy * GAP); ctx.lineTo(c.x, c.y + sy * (GAP + MARK)); ctx.stroke();
       }
       ctx.restore();
 
-      // 5. Download
+      // 6. Download
       const link = document.createElement("a");
       link.download = `${(snap.name || "token").replace(/[^a-z0-9_]/gi, "_")}_PRINT.png`;
       link.href = exportCanvas.toDataURL("image/png");
