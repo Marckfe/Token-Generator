@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
+import TokenPreviewSinglePtFrame from "./TokenPreviewSinglePtFrame";
 import { PDFDocument, rgb } from "pdf-lib";
 
 // ── COSTANTI ──────────────────────────────────────────────────────────────────
@@ -377,11 +378,7 @@ export default function MTGProxyCreator() {
         )}
 
         {tab === "token" && (
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", flex:1, color:"var(--muted)", flexDirection:"column", gap:12 }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 3h20v14H2zM8 21h8M12 17v4"/></svg>
-            <p style={{ fontWeight:600 }}>Token Creator</p>
-            <p style={{ fontSize:".82rem" }}>Usa il Tab Token Creator nel componente dedicato</p>
-          </div>
+          <TokenPreviewSinglePtFrame />
         )}
       </main>
 
