@@ -1,819 +1,652 @@
+import React, { useState, useRef, useEffect, useCallback } from "react";
 
-import React, { useState, useRef, useMemo } from "react";
-import html2canvas from "html2canvas";
-import {
-  Accordion, AccordionSummary, AccordionDetails,
-  Box, Button, Divider, FormControl, FormGroup, Grid, InputLabel,
-  MenuItem, Select, Slider, Switch, TextField, Typography, FormControlLabel
-} from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-
+// ─── ASSET IMPORTS ────────────────────────────────────────────────────────────
 const ALL_FRAME_SETS = import.meta.glob(
   "/src/assets/frames/masterframes/*/*.{png,jpg,jpeg,webp,svg}",
   { eager: true, import: "default" }
 );
-
-function groupFramesBySet(allFrames) {
+function groupFramesBySet(all) {
   const map = {};
-  for (const path in allFrames) {
-    const match = path.match(/masterframes\/([^/]+)\//);
-    if (!match) continue;
-    const setKey = match[1];
-    if (!map[setKey]) map[setKey] = [];
-    map[setKey].push({
-      name: path.split("/").pop().replace(/\.[a-z]+$/, ""),
-      url: allFrames[path],
-    });
+  for (const path in all) {
+    const m = path.match(/masterframes\/([^/]+)\//);
+    if (!m) continue;
+    const k = m[1];
+    if (!map[k]) map[k] = [];
+    map[k].push({ name: path.split("/").pop().replace(/\.[a-z]+$/, ""), url: all[path] });
   }
-  for (const k in map) {
-    map[k] = map[k].sort((a, b) => a.name.localeCompare(b.name));
-  }
+  for (const k in map) map[k].sort((a, b) => a.name.localeCompare(b.name));
   return map;
 }
 const FRAME_MAP = groupFramesBySet(ALL_FRAME_SETS);
+const framePT = import.meta.glob("/src/assets/frames/pt/*.{png,jpg,jpeg,webp,svg}", { eager: true, import: "default" });
+const PT_FRAMES = Object.entries(framePT).map(([p, url]) => ({ name: p.split("/").pop().replace(/\.[a-z]+$/, ""), url }));
+const SYMBOLS = import.meta.glob("/src/assets/simbol/*.{svg,png,jpg,jpeg,webp}", { eager: true, import: "default" });
 
-const framePT = import.meta.glob(
-  "/src/assets/frames/pt/*.{png,jpg,jpeg,webp,svg}",
-  { eager: true, import: "default" }
-);
-const PT_FRAMES = Object.entries(framePT).map(([p, url]) => ({
-  name: p.split("/").pop().replace(/\.[a-z]+$/, ""),
-  url,
-}));
+// ─── COSTANTI CARTA ───────────────────────────────────────────────────────────
+// Coordinate native: tutte le posizioni sono in px su canvas 620×890
+const CW = 620, CH = 890;
+// Scala di visualizzazione: la carta nel DOM è larga DISPLAY_W px
+const DISPLAY_W = 460;
+const DISPLAY_H = Math.round(CH * DISPLAY_W / CW); // ~661px
+const SCALE = CW / DISPLAY_W; // ~1.348 — fattore DOM→canvas
 
-const simbolImport = import.meta.glob(
-  "/src/assets/simbol/*.{svg,png,jpg,jpeg,webp}",
-  { eager: true, import: "default" }
-);
+// Font stack
+const FT = "Beleren, MatrixSC, Cinzel, Georgia, serif";
+const FB = "MPlantin, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
 
-function getAvailableSymbolsFromFolder(simbolsObj) {
-  // Estrae tutti i simboli validi dal nome del file
-  // esempio: "/src/assets/simbol/W.svg" => 'W'
-  return Object.keys(simbolsObj).map(p =>
-    p.split("/").pop().replace(/\.[^/.]+$/, "")
-  );
+// ─── UTILITY: carica immagine come HTMLImageElement ───────────────────────────
+function loadImg(src) {
+  return new Promise((res, rej) => {
+    if (!src) return rej(new Error("no src"));
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = src;
+  });
 }
 
-const CARD_WIDTH = 620, CARD_HEIGHT = 890;
-
-function ColorControl({ setter, keyName, value, label }) {
-  return (
-    <Grid container spacing={1} alignItems="center" sx={{ mb: 2 }}>
-      <Grid item xs={12}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-          {label}
-        </Typography>
-      </Grid>
-      <Grid item>
-        <input
-          type="color"
-          value={value}
-          onChange={e => setter(val => ({ ...val, [keyName]: e.target.value }))}
-          style={{
-            width: 38,
-            height: 34,
-            border: "2.5px solid #777",
-            borderRadius: 5,
-            background: "#f9fafb",
-            margin: 0,
-            cursor: "pointer"
-          }}
-          aria-label={label}
-        />
-      </Grid>
-      <Grid item xs>
-        <TextField
-          label="Hex"
-          value={value}
-          size="small"
-          variant="outlined"
-          onChange={e =>
-            setter(val => ({ ...val, [keyName]: e.target.value }))
-          }
-          sx={{ ml: 1, maxWidth: 100 }}
-          inputProps={{
-            style: { fontFamily: "monospace" },
-            maxLength: 7
-          }}
-        />
-      </Grid>
-    </Grid>
-  );
+// ─── UTILITY: trova URL simbolo da nome (es. "T", "W", "G") ──────────────────
+function symbolUrl(sym) {
+  const key = Object.keys(SYMBOLS).find(p => {
+    const fn = p.split("/").pop().replace(/\.[^.]+$/, "");
+    return fn === sym || fn === `{${sym}}` || fn.toLowerCase() === sym.toLowerCase();
+  });
+  return key ? SYMBOLS[key] : null;
 }
 
-// Parser per sostituire {SYMBOL} con l'immagine dalla cartella simboli
-function parseManaSymbols(text, symbolMap) {
-  const regex = /{([^}]+)}/g;
-  const parts = [];
-  let lastIndex = 0;
-  let match;
-  let key = 0;
-  // Calcola l'elenco simboli validi solo una volta
-  const validSymbols = useMemo(() =>
-    Object.keys(symbolMap).map(p =>
-      p.split("/").pop().replace(/\.[^/.]+$/, "")
-    )
-  , [symbolMap]);
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
-    }
-    const symbol = match[1].trim();
-    // Trova la key della mappa con il simbolo richiesto (case sensitive)
-    const symbolKey = Object.keys(symbolMap).find(p =>
-      p.split("/").pop().replace(/\.[^/.]+$/, "") === symbol
-    );
-    let imgSrc = symbolKey ? symbolMap[symbolKey] : null;
-    parts.push(
-      imgSrc ?
-        <img
-          key={`manaimg-${key++}`}
-          src={imgSrc}
-          alt={`{${symbol}}`}
-          style={{
-            width: '22px',
-            height: '22px',
-            verticalAlign: 'middle',
-            margin: '0 2px',
-            display: 'inline-block',
-          }}
-        />
-      :
-        `{${match[1]}}`
-    );
-    lastIndex = regex.lastIndex;
+// ─── PARSER MANA: ritorna array {type:"txt"|"sym", v} ─────────────────────────
+function parseMana(text) {
+  const rx = /\{([^}]+)\}/g;
+  const parts = []; let last = 0, m;
+  while ((m = rx.exec(text)) !== null) {
+    if (m.index > last) parts.push({ type: "txt", v: text.slice(last, m.index) });
+    parts.push({ type: "sym", v: m[1].trim() });
+    last = rx.lastIndex;
   }
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
+  if (last < text.length) parts.push({ type: "txt", v: text.slice(last) });
   return parts;
 }
 
-export default function MagicTokenEditor() {
-  const [name, setName] = useState("CONSTRUCT");
-  const [nameStyle, setNameStyle] = useState({ x: 0, y: 45, fontSize: 29.2, color: "#181818" });
-
-  const [type, setType] = useState("Token Artifact Creature â€” Construct");
-  const [typeStyle, setTypeStyle] = useState({ x: 53, y: 730, fontSize: 24, color: "#181818" });
-
-  const [ability, setAbility] = useState("This creature gets +1/+1 for each {W} you control.\n{T}: Add {G} or {R}.");
-  const [abilityStyle, setAbilityStyle] = useState({ x: 43, y: 787, fontSize: 15.6, color: "#181818" });
-  const [showAbility, setShowAbility] = useState(true);
-
-  const [pt, setPT] = useState({ power: 0, toughness: 0 });
-  const [ptStyle, setPTStyle] = useState({
-    x: 503, y: 775, frameX: 498, frameY: 778, width: 89, height: 58,
-    fontSize: 36, color: "#181818",
-    powerOffsetX: 0, slashOffsetX: 0, toughnessOffsetX: 0
-  });
-  const [showPT, setShowPT] = useState(true);
-
-  const allFrameKeys = Object.keys(FRAME_MAP);
-  const [mainFrameSet, setMainFrameSet] = useState(allFrameKeys[0] || "");
-  const [mainFrameIdx, setMainFrameIdx] = useState(0);
-  const [ptFrameIdx, setPTFrameIdx] = useState(0);
-
-  const [showInfoLeft, setShowInfoLeft] = useState(true);
-  const [showArtist, setShowArtist] = useState(true);
-  const [infoLeft, setInfoLeft] = useState({
-    year: "2025", rarity: "P", setCode: "MTG", lang: "EN",
-    fontSize: 13, x: 9, y: 21, artist: "Jn Avon"
-  });
-
-  const [copyright, setCopyright] = useState({ year: "2025", color: "#b2b2b2", x: 24, y: 21, fontSize: 15.5 });
-  const [showCopyright, setShowCopyright] = useState(true);
-
-  const [artUrl, setArtUrl] = useState("");
-  const artInput = useRef();
-  const cardRef = useRef();
-
-  const symbolMap = simbolImport;
-  const availableSymbols = useMemo(
-    () => getAvailableSymbolsFromFolder(symbolMap),
-    [symbolMap]
-  );
-
-  function handleSlider(setter, key) {
-    return (event, newValue) => {
-      if (typeof newValue === 'number') {
-        setter(val => ({ ...val, [key]: newValue }));
+// ─── DISEGNA TESTO CON SIMBOLI SU CANVAS ─────────────────────────────────────
+// Ritorna Promise — necessario per le immagini simboli
+async function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
+  const parts = parseMana(text);
+  const symSize = fontSize * 1.1;
+  ctx.font = `${fontSize}px ${font}`;
+  ctx.fillStyle = color;
+  ctx.textBaseline = "top";
+  let curX = x;
+  for (const p of parts) {
+    if (p.type === "txt") {
+      // Wrap se supera maxWidth
+      const words = p.v.split(" ");
+      for (let i = 0; i < words.length; i++) {
+        const word = (i === 0 ? "" : " ") + words[i];
+        const w = ctx.measureText(word).width;
+        if (maxWidth && curX + w > x + maxWidth && curX > x) {
+          curX = x;
+          y += fontSize * 1.45;
+        }
+        ctx.fillText(word, curX, y);
+        curX += ctx.measureText(word).width;
       }
-    };
-  }
-  function handleInputChange(setter, key, min, max) {
-    return e => {
-      const value = e.target.value;
-      const numValue = parseFloat(value);
-      if (!isNaN(numValue)) {
-        let clampedValue = numValue;
-        if (min !== undefined) clampedValue = Math.max(min, clampedValue);
-        if (max !== undefined) clampedValue = Math.min(max, clampedValue);
-        setter(val => ({ ...val, [key]: clampedValue }));
-      } else if (value === '') {
-        setter(val => ({ ...val, [key]: value }));
-      }
-    };
-  }
-  const handleInputBlur = (setter, key, min, max, defaultValue = min !== undefined ? min : 0) => (e) => {
-    const value = e.target.value;
-    const numValue = parseFloat(value);
-    if (value === '' || isNaN(numValue)) {
-      setter(val => ({ ...val, [key]: defaultValue }));
     } else {
-      let clampedValue = numValue;
-      if (min !== undefined) clampedValue = Math.max(min, clampedValue);
-      if (max !== undefined) clampedValue = Math.min(max, clampedValue);
-      if (clampedValue !== numValue) {
-        setter(val => ({ ...val, [key]: clampedValue }));
+      const url = symbolUrl(p.v);
+      if (url) {
+        try {
+          const img = await loadImg(url);
+          ctx.drawImage(img, curX, y, symSize, symSize);
+          curX += symSize + 1;
+        } catch {
+          ctx.fillText(`{${p.v}}`, curX, y);
+          curX += ctx.measureText(`{${p.v}}`).width;
+        }
       } else {
-        setter(val => ({ ...val, [key]: numValue }));
+        ctx.fillText(`{${p.v}}`, curX, y);
+        curX += ctx.measureText(`{${p.v}}`).width;
       }
     }
-  };
-  const handleDownload = async () => {
-    if (!cardRef.current) return;
-    const cardElement = cardRef.current;
-    const originalOverflow = cardElement.style.overflow;
-    const originalBorder = cardElement.style.border;
-    const originalBoxShadow = cardElement.style.boxShadow;
-    cardElement.style.overflow = 'visible';
-    cardElement.style.border = 'none';
-    cardElement.style.boxShadow = 'none';
+  }
+  return y; // ritorna y finale (utile per multiline)
+}
+
+// ─── RENDER CANVAS COMPLETO ───────────────────────────────────────────────────
+async function renderCard(canvas, state) {
+  const {
+    artUrl, frame, ptFrame,
+    name, nameStyle,
+    type, typeStyle,
+    ability, abilityStyle, showAbility,
+    pt, ptStyle, showPT,
+    infoLeft, showInfoLeft, showArtist,
+    copyright, showCopyright,
+  } = state;
+
+  const ctx = canvas.getContext("2d");
+  canvas.width  = CW;
+  canvas.height = CH;
+  ctx.clearRect(0, 0, CW, CH);
+
+  // 1. Artwork
+  if (artUrl) {
     try {
-      const html2canvasLib = (await import('html2canvas')).default;
-      const canvas = await html2canvasLib(cardElement, {
-        scale: 3, useCORS: true, logging: false
-      });
-      const link = document.createElement("a");
-      link.download = `${name.replace(/[^a-zA-Z0-9]/g, '_')}_token.png`;
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-    } catch (error) {
-      console.error("Errore durante il download:", error);
-    } finally {
-      cardElement.style.overflow = originalOverflow;
-      cardElement.style.border = originalBorder;
-      cardElement.style.boxShadow = originalBoxShadow;
+      const img = await loadImg(artUrl);
+      ctx.drawImage(img, 0, 0, CW, CH);
+    } catch {}
+  }
+
+  // 2. Frame principale
+  if (frame) {
+    try {
+      const img = await loadImg(frame.url);
+      ctx.drawImage(img, 0, 0, CW, CH);
+    } catch {}
+  }
+
+  // 3. NOME — centrato nel box
+  ctx.save();
+  ctx.font = `bold ${nameStyle.fontSize}px ${FT}`;
+  ctx.fillStyle = nameStyle.color;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = nameStyle.align || "center";
+  const nameBoxW = CW; // box largo tutta la carta
+  const nameX = nameStyle.align === "left" ? nameStyle.x + 10
+              : nameStyle.align === "right" ? nameStyle.x + nameBoxW - 10
+              : nameStyle.x + nameBoxW / 2;
+  // Testo maiuscolo con letter-spacing simulato
+  const nameText = name.toUpperCase();
+  ctx.letterSpacing = "1px";
+  ctx.fillText(nameText, nameX, nameStyle.y);
+  ctx.restore();
+
+  // 4. TIPO
+  ctx.save();
+  ctx.font = `bold ${typeStyle.fontSize}px ${FT}`;
+  ctx.fillStyle = typeStyle.color;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  ctx.fillText(type, typeStyle.x, typeStyle.y);
+  ctx.restore();
+
+  // 5. ABILITÀ con simboli mana
+  if (showAbility && ability) {
+    const lines = ability.split("\n");
+    let curY = abilityStyle.y;
+    for (const line of lines) {
+      curY = await drawManaText(
+        ctx, line,
+        abilityStyle.x, curY,
+        abilityStyle.fontSize,
+        abilityStyle.color,
+        FB,
+        CW - abilityStyle.x - 20
+      );
+      curY += abilityStyle.fontSize * 1.45 + 2;
     }
+  }
+
+  // 6. Frame P/T
+  if (showPT && ptFrame) {
+    try {
+      const img = await loadImg(ptFrame.url);
+      ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height);
+    } catch {}
+  }
+
+  // 7. Testo P/T
+  if (showPT) {
+    ctx.save();
+    ctx.font = `bold ${ptStyle.fontSize}px ${FT}`;
+    ctx.fillStyle = ptStyle.color;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    const ptCenterX = ptStyle.frameX + ptStyle.width / 2;
+    const ptCenterY = ptStyle.frameY + ptStyle.height / 2;
+    ctx.fillText(`${pt.power}/${pt.toughness}`, ptCenterX + (ptStyle.powerOffsetX || 0), ptCenterY);
+    ctx.restore();
+  }
+
+  // 8. Info bassa sinistra
+  if (showInfoLeft) {
+    ctx.save();
+    ctx.font = `${infoLeft.fontSize}px ${FB}`;
+    ctx.fillStyle = "#9a9a9a";
+    ctx.textBaseline = "bottom";
+    ctx.textAlign = "left";
+    const infoY = CH - infoLeft.y;
+    ctx.fillText(`${infoLeft.rarity} ${infoLeft.setCode} • ${infoLeft.lang}`, infoLeft.x, infoY - infoLeft.fontSize * 1.2);
+    if (showArtist) ctx.fillText(`Illus. ${infoLeft.artist}`, infoLeft.x, infoY);
+    ctx.restore();
+  }
+
+  // 9. Copyright
+  if (showCopyright) {
+    ctx.save();
+    ctx.font = `${copyright.fontSize * 0.85}px ${FB}`;
+    ctx.fillStyle = copyright.color;
+    ctx.textBaseline = "bottom";
+    ctx.textAlign = "right";
+    ctx.fillText(`™ & © ${copyright.year} Wizards of the Coast`, CW - copyright.x, CH - copyright.y);
+    ctx.restore();
+  }
+}
+
+// ─── COMPONENTE DRAGGABLE PER POSIZIONARE I BOX ───────────────────────────────
+// Le coordinate sono in spazio CANVAS (620×890)
+// Internamente le converti in spazio DISPLAY dividendo per SCALE
+function DragBox({ label, style, onUpdate, color, children }) {
+  const ref = useRef();
+  const drag = useRef(false);
+  const start = useRef({});
+
+  const dispX = style.x / SCALE;
+  const dispY = style.y / SCALE;
+
+  const onDown = (e) => {
+    e.preventDefault();
+    drag.current = true;
+    start.current = { mx: e.clientX, my: e.clientY, sx: style.x, sy: style.y };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   };
-  const handleArtChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setArtUrl(reader.result);
-      };
-      reader.onerror = (error) => {
-        console.error("Errore FileReader:", error);
-      };
-      reader.readAsDataURL(file);
-      e.target.value = null;
-    }
-  };
+  const onMove = useCallback((e) => {
+    if (!drag.current) return;
+    const dx = (e.clientX - start.current.mx) * SCALE;
+    const dy = (e.clientY - start.current.my) * SCALE;
+    onUpdate({ x: Math.round(start.current.sx + dx), y: Math.round(start.current.sy + dy) });
+  }, [onUpdate]);
+  const onUp = useCallback(() => {
+    drag.current = false;
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+  }, [onMove]);
 
   return (
-    <Box
-      sx={{
-        width: "100%",
-        maxWidth: "100%",
-        bgcolor: "#f5f7fa",
-        p: { xs: 1, md: 4 },
-        boxSizing: "border-box"
+    <div
+      ref={ref}
+      onMouseDown={onDown}
+      title={`Trascina: ${label}`}
+      style={{
+        position: "absolute",
+        left: dispX, top: dispY,
+        cursor: "move",
+        border: `1.5px dashed ${color}`,
+        background: `${color}18`,
+        borderRadius: 3,
+        padding: "1px 4px",
+        userSelect: "none",
+        zIndex: 10,
+        minWidth: 30, minHeight: 16,
       }}
     >
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: { xs: "column", md: "row" },
-          justifyContent: "flex-start",
-          alignItems: { xs: "center", md: "flex-start" },
-          gap: { xs: 2, md: 6 },
-          width: "100%",
-          maxWidth: "100%"
-        }}
-      >
-        <Box ref={cardRef}
-          sx={{
-            width: CARD_WIDTH,
-            height: CARD_HEIGHT,
-            position: "relative",
-            background: "#deefff",
-            overflow: "hidden",
-            borderRadius: '17px',
-            boxShadow: 6,
-            flexShrink: 0,
-            mr: { md: 4, xs: 0 },
-            alignSelf: "flex-start",
-            left: 0
-          }}>
-          {artUrl
-            ? <img src={artUrl} alt="Token artwork" crossOrigin="anonymous" style={{
-              position: "absolute", width: "100%", height: "100%", objectFit: "cover",
-              left: 0, top: 0, zIndex: 1, borderRadius: '17px'
-            }} />
-            : <Box sx={{
-              position: "absolute", left: 0, top: 0, width: "100%", height: "100%",
-              background: "#ccd7ee", color: "#9ab", fontSize: 22, display: "flex",
-              alignItems: "center", justifyContent: "center", zIndex: 1, borderRadius: '17px'
-            }}>
-              Nessuna immagine
-            </Box>
-          }
-          {FRAME_MAP[mainFrameSet] && FRAME_MAP[mainFrameSet][mainFrameIdx] && (
-            <img
-              src={FRAME_MAP[mainFrameSet][mainFrameIdx].url}
-              alt={FRAME_MAP[mainFrameSet][mainFrameIdx].name}
-              style={{
-                position: "absolute", left: 0, top: 0,
-                width: "100%", height: "100%",
-                zIndex: 8, pointerEvents: "none"
-              }}
-            />
-          )}
+      <span style={{ position: "absolute", top: -14, left: 0, fontSize: 9, background: "rgba(0,0,0,.8)", color, padding: "1px 4px", borderRadius: 2, whiteSpace: "nowrap", pointerEvents: "none" }}>{label}</span>
+      {children}
+    </div>
+  );
+}
 
-          <Typography component="div" sx={{
-            position: "absolute", left: nameStyle.x, top: nameStyle.y,
-            color: nameStyle.color, fontSize: nameStyle.fontSize, fontWeight: 700, textAlign: "center",
-            fontFamily: "BelerenBold, Beleren, serif", letterSpacing: ".13em", zIndex: 30,
-            width: CARD_WIDTH
-          }}>{name}</Typography>
+// ─── STILE PANNELLO ───────────────────────────────────────────────────────────
+const P = { background: "#1a1917", color: "#cdccca", fontFamily: "system-ui,sans-serif", fontSize: 13 };
+const BD = "#2e2d2b", G = "#4f98a3", SURFACE = "#201f1d";
 
-          <Typography component="div" sx={{
-            position: "absolute", left: typeStyle.x, top: typeStyle.y,
-            color: typeStyle.color, fontSize: typeStyle.fontSize, fontWeight: 680, textAlign: "left",
-            fontFamily: "MatrixBoldSmallCaps, MatrixBold, serif", letterSpacing: ".01em", zIndex: 29,
-            whiteSpace: "pre-line"
-          }}>{type}</Typography>
+function Lbl({ children }) {
+  return <div style={{ fontSize: 11, color: "#797876", marginBottom: 3, textTransform: "uppercase", letterSpacing: ".05em" }}>{children}</div>;
+}
+function TF({ value, onChange, placeholder, disabled, type = "text" }) {
+  return (
+    <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
+      style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`, borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box", outline: "none", marginBottom: 6, opacity: disabled ? 0.4 : 1 }} />
+  );
+}
+function TFArea({ value, onChange, placeholder, disabled, rows = 3 }) {
+  return (
+    <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled} rows={rows}
+      style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`, borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box", outline: "none", resize: "vertical", marginBottom: 6, opacity: disabled ? 0.4 : 1, fontFamily: "system-ui,sans-serif" }} />
+  );
+}
+function Sld({ label, value, onChange, min, max, step = 0.5 }) {
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#797876", marginBottom: 2 }}>
+        <span>{label}</span><span style={{ color: G }}>{typeof value === "number" ? value.toFixed(1) : value}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))}
+        style={{ width: "100%", accentColor: G }} />
+    </div>
+  );
+}
+function Row({ children }) {
+  return <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>{children}</div>;
+}
+function Btn({ children, onClick, color = G, small }) {
+  return (
+    <button onClick={onClick} style={{ background: color, color: "#fff", border: "none", borderRadius: 5, padding: small ? "3px 8px" : "6px 14px", fontSize: small ? 11 : 13, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
+      {children}
+    </button>
+  );
+}
+function Section({ title, children }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ marginBottom: 8, border: `1px solid ${BD}`, borderRadius: 6, overflow: "hidden" }}>
+      <div onClick={() => setOpen(o => !o)} style={{ background: SURFACE, padding: "7px 12px", cursor: "pointer", fontWeight: 600, fontSize: 12, display: "flex", justifyContent: "space-between", color: "#aaa" }}>
+        <span>{title}</span><span>{open ? "▲" : "▼"}</span>
+      </div>
+      {open && <div style={{ padding: "10px 12px" }}>{children}</div>}
+    </div>
+  );
+}
+function AlignBtns({ value, onChange }) {
+  return (
+    <Row>
+      {["left", "center", "right"].map(a => (
+        <button key={a} onClick={() => onChange(a)}
+          style={{ flex: 1, background: value === a ? G : "#252420", color: value === a ? "#000" : "#797876", border: `1px solid ${BD}`, borderRadius: 4, padding: "3px 0", fontSize: 12, cursor: "pointer" }}>
+          {a === "left" ? "◀" : a === "center" ? "◆" : "▶"}
+        </button>
+      ))}
+    </Row>
+  );
+}
+function CP({ label, value, onChange }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+      <Lbl>{label}</Lbl>
+      <input type="color" value={value} onChange={e => onChange(e.target.value)}
+        style={{ width: 32, height: 26, border: `1px solid ${BD}`, borderRadius: 4, background: "none", cursor: "pointer", padding: 1 }} />
+      <input type="text" value={value} onChange={e => onChange(e.target.value)}
+        style={{ flex: 1, background: "#252420", color: "#cdccca", border: `1px solid ${BD}`, borderRadius: 4, padding: "3px 6px", fontSize: 12, outline: "none" }} />
+    </div>
+  );
+}
 
-          {showAbility && (
-            <Typography component="div" sx={{
-              position: "absolute", left: abilityStyle.x, top: abilityStyle.y,
-              color: abilityStyle.color, fontSize: abilityStyle.fontSize,
-              textAlign: "left", fontFamily: "Matrix, serif",
-              fontWeight: 500, padding: "2px 9px", background: "rgba(255,255,255,0.02)",
-              borderRadius: 7, zIndex: 25, whiteSpace: "pre-line"
-            }}>
-              {parseManaSymbols(ability, symbolMap)}
-            </Typography>
-          )}
+// ─── COMPONENTE PRINCIPALE ───────────────────────────────────────────────────
+export default function TokenEditor() {
+  const canvasRef  = useRef();   // canvas preview (DISPLAY_W × DISPLAY_H)
+  const artInput   = useRef();
 
-          {showPT && PT_FRAMES[ptFrameIdx] && (
-            <img
-              src={PT_FRAMES[ptFrameIdx].url}
-              alt={PT_FRAMES[ptFrameIdx].name}
-              style={{
-                position: "absolute",
-                left: ptStyle.frameX, top: ptStyle.frameY,
-                width: ptStyle.width, height: ptStyle.height,
-                zIndex: 45, pointerEvents: "none"
-              }}
-            />
-          )}
+  // Stato carta
+  const [artUrl,      setArtUrl]     = useState("");
+  const [frameIdx,    setFrameIdx]   = useState(0);
+  const [frameSet,    setFrameSet]   = useState(Object.keys(FRAME_MAP)[0] || "");
+  const [ptFrameIdx,  setPtFrameIdx] = useState(0);
 
-          {showPT && (
-            <Box component="div" sx={{
-              position: "absolute", left: ptStyle.x, top: ptStyle.y,
-              width: ptStyle.width, height: ptStyle.height, zIndex: 50,
-              display: "flex", alignItems: "center", justifyContent: "center"
-            }}>
-              <Typography component="span" sx={{
-                fontFamily: "MatrixBoldSmallCaps, serif", fontSize: ptStyle.fontSize,
-                color: ptStyle.color, fontWeight: 800, letterSpacing: ".003em",
-                transform: `translateX(${ptStyle.powerOffsetX}px)`
-              }}>
-                {pt.power}
-              </Typography>
-              <Typography component="span" sx={{
-                fontFamily: "MatrixBoldSmallCaps, serif", fontSize: ptStyle.fontSize,
-                color: ptStyle.color, fontWeight: 800, letterSpacing: ".003em",
-                transform: `translateX(${ptStyle.slashOffsetX}px)`
-              }}>
-                /
-              </Typography>
-              <Typography component="span" sx={{
-                fontFamily: "MatrixBoldSmallCaps, serif", fontSize: ptStyle.fontSize,
-                color: ptStyle.color, fontWeight: 800, letterSpacing: ".003em",
-                transform: `translateX(${ptStyle.toughnessOffsetX}px)`
-              }}>
-                {pt.toughness}
-              </Typography>
-            </Box>
-          )}
+  const [name,        setName]       = useState("CONSTRUCT");
+  const [nameStyle,   setNameStyle]  = useState({ x: 0, y: 75, fontSize: 29, color: "#181818", align: "center" });
 
-          {showInfoLeft && (
-            <Typography component="div" sx={{
-              position: "absolute", left: infoLeft.x, bottom: infoLeft.y,
-              fontFamily: "MatrixBoldSmallCaps, serif", fontSize: infoLeft.fontSize,
-              color: "#fff", letterSpacing: ".055em", zIndex: 90,
-              display: "flex", flexDirection: "row", alignItems: "center"
-            }}>
-              <Box component="span" sx={{ marginRight: 0.5, fontWeight: 600 }}>
-                {infoLeft.year} {infoLeft.rarity}
-              </Box>
-              <Box component="span" sx={{ marginRight: 0.5, fontWeight: 600 }}>
-                {infoLeft.setCode} â€¢ {infoLeft.lang}
-              </Box>
-              {showArtist && (
-                <Box component="span"
-                  sx={{
-                    marginLeft: 1,
-                    fontFamily: "Matrix, serif",
-                    fontSize: infoLeft.fontSize - 1, color: "#fff"
-                  }}>
-                  Illus. <Box component="b">{infoLeft.artist}</Box>
-                </Box>
+  const [type,        setType]       = useState("Token Artifact Creature — Construct");
+  const [typeStyle,   setTypeStyle]  = useState({ x: 53, y: 730, fontSize: 24, color: "#181818" });
+
+  const [ability,     setAbility]    = useState("This creature gets +1/+1 for each artifact you control.\n{T}: Add {G} or {R}.");
+  const [abilityStyle,setAbilityStyle] = useState({ x: 43, y: 760, fontSize: 15.5, color: "#181818" });
+  const [showAbility, setShowAbility]= useState(true);
+
+  const [pt,          setPt]         = useState({ power: "0", toughness: "0" });
+  const [ptStyle,     setPtStyle]    = useState({ x: 503, y: 775, frameX: 498, frameY: 778, width: 89, height: 58, fontSize: 34, color: "#181818", powerOffsetX: 0 });
+  const [showPT,      setShowPT]     = useState(true);
+
+  const [infoLeft,    setInfoLeft]   = useState({ x: 9, y: 21, fontSize: 13, year: "2025", rarity: "T", setCode: "MTG", lang: "EN", artist: "Jn Avon" });
+  const [showInfoLeft,setShowInfoLeft]=useState(true);
+  const [showArtist,  setShowArtist] = useState(true);
+
+  const [copyright,   setCopyright]  = useState({ x: 24, y: 21, fontSize: 13, year: "2025", color: "#b2b2b2" });
+  const [showCopyright,setShowCopyright]=useState(true);
+
+  const [downloading, setDownloading]= useState(false);
+  const [showGrid,    setShowGrid]   = useState(true);
+
+  const frame   = (FRAME_MAP[frameSet] || [])[frameIdx];
+  const ptFrame = PT_FRAMES[ptFrameIdx];
+
+  // ── Stato completo per renderCard ──────────────────────────────────────────
+  const cardState = { artUrl, frame, ptFrame, name, nameStyle, type, typeStyle, ability, abilityStyle, showAbility, pt, ptStyle, showPT, infoLeft, showInfoLeft, showArtist, copyright, showCopyright };
+
+  // ── Ridisegna il canvas ogni volta che cambia qualcosa ──────────────────────
+  useEffect(() => {
+    const c = canvasRef.current;
+    if (!c) return;
+    // Imposta dimensioni display
+    c.style.width  = DISPLAY_W + "px";
+    c.style.height = DISPLAY_H + "px";
+    // Risoluzione interna = nativa canvas (620×890)
+    c.width  = CW;
+    c.height = CH;
+    renderCard(c, cardState);
+  });
+
+  // ── Export: il canvas ha già tutto renderizzato — basta scaricarlo ──────────
+  const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      // Crea canvas UHD 4× separato
+      const exportCanvas = document.createElement("canvas");
+      const EXPORT_SCALE = 4;
+      exportCanvas.width  = CW * EXPORT_SCALE;
+      exportCanvas.height = CH * EXPORT_SCALE;
+      const ctx = exportCanvas.getContext("2d");
+      ctx.scale(EXPORT_SCALE, EXPORT_SCALE);
+      await renderCard(exportCanvas, cardState);
+      const link = document.createElement("a");
+      link.download = `${(name || "token").replace(/[^a-z0-9_]/gi, "_")}_token.png`;
+      link.href = exportCanvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      alert("Errore export: " + err.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const allFrameKeys = Object.keys(FRAME_MAP);
+
+  return (
+    <div style={{ ...P, display: "flex", gap: 0, minHeight: "100vh", background: "#111" }}>
+
+      {/* ── PANNELLO SINISTRO ─────────────────────────────────────────────── */}
+      <div style={{ width: 260, minWidth: 220, background: "#1a1917", borderRight: `1px solid ${BD}`, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 0 }}>
+
+        <Section title="🖼 Frame & Artwork">
+          <Lbl>Set Frame</Lbl>
+          <select value={frameSet} onChange={e => { setFrameSet(e.target.value); setFrameIdx(0); }}
+            style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`, borderRadius: 5, padding: "4px 6px", marginBottom: 6, fontSize: 12 }}>
+            {allFrameKeys.map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 6 }}>
+            {(FRAME_MAP[frameSet] || []).map((f, i) => (
+              <img key={f.url} src={f.url} alt={f.name} title={f.name} onClick={() => setFrameIdx(i)}
+                style={{ width: 44, height: 63, objectFit: "cover", borderRadius: 3, cursor: "pointer", border: i === frameIdx ? `2px solid ${G}` : `2px solid transparent`, opacity: i === frameIdx ? 1 : 0.6 }} />
+            ))}
+          </div>
+          <Lbl>Frame P/T</Lbl>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 6 }}>
+            {PT_FRAMES.map((f, i) => (
+              <img key={f.url} src={f.url} alt={f.name} title={f.name} onClick={() => setPtFrameIdx(i)}
+                style={{ width: 44, height: 32, objectFit: "cover", borderRadius: 3, cursor: "pointer", border: i === ptFrameIdx ? `2px solid ${G}` : `2px solid transparent`, opacity: i === ptFrameIdx ? 1 : 0.6 }} />
+            ))}
+          </div>
+          <Btn onClick={() => artInput.current.click()} color="#6366f1">📁 Carica Artwork</Btn>
+          <input ref={artInput} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+            const f = e.target.files?.[0]; if (!f) return;
+            const r = new FileReader(); r.onloadend = () => setArtUrl(r.result); r.readAsDataURL(f);
+            e.target.value = null;
+          }} />
+          {artUrl && <div style={{ marginTop: 6 }}><Btn small onClick={() => setArtUrl("")} color="#7a1e1e">✕ Rimuovi artwork</Btn></div>}
+        </Section>
+
+        <Section title="✏️ Nome">
+          <TF value={name} onChange={setName} placeholder="Nome carta…" />
+          <Lbl>Allineamento</Lbl>
+          <AlignBtns value={nameStyle.align || "center"} onChange={v => setNameStyle(s => ({ ...s, align: v }))} />
+          <Sld label="Font size" value={nameStyle.fontSize} onChange={v => setNameStyle(s => ({ ...s, fontSize: v }))} min={10} max={50} />
+          <CP label="Colore" value={nameStyle.color} onChange={v => setNameStyle(s => ({ ...s, color: v }))} />
+        </Section>
+
+        <Section title="📋 Tipo">
+          <TF value={type} onChange={setType} placeholder="Tipo carta…" />
+          <Sld label="Font size" value={typeStyle.fontSize} onChange={v => setTypeStyle(s => ({ ...s, fontSize: v }))} min={10} max={40} />
+          <CP label="Colore" value={typeStyle.color} onChange={v => setTypeStyle(s => ({ ...s, color: v }))} />
+        </Section>
+
+        <Section title="⚡ Abilità">
+          <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, cursor: "pointer", fontSize: 12 }}>
+            <input type="checkbox" checked={showAbility} onChange={e => setShowAbility(e.target.checked)} /> Mostra abilità
+          </label>
+          <TFArea value={ability} onChange={setAbility} placeholder="Testo abilità… usa {T} {W} {G} ecc." disabled={!showAbility} rows={4} />
+          <Sld label="Font size" value={abilityStyle.fontSize} onChange={v => setAbilityStyle(s => ({ ...s, fontSize: v }))} min={8} max={30} />
+          <CP label="Colore" value={abilityStyle.color} onChange={v => setAbilityStyle(s => ({ ...s, color: v }))} />
+        </Section>
+
+        <Section title="⚔️ P/T">
+          <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, cursor: "pointer", fontSize: 12 }}>
+            <input type="checkbox" checked={showPT} onChange={e => setShowPT(e.target.checked)} /> Mostra P/T
+          </label>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>Power</Lbl><TF value={pt.power} onChange={v => setPt(p => ({ ...p, power: v }))} disabled={!showPT} /></div>
+            <div style={{ flex: 1 }}><Lbl>Toughness</Lbl><TF value={pt.toughness} onChange={v => setPt(p => ({ ...p, toughness: v }))} disabled={!showPT} /></div>
+          </Row>
+          <Sld label="Font size" value={ptStyle.fontSize} onChange={v => setPtStyle(s => ({ ...s, fontSize: v }))} min={14} max={60} />
+          <CP label="Colore" value={ptStyle.color} onChange={v => setPtStyle(s => ({ ...s, color: v }))} />
+        </Section>
+
+        <Section title="ℹ️ Info & Copyright">
+          <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, cursor: "pointer", fontSize: 12 }}>
+            <input type="checkbox" checked={showInfoLeft} onChange={e => setShowInfoLeft(e.target.checked)} /> Mostra info bassa
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, cursor: "pointer", fontSize: 12 }}>
+            <input type="checkbox" checked={showArtist} onChange={e => setShowArtist(e.target.checked)} /> Mostra artista
+          </label>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>Anno</Lbl><TF value={infoLeft.year} onChange={v => setInfoLeft(s => ({ ...s, year: v }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Rarità</Lbl><TF value={infoLeft.rarity} onChange={v => setInfoLeft(s => ({ ...s, rarity: v }))} /></div>
+          </Row>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>Set</Lbl><TF value={infoLeft.setCode} onChange={v => setInfoLeft(s => ({ ...s, setCode: v }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Lingua</Lbl><TF value={infoLeft.lang} onChange={v => setInfoLeft(s => ({ ...s, lang: v }))} /></div>
+          </Row>
+          <Lbl>Artista</Lbl>
+          <TF value={infoLeft.artist} onChange={v => setInfoLeft(s => ({ ...s, artist: v }))} disabled={!showArtist} />
+          <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, cursor: "pointer", fontSize: 12 }}>
+            <input type="checkbox" checked={showCopyright} onChange={e => setShowCopyright(e.target.checked)} /> Mostra copyright
+          </label>
+          <Lbl>Anno copyright</Lbl>
+          <TF value={copyright.year} onChange={v => setCopyright(s => ({ ...s, year: v }))} disabled={!showCopyright} />
+        </Section>
+
+      </div>
+
+      {/* ── PREVIEW CENTRALE ─────────────────────────────────────────────── */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "20px 10px", gap: 12, overflowY: "auto" }}>
+
+        {/* Toolbar */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+          <button onClick={() => setShowGrid(g => !g)}
+            style={{ background: showGrid ? G : "#252420", color: showGrid ? "#000" : "#797876", border: `1px solid ${BD}`, borderRadius: 5, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+            {showGrid ? "✅ Box ON" : "📐 Box OFF"}
+          </button>
+          <span style={{ color: "#4a4948", fontSize: 11, alignSelf: "center" }}>Trascina i box colorati per riposizionare</span>
+        </div>
+
+        {/* Carta: canvas + overlay DragBox */}
+        <div style={{ position: "relative", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14, overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,.7)", flexShrink: 0 }}>
+
+          {/* Canvas principale — unica fonte di verità visiva */}
+          <canvas ref={canvasRef} style={{ display: "block", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14 }} />
+
+          {/* Overlay drag boxes — visibili solo se showGrid */}
+          {showGrid && (
+            <>
+              <DragBox label="NOME" style={nameStyle} color="#c9a227"
+                onUpdate={d => setNameStyle(s => ({ ...s, x: d.x, y: d.y }))}>
+                <span style={{ fontSize: 9, color: "#c9a227", whiteSpace: "nowrap" }}>{name.toUpperCase()}</span>
+              </DragBox>
+              <DragBox label="TIPO" style={typeStyle} color="#60a5fa"
+                onUpdate={d => setTypeStyle(s => ({ ...s, x: d.x, y: d.y }))}>
+                <span style={{ fontSize: 9, color: "#60a5fa", whiteSpace: "nowrap" }}>{type.slice(0, 28)}</span>
+              </DragBox>
+              {showAbility && (
+                <DragBox label="ABILITÀ" style={abilityStyle} color="#4ade80"
+                  onUpdate={d => setAbilityStyle(s => ({ ...s, x: d.x, y: d.y }))}>
+                  <span style={{ fontSize: 9, color: "#4ade80", whiteSpace: "nowrap" }}>Abilità…</span>
+                </DragBox>
               )}
-            </Typography>
+              {showPT && (
+                <DragBox label="P/T" style={{ x: ptStyle.frameX, y: ptStyle.frameY }} color="#f87171"
+                  onUpdate={d => setPtStyle(s => ({ ...s, frameX: d.x, frameY: d.y, x: d.x, y: d.y }))}>
+                  <span style={{ fontSize: 9, color: "#f87171" }}>{pt.power}/{pt.toughness}</span>
+                </DragBox>
+              )}
+            </>
           )}
+        </div>
 
-          {showCopyright && (
-          <Typography component="div" sx={{
-            position: "absolute", right: copyright.x, bottom: copyright.y,
-            color: copyright.color, fontFamily: "Matrix, serif", fontSize: copyright.fontSize, zIndex: 99
-          }}>
-            Â© {copyright.year} Wizards of the Coast
-          </Typography>
-          )}
-        </Box>
-        <Box
-          sx={{
-            width: { xs: "100%", md: 470 },
-            bgcolor: 'background.paper',
-            borderRadius: '18px',
-            boxShadow: 4,
-            p: 1,
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-            alignSelf: "flex-start",
-            minWidth: { xs: "unset", md: 320 },
-            maxWidth: 520,
-            overflowY: "auto"
-          }}
-        >
+        {/* Pulsante download */}
+        <button onClick={handleDownload} disabled={downloading}
+          style={{ background: downloading ? "#333" : "#c9a227", color: downloading ? "#666" : "#000", border: "none", borderRadius: 8, padding: "10px 32px", fontSize: 15, fontWeight: 700, cursor: downloading ? "not-allowed" : "pointer", letterSpacing: ".03em", boxShadow: "0 2px 12px rgba(201,162,39,.3)" }}>
+          {downloading ? "⏳ Esportazione…" : "⬇ Scarica PNG UHD (4×)"}
+        </button>
 
-          <Accordion defaultExpanded>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography fontWeight={700}>Frame & Artwork</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <FormGroup sx={{ mb: 1 }}>
-                <FormControl fullWidth margin="normal">
-                  <InputLabel id="main-frame-set-label">Set Frame</InputLabel>
-                  <Select
-                    labelId="main-frame-set-label"
-                    value={mainFrameSet}
-                    label="Set Frame"
-                    onChange={e => { setMainFrameSet(e.target.value); setMainFrameIdx(0); }}
-                  >
-                    {allFrameKeys.map(setKey => (
-                      <MenuItem value={setKey} key={setKey}>
-                        {setKey.replace("token", "").replace(/([a-z])([A-Z])/g, "\\\\$1 \$2").replace(/^./, a => a.toUpperCase())}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Typography variant="subtitle2" sx={{ mt: 1, mb: 1 }}>Frame specifico:</Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  {(FRAME_MAP[mainFrameSet] || []).map((f, idx) => (
-                    <Button
-                      variant={idx === mainFrameIdx ? "contained" : "outlined"}
-                      onClick={() => setMainFrameIdx(idx)}
-                      key={f.url}
-                      sx={{ p: '2.5px', minWidth: 0, '& img': { borderRadius: '2px' } }}
-                    >
-                      <img src={f.url} alt={f.name} style={{ width: 41, height: 56, objectFit: "cover" }} />
-                    </Button>
-                  ))}
-                </Box>
-                <Typography variant="subtitle1" sx={{ mt: 2, mb: 0 }}>Frame P/T</Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  {PT_FRAMES.map((f, idx) => (
-                    <Button
-                      variant={idx === ptFrameIdx ? "contained" : "outlined"}
-                      onClick={() => setPTFrameIdx(idx)}
-                      key={f.url}
-                      sx={{ p: '2.5px', minWidth: 0, '& img': { borderRadius: '2px' } }}
-                    >
-                      <img src={f.url} alt={f.name} style={{ width: 33, height: 24, objectFit: "contain" }} />
-                    </Button>
-                  ))}
-                </Box>
-                <Divider sx={{my:2}} />
-                <Typography variant="subtitle1" sx={{ mt: 2, mb: 0 }}>Artwork</Typography>
-                <Button
-                  variant="outlined"
-                  color="white"
-                  onClick={() => artInput.current.click()}
-                  sx={{ borderRadius: 13,
-                fontWeight: 900,
-                fontSize: 18,
-                minWidth: 200,
-                py: 1.45,
-                px: 2.8,
-                boxShadow: "0 0 16px 3px #6366f14f, 0 2px 10px #fff3",
-                background: "linear-gradient(99deg,#6366f1 67%,#818cf8 100%)",
-                textTransform: "none",
-                transition: "all 220ms cubic-bezier(.41,.98,.25,1.13)" }}
-                >
-                  Carica immagine
-                </Button>
-                <input ref={artInput} type="file" accept="image/*" hidden onChange={handleArtChange} />
-                {artUrl && (
-                  <img src={artUrl} alt="preview" style={{ width: "100%", borderRadius: 5, objectFit: "cover" }} />
-                )}
-              </FormGroup>
-            </AccordionDetails>
-          </Accordion>
+      </div>
 
-          <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography fontWeight={700}>Nome</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <TextField label="Nome" value={name} fullWidth sx={{ mb: 1 }} onChange={e => setName(e.target.value)} />
-              <ColorControl setter={setNameStyle} keyName="color" value={nameStyle.color} label="Colore" />
-              <Slider
-                value={nameStyle.fontSize}
-                min={18} max={60} step={0.2}
-                onChange={handleSlider(setNameStyle, "fontSize")}
-                sx={{ mt: 2 }}
-                valueLabelDisplay="auto"
-                marks={[{ value: 18, label: "18" }, { value: 29.2, label: "Default" }, { value: 60, label: "60" }]}
-              />
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <TextField label="Pos X" type="number"
-                  value={nameStyle.x}
-                  onChange={handleInputChange(setNameStyle, "x", 0)}
-                  onBlur={handleInputBlur(setNameStyle, "x", 0, CARD_WIDTH - 50)}
-                  size="small" />
-                <TextField label="Pos Y" type="number"
-                  value={nameStyle.y}
-                  onChange={handleInputChange(setNameStyle, "y", 0)}
-                  onBlur={handleInputBlur(setNameStyle, "y", 0, CARD_HEIGHT)}
-                  size="small" />
-              </Box>
-            </AccordionDetails>
-          </Accordion>
+      {/* ── PANNELLO DESTRO — posizioni fini ─────────────────────────────── */}
+      <div style={{ width: 220, minWidth: 180, background: "#1a1917", borderLeft: `1px solid ${BD}`, overflowY: "auto", padding: 10 }}>
 
-          <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography fontWeight={700}>Tipo</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <TextField label="Tipo" value={type} fullWidth sx={{ mb: 1 }} onChange={e => setType(e.target.value)} />
-              <ColorControl setter={setTypeStyle} keyName="color" value={typeStyle.color} label="Colore" />
-              <Slider
-                value={typeStyle.fontSize}
-                min={12} max={40} step={0.2}
-                onChange={handleSlider(setTypeStyle, "fontSize")}
-                sx={{ mt: 2 }}
-                valueLabelDisplay="auto"
-                marks={[{ value: 12, label: "12" }, { value: 24, label: "Default" }, { value: 40, label: "40" }]}
-              />
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <TextField label="Pos X" type="number"
-                  value={typeStyle.x}
-                  onChange={handleInputChange(setTypeStyle, "x", 0)}
-                  onBlur={handleInputBlur(setTypeStyle, "x", 0, CARD_WIDTH - 100)}
-                  size="small" />
-                <TextField label="Pos Y" type="number"
-                  value={typeStyle.y}
-                  onChange={handleInputChange(setTypeStyle, "y", 0)}
-                  onBlur={handleInputBlur(setTypeStyle, "y", 0, CARD_HEIGHT)}
-                  size="small" />
-              </Box>
-            </AccordionDetails>
-          </Accordion>
+        <Section title="📍 Posizioni">
+          <Lbl>Nome  X / Y</Lbl>
+          <Row>
+            <TF type="number" value={nameStyle.x} onChange={v => setNameStyle(s => ({ ...s, x: Number(v) }))} />
+            <TF type="number" value={nameStyle.y} onChange={v => setNameStyle(s => ({ ...s, y: Number(v) }))} />
+          </Row>
+          <Lbl>Tipo  X / Y</Lbl>
+          <Row>
+            <TF type="number" value={typeStyle.x} onChange={v => setTypeStyle(s => ({ ...s, x: Number(v) }))} />
+            <TF type="number" value={typeStyle.y} onChange={v => setTypeStyle(s => ({ ...s, y: Number(v) }))} />
+          </Row>
+          <Lbl>Abilità  X / Y</Lbl>
+          <Row>
+            <TF type="number" value={abilityStyle.x} onChange={v => setAbilityStyle(s => ({ ...s, x: Number(v) }))} />
+            <TF type="number" value={abilityStyle.y} onChange={v => setAbilityStyle(s => ({ ...s, y: Number(v) }))} />
+          </Row>
+          <Lbl>P/T Frame  X / Y</Lbl>
+          <Row>
+            <TF type="number" value={ptStyle.frameX} onChange={v => setPtStyle(s => ({ ...s, frameX: Number(v), x: Number(v) }))} />
+            <TF type="number" value={ptStyle.frameY} onChange={v => setPtStyle(s => ({ ...s, frameY: Number(v), y: Number(v) }))} />
+          </Row>
+          <Lbl>P/T Frame  W / H</Lbl>
+          <Row>
+            <TF type="number" value={ptStyle.width}  onChange={v => setPtStyle(s => ({ ...s, width:  Number(v) }))} />
+            <TF type="number" value={ptStyle.height} onChange={v => setPtStyle(s => ({ ...s, height: Number(v) }))} />
+          </Row>
+        </Section>
 
-          <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography fontWeight={700}>AbilitÃ </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <FormControlLabel
-                control={<Switch checked={showAbility} onChange={e => setShowAbility(e.target.checked)} />}
-                label="Mostra testo AbilitÃ "
-              />
-              <TextField label="Testo AbilitÃ " value={ability} fullWidth sx={{ mb: 1 }} onChange={e => setAbility(e.target.value)} disabled={!showAbility} />
-              <ColorControl setter={setAbilityStyle} keyName="color" value={abilityStyle.color} label="Colore" />
-              <Slider
-                value={abilityStyle.fontSize}
-                min={9} max={32} step={0.1}
-                onChange={handleSlider(setAbilityStyle, "fontSize")}
-                sx={{ mt: 2 }}
-                valueLabelDisplay="auto"
-                marks={[{ value: 9, label: "9" }, { value: 15.6, label: "Default" }, { value: 32, label: "32" }]}
-                disabled={!showAbility}
-              />
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <TextField label="Pos X" type="number"
-                  value={abilityStyle.x}
-                  onChange={handleInputChange(setAbilityStyle, "x", 0)}
-                  onBlur={handleInputBlur(setAbilityStyle, "x", 0, CARD_WIDTH - 100)}
-                  size="small"
-                  disabled={!showAbility}
-                />
-                <TextField label="Pos Y" type="number"
-                  value={abilityStyle.y}
-                  onChange={handleInputChange(setAbilityStyle, "y", 0)}
-                  onBlur={handleInputBlur(setAbilityStyle, "y", 0, CARD_HEIGHT)}
-                  size="small"
-                  disabled={!showAbility}
-                />
-              </Box>
-            </AccordionDetails>
-          </Accordion>
+        <Section title="💾 Layout JSON">
+          <Btn onClick={() => {
+            const layout = { nameStyle, typeStyle, abilityStyle, ptStyle };
+            const a = document.createElement("a");
+            a.href = "data:application/json," + encodeURIComponent(JSON.stringify(layout, null, 2));
+            a.download = "token_layout.json"; a.click();
+          }} color="#4a4948" small>⬇ Salva layout</Btn>
+          <div style={{ marginTop: 6 }}>
+            <input type="file" accept=".json" id="layoutUpload" style={{ display: "none" }} onChange={e => {
+              const f = e.target.files?.[0]; if (!f) return;
+              const r = new FileReader();
+              r.onloadend = () => {
+                try {
+                  const l = JSON.parse(r.result);
+                  if (l.nameStyle)    setNameStyle(l.nameStyle);
+                  if (l.typeStyle)    setTypeStyle(l.typeStyle);
+                  if (l.abilityStyle) setAbilityStyle(l.abilityStyle);
+                  if (l.ptStyle)      setPtStyle(l.ptStyle);
+                } catch { alert("JSON non valido"); }
+              };
+              r.readAsText(f); e.target.value = null;
+            }} />
+            <Btn onClick={() => document.getElementById("layoutUpload").click()} color="#4a4948" small>📂 Carica layout</Btn>
+          </div>
+        </Section>
 
-          <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography fontWeight={700}>Power / Toughness</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <FormControlLabel
-                control={<Switch checked={showPT} onChange={e => setShowPT(e.target.checked)} />}
-                label="Mostra Power/Toughness"
-              />
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <TextField label="Power" type="number" value={pt.power} disabled={!showPT}
-                  onChange={e => setPT(ptf => ({ ...ptf, power: e.target.value }))}
-                  size="small" />
-                <TextField label="Toughness" type="number" value={pt.toughness} disabled={!showPT}
-                  onChange={e => setPT(ptf => ({ ...ptf, toughness: e.target.value }))}
-                  size="small" />
-              </Box>
-              <ColorControl setter={setPTStyle} keyName="color" value={ptStyle.color} label="Colore" />
-              <Slider
-                value={ptStyle.fontSize}
-                min={16} max={60} step={0.1}
-                onChange={handleSlider(setPTStyle, "fontSize")}
-                sx={{ mt: 2 }}
-                valueLabelDisplay="auto"
-                marks={[{ value: 16, label: "16" }, { value: 36, label: "Default" }, { value: 60, label: "60" }]}
-                disabled={!showPT}
-              />
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <TextField label="Pos X" type="number"
-                  value={ptStyle.x}
-                  onChange={handleInputChange(setPTStyle, "x", 0)}
-                  onBlur={handleInputBlur(setPTStyle, "x", 0, CARD_WIDTH - 90)}
-                  size="small"
-                  disabled={!showPT}
-                />
-                <TextField label="Pos Y" type="number"
-                  value={ptStyle.y}
-                  onChange={handleInputChange(setPTStyle, "y", 0)}
-                  onBlur={handleInputBlur(setPTStyle, "y", 0, CARD_HEIGHT)}
-                  size="small"
-                  disabled={!showPT}
-                />
-              </Box>
-              <Typography variant="subtitle2" sx={{ mt: 1 }}>Offset Power, Slash, Toughness</Typography>
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <TextField label="Power X" type="number"
-                  value={ptStyle.powerOffsetX}
-                  onChange={handleInputChange(setPTStyle, "powerOffsetX")}
-                  size="small"
-                  disabled={!showPT}
-                />
-                <TextField label="Slash X" type="number"
-                  value={ptStyle.slashOffsetX}
-                  onChange={handleInputChange(setPTStyle, "slashOffsetX")}
-                  size="small"
-                  disabled={!showPT}
-                />
-                <TextField label="Tough X" type="number"
-                  value={ptStyle.toughnessOffsetX}
-                  onChange={handleInputChange(setPTStyle, "toughnessOffsetX")}
-                  size="small"
-                  disabled={!showPT}
-                />
-              </Box>
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="subtitle2" sx={{ mb: 1, mt: 2 }}>Spostamento Frame P/T</Typography>
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <TextField
-                  label="Frame X"
-                  type="number"
-                  value={ptStyle.frameX}
-                  onChange={handleInputChange(setPTStyle, "frameX", 0, CARD_WIDTH - ptStyle.width)}
-                  size="small"
-                  disabled={!showPT}
-                />
-                <TextField
-                  label="Frame Y"
-                  type="number"
-                  value={ptStyle.frameY}
-                  onChange={handleInputChange(setPTStyle, "frameY", 0, CARD_HEIGHT - ptStyle.height)}
-                  size="small"
-                  disabled={!showPT}
-                />
-              </Box>
-            </AccordionDetails>
-          </Accordion>
-
-          <Accordion>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography fontWeight={700}>Info Basso &amp; Copyright</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <FormControlLabel
-                control={<Switch checked={showInfoLeft} onChange={e => setShowInfoLeft(e.target.checked)} />}
-                label="Mostra Info Bassa Sinistra"
-              />
-              <FormControlLabel
-                control={<Switch checked={showArtist} onChange={e => setShowArtist(e.target.checked)} />}
-                label="Mostra Artista"
-              />
-              <TextField label="Anno" type="text" value={infoLeft.year}
-                onChange={e => setInfoLeft(val => ({ ...val, year: e.target.value }))}
-                sx={{ my: 1 }} size="small" disabled={!showInfoLeft} />
-              <TextField label="RaritÃ " type="text" value={infoLeft.rarity}
-                onChange={e => setInfoLeft(val => ({ ...val, rarity: e.target.value }))}
-                sx={{ mb: 1 }} size="small" disabled={!showInfoLeft} />
-              <TextField label="Set" type="text" value={infoLeft.setCode}
-                onChange={e => setInfoLeft(val => ({ ...val, setCode: e.target.value }))}
-                sx={{ mb: 1 }} size="small" disabled={!showInfoLeft} />
-              <TextField label="Lingua" type="text" value={infoLeft.lang}
-                onChange={e => setInfoLeft(val => ({ ...val, lang: e.target.value }))}
-                sx={{ mb: 1 }} size="small" disabled={!showInfoLeft} />
-              <TextField label="Artista" type="text" value={infoLeft.artist}
-                onChange={e => setInfoLeft(val => ({ ...val, artist: e.target.value }))}
-                sx={{ mb: 1 }} size="small" disabled={!showArtist || !showInfoLeft} />
-              <Slider
-                value={infoLeft.fontSize}
-                min={7} max={36} step={0.1}
-                onChange={handleSlider(setInfoLeft, "fontSize")}
-                sx={{ mt: 2 }}
-                valueLabelDisplay="auto"
-                marks={[{ value: 7, label: "7" }, { value: 13, label: "Default" }, { value: 36, label: "36" }]}
-                disabled={!showInfoLeft}
-              />
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <TextField label="Pos X" type="number"
-                  value={infoLeft.x}
-                  onChange={handleInputChange(setInfoLeft, "x")}
-                  size="small"
-                  disabled={!showInfoLeft}
-                />
-                <TextField label="Pos Y" type="number"
-                  value={infoLeft.y}
-                  onChange={handleInputChange(setInfoLeft, "y")}
-                  size="small"
-                  disabled={!showInfoLeft}
-                />
-              </Box>
-              <Divider sx={{ my: 1 }} />
-              <FormControlLabel
-                control={<Switch checked={showCopyright} onChange={e => setShowCopyright(e.target.checked)} />}
-                label="Mostra Copyright"
-              />
-              <TextField label="Anno Copyright" type="text" value={copyright.year}
-                onChange={e => setCopyright(val => ({ ...val, year: e.target.value }))}
-                sx={{ mb: 1 }} size="small" disabled={!showCopyright} />
-              <ColorControl setter={setCopyright} keyName="color" value={copyright.color} label="Colore Copyright" />
-              <Slider
-                value={copyright.fontSize}
-                min={5} max={36} step={0.1}
-                onChange={handleSlider(setCopyright, "fontSize")}
-                sx={{ mt: 2 }} valueLabelDisplay="auto"
-                marks={[{ value: 5, label: "5" }, { value: 15.5, label: "Def." }, { value: 36, label: "36" }]}
-                disabled={!showCopyright}
-              />
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <TextField label="Pos X" type="number"
-                  value={copyright.x}
-                  onChange={handleInputChange(setCopyright, "x")}
-                  size="small"
-                  disabled={!showCopyright}
-                />
-                <TextField label="Pos Y" type="number"
-                  value={copyright.y}
-                  onChange={handleInputChange(setCopyright, "y")}
-                  size="small"
-                  disabled={!showCopyright}
-                />
-              </Box>
-            </AccordionDetails>
-          </Accordion>
-
-          <Divider sx={{my:2}} />
-          <Button variant="contained" color="primary" onClick={handleDownload} 
-            sx={{ borderRadius: 13,
-                fontWeight: 900,
-                fontSize: 24,
-                minWidth: 200,
-                py: 1.45,
-                px: 2.8,
-                boxShadow: "0 0 16px 3px #6366f14f, 0 2px 10px #fff3",
-                background: "linear-gradient(99deg,#6366f1 67%,#818cf8 100%)",
-                textTransform: "none",
-                transition: "all 220ms cubic-bezier(.41,.98,.25,1.13)" }}>
-            Scarica come PNG UHD
-          </Button>
-        </Box>
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }
