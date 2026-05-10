@@ -123,7 +123,6 @@ async function renderCard(canvas, state) {
   if (artUrl) {
     try { const img = await loadImg(artUrl); ctx.drawImage(img, 0, 0, CW, CH); } catch {}
   }
-
   if (frame) {
     try { const img = await loadImg(frame.url); ctx.drawImage(img, 0, 0, CW, CH); } catch {}
   }
@@ -165,7 +164,6 @@ async function renderCard(canvas, state) {
   if (showPT && ptFrame) {
     try { const img = await loadImg(ptFrame.url); ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height); } catch {}
   }
-
   if (showPT) {
     ctx.save();
     ctx.font = `bold ${ptStyle.fontSize}px ${FT}`;
@@ -201,7 +199,6 @@ async function renderCard(canvas, state) {
 
 // ─── DRAG BOX ─────────────────────────────────────────────────────────────────
 function DragBox({ label, style, onUpdate, color, children }) {
-  const ref = useRef();
   const drag = useRef(false);
   const start = useRef({});
   const dispX = style.x / SCALE;
@@ -227,7 +224,7 @@ function DragBox({ label, style, onUpdate, color, children }) {
   }, [onMove]);
 
   return (
-    <div ref={ref} onMouseDown={onDown} title={`Trascina: ${label}`}
+    <div onMouseDown={onDown} title={`Trascina: ${label}`}
       style={{ position: "absolute", left: dispX, top: dispY, cursor: "move",
         border: `1.5px dashed ${color}`, background: `${color}18`,
         borderRadius: 3, padding: "1px 4px", userSelect: "none", zIndex: 10,
@@ -317,98 +314,69 @@ function AlignBtns({ value, onChange }) {
     </Row>
   );
 }
-
-// ─── FIX #3: Color Picker più grande e leggibile ──────────────────────────────
 function CP({ label, value, onChange }) {
   return (
     <div style={{ marginBottom: 8 }}>
       <Lbl>{label}</Lbl>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <input
-          type="color"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          style={{
-            width: 44,
-            height: 36,
-            border: `1px solid ${BD}`,
-            borderRadius: 6,
-            background: "none",
-            cursor: "pointer",
-            padding: 2,
-            flexShrink: 0,
-          }}
-        />
-        <input
-          type="text"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          style={{
-            flex: 1,
-            background: "#252420",
-            color: "#cdccca",
-            border: `1px solid ${BD}`,
-            borderRadius: 4,
-            padding: "5px 8px",
-            fontSize: 13,
-            outline: "none",
-            minWidth: 0,
-          }}
-        />
+        <input type="color" value={value} onChange={e => onChange(e.target.value)}
+          style={{ width: 44, height: 36, border: `1px solid ${BD}`, borderRadius: 6,
+            background: "none", cursor: "pointer", padding: 2, flexShrink: 0 }} />
+        <input type="text" value={value} onChange={e => onChange(e.target.value)}
+          style={{ flex: 1, background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
+            borderRadius: 4, padding: "5px 8px", fontSize: 13, outline: "none", minWidth: 0 }} />
       </div>
     </div>
   );
 }
 
-// ─── COMPONENTE PRINCIPALE ───────────────────────────────────────────────────
+// ─── COMPONENTE PRINCIPALE ────────────────────────────────────────────────────
 export default function TokenEditor() {
   const canvasRef  = useRef();
   const artInput   = useRef();
   const stateInput = useRef();
 
-  const [artUrl,       setArtUrl]      = useState("");
-  const [frameIdx,     setFrameIdx]    = useState(0);
-  const [frameSet,     setFrameSet]    = useState(Object.keys(FRAME_MAP)[0] || "");
-  const [ptFrameIdx,   setPtFrameIdx]  = useState(0);
+  // ── stati carta ──────────────────────────────────────────────────────────────
+  const [artUrl,        setArtUrl]       = useState("");
+  const [frameIdx,      setFrameIdx]     = useState(0);
+  const [frameSet,      setFrameSet]     = useState(Object.keys(FRAME_MAP)[0] || "");
+  const [ptFrameIdx,    setPtFrameIdx]   = useState(0);
 
-  const [name,         setName]        = useState("CONSTRUCT");
-  const [nameStyle,    setNameStyle]   = useState({ x: 0, y: 75, fontSize: 29, color: "#181818", align: "center" });
+  const [name,          setName]         = useState("CONSTRUCT");
+  const [nameStyle,     setNameStyle]    = useState({ x: 0, y: 75, fontSize: 29, color: "#181818", align: "center" });
 
-  const [type,         setType]        = useState("Token Artifact Creature — Construct");
-  const [typeStyle,    setTypeStyle]   = useState({ x: 53, y: 730, fontSize: 24, color: "#181818" });
+  const [type,          setType]         = useState("Token Artifact Creature — Construct");
+  const [typeStyle,     setTypeStyle]    = useState({ x: 53, y: 730, fontSize: 24, color: "#181818" });
 
-  const [ability,      setAbility]     = useState("This creature gets +1/+1 for each artifact you control.\n{T}: Add {G} or {R}.");
-  const [abilityStyle, setAbilityStyle]= useState({ x: 43, y: 760, fontSize: 15.5, color: "#181818" });
-  const [showAbility,  setShowAbility] = useState(true);
+  const [ability,       setAbility]      = useState("This creature gets +1/+1 for each artifact you control.\n{T}: Add {G} or {R}.");
+  const [abilityStyle,  setAbilityStyle] = useState({ x: 43, y: 760, fontSize: 15.5, color: "#181818" });
+  const [showAbility,   setShowAbility]  = useState(true);
 
-  const [pt,           setPt]          = useState({ power: "0", toughness: "0" });
-  const [ptStyle,      setPtStyle]     = useState({ x: 503, y: 775, frameX: 498, frameY: 778, width: 89, height: 58, fontSize: 34, color: "#181818", powerOffsetX: 0 });
-  const [showPT,       setShowPT]      = useState(true);
+  const [pt,            setPt]           = useState({ power: "0", toughness: "0" });
+  const [ptStyle,       setPtStyle]      = useState({ x: 503, y: 775, frameX: 498, frameY: 778, width: 89, height: 58, fontSize: 34, color: "#181818", powerOffsetX: 0 });
+  const [showPT,        setShowPT]       = useState(true);
 
-  const [infoLeft,     setInfoLeft]    = useState({ x: 9, y: 21, fontSize: 13, year: "2025", rarity: "T", setCode: "MTG", lang: "EN", artist: "Jn Avon" });
-  const [showInfoLeft, setShowInfoLeft]= useState(true);
-  const [showArtist,   setShowArtist]  = useState(true);
+  const [infoLeft,      setInfoLeft]     = useState({ x: 9, y: 21, fontSize: 13, year: "2025", rarity: "T", setCode: "MTG", lang: "EN", artist: "Jn Avon" });
+  const [showInfoLeft,  setShowInfoLeft] = useState(true);
+  const [showArtist,    setShowArtist]   = useState(true);
 
-  const [copyright,    setCopyright]   = useState({ x: 24, y: 21, fontSize: 13, year: "2025", color: "#b2b2b2" });
-  const [showCopyright,setShowCopyright]=useState(true);
+  const [copyright,     setCopyright]    = useState({ x: 24, y: 21, fontSize: 13, year: "2025", color: "#b2b2b2" });
+  const [showCopyright, setShowCopyright]= useState(true);
 
-  const [downloading,  setDownloading] = useState(false);
-  const [showGrid,     setShowGrid]    = useState(true);
+  const [downloading,   setDownloading]  = useState(false);
+  const [showGrid,      setShowGrid]     = useState(true);
 
   const frame   = (FRAME_MAP[frameSet] || [])[frameIdx];
   const ptFrame = PT_FRAMES[ptFrameIdx];
 
-  const cardState = {
-    artUrl, frame, ptFrame,
-    name, nameStyle,
-    type, typeStyle,
-    ability, abilityStyle, showAbility,
-    pt, ptStyle, showPT,
-    infoLeft, showInfoLeft, showArtist,
-    copyright, showCopyright,
-  };
+  // ── FIX DOPPIA CARTA: ref sempre aggiornato allo stato corrente ───────────
+  // In questo modo handleDownload legge sempre i valori freschi
+  // senza innescare un nuovo render o richiamare useEffect
+  const stateRef = useRef({});
+  stateRef.current = { artUrl, frame, ptFrame, name, nameStyle, type, typeStyle, ability, abilityStyle, showAbility, pt, ptStyle, showPT, infoLeft, showInfoLeft, showArtist, copyright, showCopyright };
 
-  // ─── FIX #1: useEffect con dipendenze esplicite — niente re-render spurio ───
+  // ── useEffect: ridisegna SOLO quando i dati della carta cambiano ──────────
+  // Non dipende da `downloading` → nessun re-render spurio durante l'export
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -416,7 +384,7 @@ export default function TokenEditor() {
     c.height = CH;
     c.style.width  = DISPLAY_W + "px";
     c.style.height = DISPLAY_H + "px";
-    renderCard(c, cardState);
+    renderCard(c, stateRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     artUrl, frame, ptFrame,
@@ -428,17 +396,17 @@ export default function TokenEditor() {
     copyright, showCopyright,
   ]);
 
-  // ─── FIX #1 (continua): Download usa il canvas già renderizzato ─────────────
+  // ── Download: usa stateRef.current — ZERO re-render, ZERO doppia carta ────
   const handleDownload = async () => {
     if (downloading) return;
     setDownloading(true);
     try {
       const BLEED = 21;
       const S     = 4;
+      const snap  = stateRef.current; // snapshot frozen dei valori attuali
 
-      // Ridisegna su canvas offscreen per l'export UHD
       const cardCanvas = document.createElement("canvas");
-      await renderCard(cardCanvas, cardState);
+      await renderCard(cardCanvas, snap);
 
       const EW = (CW + BLEED * 2) * S;
       const EH = (CH + BLEED * 2) * S;
@@ -448,10 +416,9 @@ export default function TokenEditor() {
       const ctx = exportCanvas.getContext("2d");
       ctx.clearRect(0, 0, EW, EH);
 
-      if (artUrl) {
-        try { const img = await loadImg(artUrl); ctx.drawImage(img, 0, 0, EW, EH); } catch {}
+      if (snap.artUrl) {
+        try { const img = await loadImg(snap.artUrl); ctx.drawImage(img, 0, 0, EW, EH); } catch {}
       }
-
       ctx.drawImage(cardCanvas, 0, 0, CW, CH, BLEED * S, BLEED * S, CW * S, CH * S);
 
       const bx = BLEED * S, by = BLEED * S;
@@ -461,22 +428,16 @@ export default function TokenEditor() {
       ctx.strokeStyle = "#555555";
       ctx.lineWidth   = S * 0.6;
       ctx.lineCap     = "square";
-      const corners = [
-        { x: bx,      y: by      },
-        { x: bx + cw, y: by      },
-        { x: bx,      y: by + ch },
-        { x: bx + cw, y: by + ch },
-      ];
-      for (const c of corners) {
-        const sx = c.x === bx ? -1 : 1;
-        const sy = c.y === by ? -1 : 1;
-        ctx.beginPath(); ctx.moveTo(c.x + sx * GAP, c.y); ctx.lineTo(c.x + sx * (GAP + MARK), c.y); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(c.x, c.y + sy * GAP); ctx.lineTo(c.x, c.y + sy * (GAP + MARK)); ctx.stroke();
+      for (const corner of [{ x: bx, y: by }, { x: bx + cw, y: by }, { x: bx, y: by + ch }, { x: bx + cw, y: by + ch }]) {
+        const sx = corner.x === bx ? -1 : 1;
+        const sy = corner.y === by ? -1 : 1;
+        ctx.beginPath(); ctx.moveTo(corner.x + sx * GAP, corner.y); ctx.lineTo(corner.x + sx * (GAP + MARK), corner.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(corner.x, corner.y + sy * GAP); ctx.lineTo(corner.x, corner.y + sy * (GAP + MARK)); ctx.stroke();
       }
       ctx.restore();
 
       const link = document.createElement("a");
-      link.download = `${(name || "token").replace(/[^a-z0-9_]/gi, "_")}_PRINT.png`;
+      link.download = `${(snap.name || "token").replace(/[^a-z0-9_]/gi, "_")}_PRINT.png`;
       link.href = exportCanvas.toDataURL("image/png");
       link.click();
     } catch (err) {
@@ -487,31 +448,48 @@ export default function TokenEditor() {
     }
   };
 
-  // ─── FIX #2: Salva stato completo con nomi frame (non solo indici) ──────────
+  // ── FIX JSON: salva TUTTI i campi inclusi testi, artUrl, frame per nome ───
   const handleSaveState = () => {
+    const snap = stateRef.current;
     const snapshot = {
-      _version: 2,
+      _version: 3,
+      // frame identificati per nome — non per indice
       frameSet,
-      frameName:   frame?.name   ?? null,
-      ptFrameName: ptFrame?.name ?? null,
-      artUrl,
-      name, nameStyle,
-      type, typeStyle,
-      ability, abilityStyle, showAbility,
-      pt, ptStyle, showPT,
-      infoLeft, showInfoLeft, showArtist,
-      copyright, showCopyright,
+      frameName:    snap.frame?.name   ?? null,
+      ptFrameName:  snap.ptFrame?.name ?? null,
+      // artwork come dataURL (se presente)
+      artUrl:       snap.artUrl,
+      // TUTTI i testi
+      name:         snap.name,
+      type:         snap.type,
+      ability:      snap.ability,
+      pt:           snap.pt,
+      // stili
+      nameStyle:    snap.nameStyle,
+      typeStyle:    snap.typeStyle,
+      abilityStyle: snap.abilityStyle,
+      ptStyle:      snap.ptStyle,
+      // visibilità
+      showAbility:  snap.showAbility,
+      showPT:       snap.showPT,
+      showInfoLeft: snap.showInfoLeft,
+      showArtist:   snap.showArtist,
+      showCopyright:snap.showCopyright,
+      // info & copyright
+      infoLeft:     snap.infoLeft,
+      copyright:    snap.copyright,
+      // ui
       showGrid,
     };
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${(name || "token").replace(/[^a-z0-9_]/gi, "_")}_state.json`;
+    a.download = `${(snap.name || "token").replace(/[^a-z0-9_]/gi, "_")}_state.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
 
-  // ─── FIX #2 (continua): Carica stato cercando frame per nome ────────────────
+  // ── FIX JSON: carica TUTTI i campi — testi + posizioni + frame per nome ───
   const handleLoadState = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -520,19 +498,16 @@ export default function TokenEditor() {
       try {
         const s = JSON.parse(ev.target.result);
 
-        // Ripristina frameSet e cerca il frame per NOME (non per indice)
+        // ── frame: cerca per nome (v3), fallback indice (v1/v2) ───────────
         if (s.frameSet !== undefined) {
           setFrameSet(s.frameSet);
           if (s.frameName && FRAME_MAP[s.frameSet]) {
             const idx = FRAME_MAP[s.frameSet].findIndex(f => f.name === s.frameName);
             setFrameIdx(idx >= 0 ? idx : 0);
           } else if (s.frameIdx !== undefined) {
-            // fallback retrocompatibilità con _version:1
             setFrameIdx(s.frameIdx);
           }
         }
-
-        // Ripristina PT frame per nome
         if (s.ptFrameName) {
           const idx = PT_FRAMES.findIndex(f => f.name === s.ptFrameName);
           setPtFrameIdx(idx >= 0 ? idx : 0);
@@ -540,29 +515,41 @@ export default function TokenEditor() {
           setPtFrameIdx(s.ptFrameIdx);
         }
 
-        if (s.artUrl        !== undefined) setArtUrl(s.artUrl);
-        if (s.name          !== undefined) setName(s.name);
+        // ── artwork ────────────────────────────────────────────────────────
+        if (s.artUrl !== undefined) setArtUrl(s.artUrl);
+
+        // ── TESTI ─────────────────────────────────────────────────────────
+        if (s.name    !== undefined) setName(s.name);
+        if (s.type    !== undefined) setType(s.type);
+        if (s.ability !== undefined) setAbility(s.ability);
+        if (s.pt      !== undefined) setPt(s.pt);
+
+        // ── stili posizione ────────────────────────────────────────────────
         if (s.nameStyle     !== undefined) setNameStyle(s.nameStyle);
-        if (s.type          !== undefined) setType(s.type);
         if (s.typeStyle     !== undefined) setTypeStyle(s.typeStyle);
-        if (s.ability       !== undefined) setAbility(s.ability);
         if (s.abilityStyle  !== undefined) setAbilityStyle(s.abilityStyle);
-        if (s.showAbility   !== undefined) setShowAbility(s.showAbility);
-        if (s.pt            !== undefined) setPt(s.pt);
         if (s.ptStyle       !== undefined) setPtStyle(s.ptStyle);
+
+        // ── visibilità ────────────────────────────────────────────────────
+        if (s.showAbility   !== undefined) setShowAbility(s.showAbility);
         if (s.showPT        !== undefined) setShowPT(s.showPT);
-        if (s.infoLeft      !== undefined) setInfoLeft(s.infoLeft);
         if (s.showInfoLeft  !== undefined) setShowInfoLeft(s.showInfoLeft);
         if (s.showArtist    !== undefined) setShowArtist(s.showArtist);
-        if (s.copyright     !== undefined) setCopyright(s.copyright);
         if (s.showCopyright !== undefined) setShowCopyright(s.showCopyright);
-        if (s.showGrid      !== undefined) setShowGrid(s.showGrid);
+
+        // ── info & copyright ──────────────────────────────────────────────
+        if (s.infoLeft  !== undefined) setInfoLeft(s.infoLeft);
+        if (s.copyright !== undefined) setCopyright(s.copyright);
+
+        // ── ui ────────────────────────────────────────────────────────────
+        if (s.showGrid !== undefined) setShowGrid(s.showGrid);
+
       } catch (err) {
         alert("File non valido: " + err.message);
       }
     };
     reader.readAsText(file);
-    e.target.value = null; // permette ricaricamento dello stesso file
+    e.target.value = null;
   };
 
   const allFrameKeys = Object.keys(FRAME_MAP);
@@ -669,7 +656,6 @@ export default function TokenEditor() {
       {/* ── PREVIEW CENTRALE ─────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "20px 10px", gap: 12, overflowY: "auto" }}>
 
-        {/* Toolbar */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
           <button onClick={() => setShowGrid(g => !g)}
             style={{ background: showGrid ? G : "#252420", color: showGrid ? "#000" : "#797876",
@@ -680,10 +666,8 @@ export default function TokenEditor() {
           <span style={{ color: "#4a4948", fontSize: 11, alignSelf: "center" }}>Trascina i box colorati per riposizionare</span>
         </div>
 
-        {/* Carta: canvas + overlay DragBox */}
         <div style={{ position: "relative", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14, overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,.7)", flexShrink: 0 }}>
           <canvas ref={canvasRef} style={{ display: "block", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14 }} />
-
           {showGrid && (
             <>
               <DragBox label="NOME" style={nameStyle} color="#c9a227"
@@ -710,7 +694,6 @@ export default function TokenEditor() {
           )}
         </div>
 
-        {/* Download PNG UHD */}
         <button onClick={handleDownload} disabled={downloading}
           style={{ background: downloading ? "#333" : "#c9a227", color: downloading ? "#666" : "#000",
             border: "none", borderRadius: 8, padding: "10px 32px", fontSize: 15, fontWeight: 700,
@@ -719,18 +702,15 @@ export default function TokenEditor() {
           {downloading ? "⏳ Esportazione…" : "⬇ Scarica PNG UHD (4×)"}
         </button>
 
-        {/* Salva / Carica stato COMPLETO */}
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button onClick={handleSaveState} title="Salva stato carta come JSON"
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <button onClick={handleSaveState}
             style={{ flex: 1, background: "#1e3a2f", color: "#4f98a3", border: "1px solid #4f98a3",
-              borderRadius: 8, padding: "8px 0", fontSize: 13, fontWeight: 700,
-              cursor: "pointer", letterSpacing: ".02em" }}>
+              borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
             💾 Salva stato
           </button>
-          <button onClick={() => stateInput.current.click()} title="Carica stato carta da JSON"
+          <button onClick={() => stateInput.current.click()}
             style={{ flex: 1, background: "#1e2a3a", color: "#7ab4c9", border: "1px solid #4f98a3",
-              borderRadius: 8, padding: "8px 0", fontSize: 13, fontWeight: 700,
-              cursor: "pointer", letterSpacing: ".02em" }}>
+              borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
             📂 Carica stato
           </button>
           <input ref={stateInput} type="file" accept=".json,application/json"
@@ -768,32 +748,6 @@ export default function TokenEditor() {
             <TF type="number" value={ptStyle.width}  onChange={v => setPtStyle(s => ({ ...s, width:  Number(v) }))} />
             <TF type="number" value={ptStyle.height} onChange={v => setPtStyle(s => ({ ...s, height: Number(v) }))} />
           </Row>
-        </Section>
-
-        <Section title="💾 Layout JSON">
-          <Btn onClick={() => {
-            const layout = { nameStyle, typeStyle, abilityStyle, ptStyle };
-            const a = document.createElement("a");
-            a.href = "data:application/json," + encodeURIComponent(JSON.stringify(layout, null, 2));
-            a.download = "token_layout.json"; a.click();
-          }} color="#4a4948" small>⬇ Salva layout</Btn>
-          <div style={{ marginTop: 6 }}>
-            <input type="file" accept=".json" id="layoutUpload" style={{ display: "none" }} onChange={e => {
-              const f = e.target.files?.[0]; if (!f) return;
-              const r = new FileReader();
-              r.onloadend = () => {
-                try {
-                  const l = JSON.parse(r.result);
-                  if (l.nameStyle)    setNameStyle(l.nameStyle);
-                  if (l.typeStyle)    setTypeStyle(l.typeStyle);
-                  if (l.abilityStyle) setAbilityStyle(l.abilityStyle);
-                  if (l.ptStyle)      setPtStyle(l.ptStyle);
-                } catch { alert("JSON non valido"); }
-              };
-              r.readAsText(f); e.target.value = null;
-            }} />
-            <Btn onClick={() => document.getElementById("layoutUpload").click()} color="#4a4948" small>📂 Carica layout</Btn>
-          </div>
         </Section>
 
       </div>
