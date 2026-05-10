@@ -295,13 +295,18 @@ function TFArea({ value, onChange, placeholder, disabled, rows = 3 }) {
 }
 function Sld({ label, value, onChange, min, max, step = 0.5 }) {
   const numVal = Number(value) || 0;
+  const ref = React.useRef();
+  React.useEffect(() => {
+    if (ref.current && Number(ref.current.value) !== numVal) {
+      ref.current.value = numVal;
+    }
+  }, [numVal]);
   return (
     <div style={{ marginBottom: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#797876", marginBottom: 2 }}>
         <span>{label}</span><span style={{ color: G }}>{numVal.toFixed(1)}</span>
       </div>
-      <input type="range" min={min} max={max} step={step} value={numVal}
-        key={numVal}
+      <input ref={ref} type="range" min={min} max={max} step={step} defaultValue={numVal}
         onChange={e => onChange(Number(e.target.value))}
         style={{ width: "100%", accentColor: G }} />
     </div>
@@ -661,7 +666,18 @@ export default function TokenEditor() {
             <input type="checkbox" checked={showAbility} onChange={e => setShowAbility(e.target.checked)} /> Mostra abilità
           </label>
           <TFArea value={ability} onChange={setAbility} placeholder="Testo abilità… usa {T} {W} {G} ecc." disabled={!showAbility} rows={4} />
-          <Sld label="Font size" value={abilityStyle.fontSize} onChange={v => setAbilityStyle(s => ({ ...s, fontSize: v }))} min={8} max={30} />
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#797876", marginBottom: 2 }}>
+              <span>Font size</span>
+              <span style={{ color: G }}>{Number(abilityStyle.fontSize || 0).toFixed(1)}</span>
+            </div>
+            <input
+              type="range" min={8} max={30} step={0.5}
+              value={Number(abilityStyle.fontSize || 15.5)}
+              onChange={e => setAbilityStyle(s => ({ ...s, fontSize: Number(e.target.value) }))}
+              style={{ width: "100%", accentColor: G }}
+            />
+          </div>
           <CP label="Colore" value={abilityStyle.color} onChange={v => setAbilityStyle(s => ({ ...s, color: v }))} />
         </Section>
 
