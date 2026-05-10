@@ -24,6 +24,7 @@ const SYMBOLS = import.meta.glob("/src/assets/simbol/*.{svg,png,jpg,jpeg,webp}",
 
 // ─── COSTANTI CARTA ───────────────────────────────────────────────────────────
 const CW = 620, CH = 890;
+const BLEED = 21; // ~3mm bleed tipografico
 const DISPLAY_W = 460;
 const DISPLAY_H = Math.round(CH * DISPLAY_W / CW);
 const SCALE = CW / DISPLAY_W;
@@ -104,7 +105,7 @@ async function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
 }
 
 // ─── RENDER CANVAS ────────────────────────────────────────────────────────────
-async function renderCard(canvas, state) {
+async function renderCard(canvas, state, withBleed = false) {
   const {
     artUrl, frame, ptFrame,
     name, nameStyle,
@@ -115,14 +116,27 @@ async function renderCard(canvas, state) {
     copyright, showCopyright,
   } = state;
 
-  canvas.width  = CW;
-  canvas.height = CH;
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, CW, CH);
+  const B  = withBleed ? BLEED : 0;   // offset bleed
+  const TW = CW + B * 2;              // canvas totale width
+  const TH = CH + B * 2;              // canvas totale height
 
+  canvas.width  = TW;
+  canvas.height = TH;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, TW, TH);
+
+  // ── ARTWORK: occupa tutto il canvas (incluso bleed) ─────────────────────
   if (artUrl) {
-    try { const img = await loadImg(artUrl); ctx.drawImage(img, 0, 0, CW, CH); } catch {}
+    try {
+      const img = await loadImg(artUrl);
+      ctx.drawImage(img, 0, 0, TW, TH);
+    } catch {}
   }
+
+  // ── TUTTO IL RESTO: spostato di B pixel (BLEED offset) ──────────────────
+  ctx.save();
+  ctx.translate(B, B);
+
   if (frame) {
     try { const img = await loadImg(frame.url); ctx.drawImage(img, 0, 0, CW, CH); } catch {}
   }
@@ -155,47 +169,64 @@ async function renderCard(canvas, state) {
       curY = await drawManaText(
         ctx, line, abilityStyle.x, curY,
         abilityStyle.fontSize, abilityStyle.color,
-        FB, CW - abilityStyle.x - 20
+        CW - abilityStyle.x * 2
       );
-      curY += abilityStyle.fontSize * 1.45 + 2;
     }
   }
 
   if (showPT && ptFrame) {
     try { const img = await loadImg(ptFrame.url); ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height); } catch {}
-  }
-  if (showPT) {
     ctx.save();
     ctx.font = `bold ${ptStyle.fontSize}px ${FT}`;
     ctx.fillStyle = ptStyle.color;
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
-    ctx.fillText(`${pt.power}/${pt.toughness}`, ptStyle.frameX + ptStyle.width / 2 + (ptStyle.powerOffsetX || 0), ptStyle.frameY + ptStyle.height / 2);
+    const slash = "/";
+    const pw = ctx.measureText(pt.power   || "0").width;
+    const sw = ctx.measureText(slash).width;
+    const tw = pw + sw + ctx.measureText(pt.toughness || "0").width;
+    const ptCX = ptStyle.frameX + ptStyle.width / 2 + (ptStyle.powerOffsetX || 0);
+    const ptCY = ptStyle.frameY + ptStyle.height / 2;
+    ctx.textAlign = "left";
+    ctx.fillText(pt.power     || "0", ptCX - tw / 2, ptCY);
+    ctx.fillText(slash,                ptCX - tw / 2 + pw, ptCY);
+    ctx.fillText(pt.toughness || "0", ptCX - tw / 2 + pw + sw, ptCY);
     ctx.restore();
   }
 
-  if (showInfoLeft) {
+  if (showInfoLeft && infoLeft) {
     ctx.save();
-    ctx.font = `${infoLeft.fontSize}px ${FB}`;
-    ctx.fillStyle = "#9a9a9a";
+    ctx.font = `${infoLeft.fontSize || 11}px ${FT}`;
+    ctx.fillStyle = infoLeft.color || "#1a1a1a";
     ctx.textBaseline = "bottom";
     ctx.textAlign = "left";
-    const infoY = CH - infoLeft.y;
-    ctx.fillText(`${infoLeft.rarity} ${infoLeft.setCode} • ${infoLeft.lang}`, infoLeft.x, infoY - infoLeft.fontSize * 1.2);
-    if (showArtist) ctx.fillText(`Illus. ${infoLeft.artist}`, infoLeft.x, infoY);
+    ctx.fillText(infoLeft.text || "", infoLeft.x, CH - (infoLeft.y || 10));
     ctx.restore();
   }
 
-  if (showCopyright) {
+  if (showArtist && infoLeft?.artist) {
     ctx.save();
-    ctx.font = `${copyright.fontSize * 0.85}px ${FB}`;
+    ctx.font = `${infoLeft.fontSize || 11}px ${FT}`;
+    ctx.fillStyle = infoLeft.color || "#1a1a1a";
+    ctx.textBaseline = "bottom";
+    ctx.textAlign = "left";
+    ctx.fillText(`Illus. ${infoLeft.artist}`, infoLeft.x, CH - (infoLeft.y || 10) + (infoLeft.fontSize || 11) + 2);
+    ctx.restore();
+  }
+
+  if (showCopyright && copyright) {
+    ctx.save();
+    ctx.font = `${copyright.fontSize || 9}px ${FT}`;
     ctx.fillStyle = copyright.color;
     ctx.textBaseline = "bottom";
     ctx.textAlign = "right";
     ctx.fillText(`™ & © ${copyright.year} Wizards of the Coast`, CW - copyright.x, CH - copyright.y);
     ctx.restore();
   }
+
+  ctx.restore(); // fine translate(B, B)
 }
+
 
 // ─── DRAG BOX ─────────────────────────────────────────────────────────────────
 function DragBox({ label, style, onUpdate, color, children }) {
@@ -413,35 +444,28 @@ export default function TokenEditor() {
     try {
       const snap = {
         artUrl, frame, ptFrame,
-        name, nameStyle,
-        type, typeStyle,
+        name, nameStyle, type, typeStyle,
         ability, abilityStyle, showAbility,
         pt, ptStyle, showPT,
         infoLeft, showInfoLeft, showArtist,
         copyright, showCopyright,
       };
-      const S     = 4;
-      const BLEED = 21; // ~3mm
+      const S = 4;
 
-      // 1. Disegna la carta normale su canvas 620x890
-      const cardCanvas = document.createElement("canvas");
-      await renderCard(cardCanvas, snap);
+      // Canvas con bleed integrato: artwork su tutto, frame+testi offset di BLEED
+      const printCanvas = document.createElement("canvas");
+      await renderCard(printCanvas, snap, true); // withBleed=true
 
-      // 2. Export canvas con bleed: stessa carta stretchata su (620+42)x(890+42)
-      const EW = (CW + BLEED * 2) * S;
-      const EH = (CH + BLEED * 2) * S;
+      // Scala 4x
+      const EW = printCanvas.width  * S;
+      const EH = printCanvas.height * S;
       const exportCanvas = document.createElement("canvas");
       exportCanvas.width  = EW;
       exportCanvas.height = EH;
       const ctx = exportCanvas.getContext("2d");
+      ctx.drawImage(printCanvas, 0, 0, printCanvas.width, printCanvas.height, 0, 0, EW, EH);
 
-      // Sfondo bleed = cardCanvas stretchato sull'intero export canvas
-      ctx.drawImage(cardCanvas, 0, 0, EW, EH);
-
-      // Carta centrata sopra, scalata 4x con offset bleed
-      ctx.drawImage(cardCanvas, 0, 0, CW, CH, BLEED * S, BLEED * S, CW * S, CH * S);
-
-      // 3. Crop marks
+      // Crop marks dentro il bleed (a BLEED*S dal bordo)
       const bx = BLEED * S, by = BLEED * S;
       const cw = CW * S, ch = CH * S;
       const MARK = 10 * S, GAP = 3 * S;
@@ -774,3 +798,4 @@ export default function TokenEditor() {
     </div>
   );
 }
+
