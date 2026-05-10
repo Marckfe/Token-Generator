@@ -365,6 +365,7 @@ function CP({ label, value, onChange }) {
 export default function TokenEditor() {
   const canvasRef  = useRef();   // canvas preview (DISPLAY_W × DISPLAY_H)
   const artInput   = useRef();
+  const stateInput  = useRef();  // input file per caricare stato JSON
 
   // Stato carta
   const [artUrl,      setArtUrl]     = useState("");
@@ -504,6 +505,73 @@ export default function TokenEditor() {
       setDownloading(false);
     }
   };
+
+  // ─── SALVA / CARICA STATO CARTA ─────────────────────────────────────────────
+  const SAVE_KEYS = [
+    "frameSet","frameIdx","ptFrameIdx",
+    "name","nameStyle",
+    "type","typeStyle",
+    "ability","abilityStyle","showAbility",
+    "pt","ptStyle","showPT",
+    "infoLeft","showInfoLeft","showArtist",
+    "copyright","showCopyright",
+    "showGrid"
+  ];
+
+  const handleSaveState = () => {
+    const snapshot = {
+      _version: 1,
+      frameSet, frameIdx, ptFrameIdx,
+      name, nameStyle,
+      type, typeStyle,
+      ability, abilityStyle, showAbility,
+      pt, ptStyle, showPT,
+      infoLeft, showInfoLeft, showArtist,
+      copyright, showCopyright,
+      showGrid,
+    };
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(name || "token").replace(/[^a-z0-9_]/gi, "_")}_state.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const handleLoadState = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const s = JSON.parse(ev.target.result);
+        if (s.frameSet    !== undefined) setFrameSet(s.frameSet);
+        if (s.frameIdx    !== undefined) setFrameIdx(s.frameIdx);
+        if (s.ptFrameIdx  !== undefined) setPtFrameIdx(s.ptFrameIdx);
+        if (s.name        !== undefined) setName(s.name);
+        if (s.nameStyle   !== undefined) setNameStyle(s.nameStyle);
+        if (s.type        !== undefined) setType(s.type);
+        if (s.typeStyle   !== undefined) setTypeStyle(s.typeStyle);
+        if (s.ability     !== undefined) setAbility(s.ability);
+        if (s.abilityStyle!== undefined) setAbilityStyle(s.abilityStyle);
+        if (s.showAbility !== undefined) setShowAbility(s.showAbility);
+        if (s.pt          !== undefined) setPt(s.pt);
+        if (s.ptStyle     !== undefined) setPtStyle(s.ptStyle);
+        if (s.showPT      !== undefined) setShowPT(s.showPT);
+        if (s.infoLeft    !== undefined) setInfoLeft(s.infoLeft);
+        if (s.showInfoLeft!== undefined) setShowInfoLeft(s.showInfoLeft);
+        if (s.showArtist  !== undefined) setShowArtist(s.showArtist);
+        if (s.copyright   !== undefined) setCopyright(s.copyright);
+        if (s.showCopyright!==undefined) setShowCopyright(s.showCopyright);
+        if (s.showGrid    !== undefined) setShowGrid(s.showGrid);
+      } catch (err) {
+        alert("File non valido: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = null; // reset input per permettere ricarico stesso file
+  };
+
 // ─── FINE PATCH ──────────────────────────────────────────────────────────────
 
   const allFrameKeys = Object.keys(FRAME_MAP);
@@ -656,6 +724,24 @@ export default function TokenEditor() {
 
       </div>
 
+
+        {/* Salva / Carica stato */}
+        <div style={{ display:"flex", gap:8, marginTop:8 }}>
+          <button
+            onClick={handleSaveState}
+            title="Salva stato carta come JSON"
+            style={{ flex:1, background:"#1e3a2f", color:"#4f98a3", border:"1px solid #4f98a3", borderRadius:8, padding:"8px 0", fontSize:13, fontWeight:700, cursor:"pointer", letterSpacing:".02em" }}>
+            💾 Salva stato
+          </button>
+          <button
+            onClick={() => stateInput.current.click()}
+            title="Carica stato carta da JSON"
+            style={{ flex:1, background:"#1e2a3a", color:"#7ab4c9", border:"1px solid #4f98a3", borderRadius:8, padding:"8px 0", fontSize:13, fontWeight:700, cursor:"pointer", letterSpacing:".02em" }}>
+            📂 Carica stato
+          </button>
+          <input ref={stateInput} type="file" accept=".json,application/json"
+            style={{ display:"none" }} onChange={handleLoadState} />
+        </div>
       {/* ── PANNELLO DESTRO — posizioni fini ─────────────────────────────── */}
       <div style={{ width: 220, minWidth: 180, background: "#1a1917", borderLeft: `1px solid ${BD}`, overflowY: "auto", padding: 10 }}>
 
