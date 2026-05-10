@@ -402,14 +402,14 @@ export default function TokenEditor() {
     setDownloading(true);
     try {
       const snap = stateRef.current;
-      const S     = 4;       // scala UHD 4x
-      const BLEED = 21;      // ~3mm in px canvas (620x890)
+      const S     = 4;    // scala UHD 4x
+      const BLEED = 21;   // ~3mm in px spazio canvas nativo
 
       // 1. Disegna carta completa su canvas nativo 620x890
       const cardCanvas = document.createElement("canvas");
       await renderCard(cardCanvas, snap);
 
-      // 2. Export canvas con bleed su tutti i lati
+      // 2. Export canvas con bleed
       const EW = (CW + BLEED * 2) * S;
       const EH = (CH + BLEED * 2) * S;
       const exportCanvas = document.createElement("canvas");
@@ -418,35 +418,40 @@ export default function TokenEditor() {
       const ctx = exportCanvas.getContext("2d");
       ctx.clearRect(0, 0, EW, EH);
 
-      // 3. Sfondo bleed: SOLO l'artwork esteso a tutto il canvas export
-      //    (non la carta intera, solo l'immagine artwork come sfondo)
-      if (snap.artUrl) {
-        try {
-          const img = await loadImg(snap.artUrl);
-          ctx.drawImage(img, 0, 0, EW, EH);
-        } catch {}
-      } else {
-        // sfondo nero se non c'è artwork
-        ctx.fillStyle = "#000000";
-        ctx.fillRect(0, 0, EW, EH);
-      }
+      // 3. Sfondo bleed: estendi i bordi di cardCanvas (non ridisegnare artwork)
+      //    Sinistra: striscia sinistra di cardCanvas scalata nel bleed sinistro
+      ctx.drawImage(cardCanvas, 0, 0, 1, CH,          0, BLEED*S, BLEED*S, CH*S);
+      //    Destra
+      ctx.drawImage(cardCanvas, CW-1, 0, 1, CH,       (CW+BLEED)*S, BLEED*S, BLEED*S, CH*S);
+      //    Top
+      ctx.drawImage(cardCanvas, 0, 0, CW, 1,          BLEED*S, 0, CW*S, BLEED*S);
+      //    Bottom
+      ctx.drawImage(cardCanvas, 0, CH-1, CW, 1,       BLEED*S, (CH+BLEED)*S, CW*S, BLEED*S);
+      //    Angolo top-left
+      ctx.drawImage(cardCanvas, 0, 0, 1, 1,            0, 0, BLEED*S, BLEED*S);
+      //    Angolo top-right
+      ctx.drawImage(cardCanvas, CW-1, 0, 1, 1,         (CW+BLEED)*S, 0, BLEED*S, BLEED*S);
+      //    Angolo bottom-left
+      ctx.drawImage(cardCanvas, 0, CH-1, 1, 1,         0, (CH+BLEED)*S, BLEED*S, BLEED*S);
+      //    Angolo bottom-right
+      ctx.drawImage(cardCanvas, CW-1, CH-1, 1, 1,      (CW+BLEED)*S, (CH+BLEED)*S, BLEED*S, BLEED*S);
 
-      // 4. Incolla la carta scalata 4x centrata (offset = BLEED * S)
-      ctx.drawImage(cardCanvas, 0, 0, CW, CH, BLEED * S, BLEED * S, CW * S, CH * S);
+      // 4. Incolla la carta scalata 4x al centro
+      ctx.drawImage(cardCanvas, 0, 0, CW, CH, BLEED*S, BLEED*S, CW*S, CH*S);
 
-      // 5. Crop marks sul bordo taglio reale (bordo della carta, non del bleed)
-      const bx = BLEED * S, by = BLEED * S;
-      const cw = CW * S,    ch = CH * S;
-      const MARK = 10 * S,  GAP = 3 * S;
+      // 5. Crop marks sul bordo taglio reale
+      const bx = BLEED*S, by = BLEED*S;
+      const cw = CW*S,    ch = CH*S;
+      const MARK = 10*S,  GAP = 3*S;
       ctx.save();
       ctx.strokeStyle = "#555555";
       ctx.lineWidth   = S * 0.6;
       ctx.lineCap     = "square";
-      for (const c of [{ x: bx, y: by }, { x: bx + cw, y: by }, { x: bx, y: by + ch }, { x: bx + cw, y: by + ch }]) {
+      for (const c of [{ x: bx, y: by }, { x: bx+cw, y: by }, { x: bx, y: by+ch }, { x: bx+cw, y: by+ch }]) {
         const sx = c.x === bx ? -1 : 1;
         const sy = c.y === by ? -1 : 1;
-        ctx.beginPath(); ctx.moveTo(c.x + sx * GAP, c.y); ctx.lineTo(c.x + sx * (GAP + MARK), c.y); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(c.x, c.y + sy * GAP); ctx.lineTo(c.x, c.y + sy * (GAP + MARK)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(c.x+sx*GAP, c.y); ctx.lineTo(c.x+sx*(GAP+MARK), c.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(c.x, c.y+sy*GAP); ctx.lineTo(c.x, c.y+sy*(GAP+MARK)); ctx.stroke();
       }
       ctx.restore();
 
