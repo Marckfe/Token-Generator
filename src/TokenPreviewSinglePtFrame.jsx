@@ -401,39 +401,46 @@ export default function TokenEditor() {
     if (downloading) return;
     setDownloading(true);
     try {
-      const BLEED = 21;
-      const S     = 4;
-      const snap  = stateRef.current; // snapshot frozen dei valori attuali
+      const snap = stateRef.current;
+      const S = 4; // scala UHD
 
+      // 1. Disegna la carta su canvas nativo 620x890
       const cardCanvas = document.createElement("canvas");
       await renderCard(cardCanvas, snap);
 
-      const EW = (CW + BLEED * 2) * S;
-      const EH = (CH + BLEED * 2) * S;
+      // 2. Export canvas = carta scalata 4x (niente bleed extra che causa doppia carta)
+      const EW = CW * S;
+      const EH = CH * S;
       const exportCanvas = document.createElement("canvas");
       exportCanvas.width  = EW;
       exportCanvas.height = EH;
       const ctx = exportCanvas.getContext("2d");
       ctx.clearRect(0, 0, EW, EH);
 
-      // Disegna solo cardCanvas — artwork già incluso dentro renderCard, non va ridisegnato
-      ctx.drawImage(cardCanvas, 0, 0, CW, CH, BLEED * S, BLEED * S, CW * S, CH * S);
+      // 3. Scala la carta 4x sul canvas export — una sola drawImage, zero duplicati
+      ctx.drawImage(cardCanvas, 0, 0, CW, CH, 0, 0, EW, EH);
 
-      const bx = BLEED * S, by = BLEED * S;
-      const cw = CW * S,    ch = CH * S;
-      const MARK = 10 * S,  GAP = 3 * S;
+      // 4. Crop marks agli angoli
+      const MARK = 10 * S, GAP = 3 * S;
       ctx.save();
       ctx.strokeStyle = "#555555";
       ctx.lineWidth   = S * 0.6;
       ctx.lineCap     = "square";
-      for (const corner of [{ x: bx, y: by }, { x: bx + cw, y: by }, { x: bx, y: by + ch }, { x: bx + cw, y: by + ch }]) {
-        const sx = corner.x === bx ? -1 : 1;
-        const sy = corner.y === by ? -1 : 1;
-        ctx.beginPath(); ctx.moveTo(corner.x + sx * GAP, corner.y); ctx.lineTo(corner.x + sx * (GAP + MARK), corner.y); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(corner.x, corner.y + sy * GAP); ctx.lineTo(corner.x, corner.y + sy * (GAP + MARK)); ctx.stroke();
+      const corners = [
+        { x: 0,  y: 0  },
+        { x: EW, y: 0  },
+        { x: 0,  y: EH },
+        { x: EW, y: EH },
+      ];
+      for (const c of corners) {
+        const sx = c.x === 0 ? 1 : -1;
+        const sy = c.y === 0 ? 1 : -1;
+        ctx.beginPath(); ctx.moveTo(c.x + sx * GAP, c.y); ctx.lineTo(c.x + sx * (GAP + MARK), c.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(c.x, c.y + sy * GAP); ctx.lineTo(c.x, c.y + sy * (GAP + MARK)); ctx.stroke();
       }
       ctx.restore();
 
+      // 5. Download
       const link = document.createElement("a");
       link.download = `${(snap.name || "token").replace(/[^a-z0-9_]/gi, "_")}_PRINT.png`;
       link.href = exportCanvas.toDataURL("image/png");
