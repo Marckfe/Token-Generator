@@ -420,168 +420,78 @@ export default function TokenEditor() {
     if (downloading) return;
     setDownloading(true);
     try {
-      // Bleed tipografico: 3mm → ~21px sul canvas 620×890
-      const BLEED = 21;   // px nel sistema canvas nativo
-      const S     = 4;    // export scale 4× → qualità UHD
+      const BLEED = 21; // px nel sistema canvas nativo 620×890 (~3mm)
+      const S     = 4;  // 4× scala export
 
-      // Canvas finale: carta + bleed su tutti i lati, scalato 4×
+      // ── Step 1: disegna carta su canvas nativo (identico alla preview) ──────
+      const cardCanvas = document.createElement("canvas");
+      const cardState  = {
+        artUrl, frame, ptFrame,
+        name, nameStyle,
+        type, typeStyle,
+        ability, abilityStyle, showAbility,
+        pt, ptStyle, showPT,
+        infoLeft, showInfoLeft, showArtist,
+        copyright, showCopyright,
+      };
+      await renderCard(cardCanvas, cardState);
+      // cardCanvas ora è 620×890 con tutto renderizzato correttamente
+
+      // ── Step 2: canvas export = (620+42)×(890+42) × 4 ──────────────────────
       const EW = (CW + BLEED * 2) * S;
       const EH = (CH + BLEED * 2) * S;
-
       const exportCanvas = document.createElement("canvas");
       exportCanvas.width  = EW;
       exportCanvas.height = EH;
       const ctx = exportCanvas.getContext("2d");
       ctx.clearRect(0, 0, EW, EH);
 
-      // Trick: translate + scale → renderCard disegna come al solito su 620×890
-      // ma il canvas risultante è spostato di BLEED*S e scalato S volte
-      // Tutte le posizioni testi/frame rimangono IDENTICHE alla preview
-      ctx.save();
-      ctx.translate(BLEED * S, BLEED * S);
-      ctx.scale(S, S);
-
-      // Artwork esteso all'area bleed: torna al sistema originale per coprire tutto
-      ctx.save();
-      ctx.translate(-BLEED, -BLEED);
+      // ── Step 3: artwork esteso nel bleed ─────────────────────────────────────
+      // Disegna l'artwork leggermente ingrandito così copre l'area bleed
       if (artUrl) {
         try {
           const img = await loadImg(artUrl);
-          ctx.drawImage(img, 0, 0, CW + BLEED * 2, CH + BLEED * 2);
+          ctx.drawImage(img, 0, 0, EW, EH);
         } catch {}
       }
-      if (frame) {
-        try {
-          const img = await loadImg(frame.url);
-          ctx.drawImage(img, 0, 0, CW + BLEED * 2, CH + BLEED * 2);
-        } catch {}
-      }
-      ctx.restore();
 
-      // Ora disegna tutti gli elementi della carta usando le coordinate native
-      // esattamente come le vedi in preview — translate+scale fa il resto
+      // ── Step 4: copia cardCanvas (620×890) al centro del canvas export ───────
+      // con scala S e offset BLEED*S per il bleed
+      ctx.drawImage(
+        cardCanvas,
+        0, 0, CW, CH,                          // sorgente: intera carta
+        BLEED * S, BLEED * S, CW * S, CH * S   // destinazione: con bleed + scala
+      );
 
-      // NOME
+      // ── Step 5: crop marks agli angoli del bordo taglio reale ─────────────────
+      const bx   = BLEED * S, by = BLEED * S;
+      const cw   = CW * S,    ch = CH * S;
+      const MARK = 10 * S,    GAP = 3 * S;
       ctx.save();
-      ctx.font         = `bold ${nameStyle.fontSize}px ${FT}`;
-      ctx.fillStyle    = nameStyle.color;
-      ctx.textBaseline = "middle";
-      ctx.textAlign    = nameStyle.align || "center";
-      const nameBoxW   = CW;
-      const nameX      = nameStyle.align === "left"  ? nameStyle.x + 10
-                       : nameStyle.align === "right" ? nameStyle.x + nameBoxW - 10
-                       : nameStyle.x + nameBoxW / 2;
-      ctx.fillText(name.toUpperCase(), nameX, nameStyle.y);
-      ctx.restore();
-
-      // TIPO
-      ctx.save();
-      ctx.font         = `bold ${typeStyle.fontSize}px ${FT}`;
-      ctx.fillStyle    = typeStyle.color;
-      ctx.textBaseline = "middle";
-      ctx.textAlign    = "left";
-      ctx.fillText(type, typeStyle.x, typeStyle.y);
-      ctx.restore();
-
-      // ABILITÀ con simboli mana
-      if (showAbility && ability) {
-        const abLines = ability.split("\n");
-        let curY = abilityStyle.y;
-        for (const line of abLines) {
-          curY = await drawManaText(
-            ctx, line,
-            abilityStyle.x, curY,
-            abilityStyle.fontSize, abilityStyle.color, FB,
-            CW - abilityStyle.x - 20
-          );
-          curY += abilityStyle.fontSize * 1.45 + 2;
-        }
-      }
-
-      // FRAME P/T
-      if (showPT && ptFrame) {
-        try {
-          const img = await loadImg(ptFrame.url);
-          ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height);
-        } catch {}
-      }
-
-      // TESTO P/T
-      if (showPT) {
-        const ptCX = ptStyle.frameX + ptStyle.width / 2 + (ptStyle.powerOffsetX || 0);
-        const ptCY = ptStyle.frameY + ptStyle.height / 2;
-        ctx.save();
-        ctx.font         = `bold ${ptStyle.fontSize}px ${FT}`;
-        ctx.fillStyle    = ptStyle.color;
-        ctx.textBaseline = "middle";
-        ctx.textAlign    = "center";
-        ctx.fillText(`${pt.power}/${pt.toughness}`, ptCX, ptCY);
-        ctx.restore();
-      }
-
-      // INFO BASSA SINISTRA
-      if (showInfoLeft) {
-        const iy1 = CH - infoLeft.y - infoLeft.fontSize * 1.2;
-        const iy2 = CH - infoLeft.y;
-        ctx.save();
-        ctx.font         = `${infoLeft.fontSize}px ${FB}`;
-        ctx.fillStyle    = "#9a9a9a";
-        ctx.textBaseline = "bottom";
-        ctx.textAlign    = "left";
-        ctx.fillText(`${infoLeft.rarity} ${infoLeft.setCode} • ${infoLeft.lang}`, infoLeft.x, iy1);
-        if (showArtist) ctx.fillText(`Illus. ${infoLeft.artist}`, infoLeft.x, iy2);
-        ctx.restore();
-      }
-
-      // COPYRIGHT
-      if (showCopyright) {
-        ctx.save();
-        ctx.font         = `${copyright.fontSize * 0.85}px ${FB}`;
-        ctx.fillStyle    = copyright.color;
-        ctx.textBaseline = "bottom";
-        ctx.textAlign    = "right";
-        ctx.fillText(`™ & © ${copyright.year} Wizards of the Coast`,
-          CW - copyright.x,
-          CH - copyright.y
-        );
-        ctx.restore();
-      }
-
-      ctx.restore(); // fine translate+scale
-
-      // CROP MARKS — disegnati nel sistema EW×EH (fuori dalla carta)
-      // Posizione angoli nel sistema scalato
-      const bx = BLEED * S, by = BLEED * S;
-      const cw = CW * S,    ch = CH * S;
-      const MARK = 12 * S,  GAP = 3 * S;
+      ctx.strokeStyle = "#555555";
+      ctx.lineWidth   = S * 0.6;
+      ctx.lineCap     = "square";
       const corners = [
         { x: bx,      y: by      },
         { x: bx + cw, y: by      },
         { x: bx,      y: by + ch },
         { x: bx + cw, y: by + ch },
       ];
-      const ctxOuter = exportCanvas.getContext("2d");
-      ctxOuter.save();
-      ctxOuter.strokeStyle = "#666666";
-      ctxOuter.lineWidth   = 1 * S;
-      ctxOuter.lineCap     = "round";
       for (const c of corners) {
         const sx = c.x === bx ? -1 : 1;
         const sy = c.y === by ? -1 : 1;
-        // Linea orizzontale
-        ctxOuter.beginPath();
-        ctxOuter.moveTo(c.x + sx * GAP, c.y);
-        ctxOuter.lineTo(c.x + sx * (GAP + MARK), c.y);
-        ctxOuter.stroke();
-        // Linea verticale
-        ctxOuter.beginPath();
-        ctxOuter.moveTo(c.x, c.y + sy * GAP);
-        ctxOuter.lineTo(c.x, c.y + sy * (GAP + MARK));
-        ctxOuter.stroke();
+        ctx.beginPath();
+        ctx.moveTo(c.x + sx * GAP, c.y);
+        ctx.lineTo(c.x + sx * (GAP + MARK), c.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(c.x, c.y + sy * GAP);
+        ctx.lineTo(c.x, c.y + sy * (GAP + MARK));
+        ctx.stroke();
       }
-      ctxOuter.restore();
+      ctx.restore();
 
-      // DOWNLOAD
+      // ── Download ──────────────────────────────────────────────────────────────
       const link = document.createElement("a");
       link.download = `${(name || "token").replace(/[^a-z0-9_]/gi, "_")}_PRINT.png`;
       link.href = exportCanvas.toDataURL("image/png");
