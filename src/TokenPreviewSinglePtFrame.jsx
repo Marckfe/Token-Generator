@@ -23,18 +23,15 @@ const PT_FRAMES = Object.entries(framePT).map(([p, url]) => ({ name: p.split("/"
 const SYMBOLS = import.meta.glob("/src/assets/simbol/*.{svg,png,jpg,jpeg,webp}", { eager: true, import: "default" });
 
 // ─── COSTANTI CARTA ───────────────────────────────────────────────────────────
-// Coordinate native: tutte le posizioni sono in px su canvas 620×890
 const CW = 620, CH = 890;
-// Scala di visualizzazione: la carta nel DOM è larga DISPLAY_W px
 const DISPLAY_W = 460;
-const DISPLAY_H = Math.round(CH * DISPLAY_W / CW); // ~661px
-const SCALE = CW / DISPLAY_W; // ~1.348 — fattore DOM→canvas
+const DISPLAY_H = Math.round(CH * DISPLAY_W / CW);
+const SCALE = CW / DISPLAY_W;
 
-// Font stack
 const FT = "Beleren, MatrixSC, Cinzel, Georgia, serif";
 const FB = "MPlantin, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
 
-// ─── UTILITY: carica immagine come HTMLImageElement ───────────────────────────
+// ─── UTILITY ──────────────────────────────────────────────────────────────────
 function loadImg(src) {
   return new Promise((res, rej) => {
     if (!src) return rej(new Error("no src"));
@@ -46,7 +43,6 @@ function loadImg(src) {
   });
 }
 
-// ─── UTILITY: trova URL simbolo da nome (es. "T", "W", "G") ──────────────────
 function symbolUrl(sym) {
   const key = Object.keys(SYMBOLS).find(p => {
     const fn = p.split("/").pop().replace(/\.[^.]+$/, "");
@@ -55,7 +51,6 @@ function symbolUrl(sym) {
   return key ? SYMBOLS[key] : null;
 }
 
-// ─── PARSER MANA: ritorna array {type:"txt"|"sym", v} ─────────────────────────
 function parseMana(text) {
   const rx = /\{([^}]+)\}/g;
   const parts = []; let last = 0, m;
@@ -68,8 +63,6 @@ function parseMana(text) {
   return parts;
 }
 
-// ─── DISEGNA TESTO CON SIMBOLI SU CANVAS ─────────────────────────────────────
-// Ritorna Promise — necessario per le immagini simboli
 async function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
   const parts = parseMana(text);
   const symSize = fontSize * 1.1;
@@ -79,7 +72,6 @@ async function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
   let curX = x;
   for (const p of parts) {
     if (p.type === "txt") {
-      // Wrap se supera maxWidth
       const words = p.v.split(" ");
       for (let i = 0; i < words.length; i++) {
         const word = (i === 0 ? "" : " ") + words[i];
@@ -108,10 +100,10 @@ async function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
       }
     }
   }
-  return y; // ritorna y finale (utile per multiline)
+  return y;
 }
 
-// ─── RENDER CANVAS COMPLETO ───────────────────────────────────────────────────
+// ─── RENDER CANVAS ────────────────────────────────────────────────────────────
 async function renderCard(canvas, state) {
   const {
     artUrl, frame, ptFrame,
@@ -128,39 +120,27 @@ async function renderCard(canvas, state) {
   canvas.height = CH;
   ctx.clearRect(0, 0, CW, CH);
 
-  // 1. Artwork
   if (artUrl) {
-    try {
-      const img = await loadImg(artUrl);
-      ctx.drawImage(img, 0, 0, CW, CH);
-    } catch {}
+    try { const img = await loadImg(artUrl); ctx.drawImage(img, 0, 0, CW, CH); } catch {}
   }
 
-  // 2. Frame principale
   if (frame) {
-    try {
-      const img = await loadImg(frame.url);
-      ctx.drawImage(img, 0, 0, CW, CH);
-    } catch {}
+    try { const img = await loadImg(frame.url); ctx.drawImage(img, 0, 0, CW, CH); } catch {}
   }
 
-  // 3. NOME — centrato nel box
   ctx.save();
   ctx.font = `bold ${nameStyle.fontSize}px ${FT}`;
   ctx.fillStyle = nameStyle.color;
   ctx.textBaseline = "middle";
   ctx.textAlign = nameStyle.align || "center";
-  const nameBoxW = CW; // box largo tutta la carta
-  const nameX = nameStyle.align === "left" ? nameStyle.x + 10
+  const nameBoxW = CW;
+  const nameX = nameStyle.align === "left"  ? nameStyle.x + 10
               : nameStyle.align === "right" ? nameStyle.x + nameBoxW - 10
               : nameStyle.x + nameBoxW / 2;
-  // Testo maiuscolo con letter-spacing simulato
-  const nameText = name.toUpperCase();
   ctx.letterSpacing = "1px";
-  ctx.fillText(nameText, nameX, nameStyle.y);
+  ctx.fillText(name.toUpperCase(), nameX, nameStyle.y);
   ctx.restore();
 
-  // 4. TIPO
   ctx.save();
   ctx.font = `bold ${typeStyle.fontSize}px ${FT}`;
   ctx.fillStyle = typeStyle.color;
@@ -169,45 +149,33 @@ async function renderCard(canvas, state) {
   ctx.fillText(type, typeStyle.x, typeStyle.y);
   ctx.restore();
 
-  // 5. ABILITÀ con simboli mana
   if (showAbility && ability) {
     const lines = ability.split("\n");
     let curY = abilityStyle.y;
     for (const line of lines) {
       curY = await drawManaText(
-        ctx, line,
-        abilityStyle.x, curY,
-        abilityStyle.fontSize,
-        abilityStyle.color,
-        FB,
-        CW - abilityStyle.x - 20
+        ctx, line, abilityStyle.x, curY,
+        abilityStyle.fontSize, abilityStyle.color,
+        FB, CW - abilityStyle.x - 20
       );
       curY += abilityStyle.fontSize * 1.45 + 2;
     }
   }
 
-  // 6. Frame P/T
   if (showPT && ptFrame) {
-    try {
-      const img = await loadImg(ptFrame.url);
-      ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height);
-    } catch {}
+    try { const img = await loadImg(ptFrame.url); ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height); } catch {}
   }
 
-  // 7. Testo P/T
   if (showPT) {
     ctx.save();
     ctx.font = `bold ${ptStyle.fontSize}px ${FT}`;
     ctx.fillStyle = ptStyle.color;
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
-    const ptCenterX = ptStyle.frameX + ptStyle.width / 2;
-    const ptCenterY = ptStyle.frameY + ptStyle.height / 2;
-    ctx.fillText(`${pt.power}/${pt.toughness}`, ptCenterX + (ptStyle.powerOffsetX || 0), ptCenterY);
+    ctx.fillText(`${pt.power}/${pt.toughness}`, ptStyle.frameX + ptStyle.width / 2 + (ptStyle.powerOffsetX || 0), ptStyle.frameY + ptStyle.height / 2);
     ctx.restore();
   }
 
-  // 8. Info bassa sinistra
   if (showInfoLeft) {
     ctx.save();
     ctx.font = `${infoLeft.fontSize}px ${FB}`;
@@ -220,7 +188,6 @@ async function renderCard(canvas, state) {
     ctx.restore();
   }
 
-  // 9. Copyright
   if (showCopyright) {
     ctx.save();
     ctx.font = `${copyright.fontSize * 0.85}px ${FB}`;
@@ -232,14 +199,11 @@ async function renderCard(canvas, state) {
   }
 }
 
-// ─── COMPONENTE DRAGGABLE PER POSIZIONARE I BOX ───────────────────────────────
-// Le coordinate sono in spazio CANVAS (620×890)
-// Internamente le converti in spazio DISPLAY dividendo per SCALE
+// ─── DRAG BOX ─────────────────────────────────────────────────────────────────
 function DragBox({ label, style, onUpdate, color, children }) {
   const ref = useRef();
   const drag = useRef(false);
   const start = useRef({});
-
   const dispX = style.x / SCALE;
   const dispY = style.y / SCALE;
 
@@ -263,30 +227,20 @@ function DragBox({ label, style, onUpdate, color, children }) {
   }, [onMove]);
 
   return (
-    <div
-      ref={ref}
-      onMouseDown={onDown}
-      title={`Trascina: ${label}`}
-      style={{
-        position: "absolute",
-        left: dispX, top: dispY,
-        cursor: "move",
-        border: `1.5px dashed ${color}`,
-        background: `${color}18`,
-        borderRadius: 3,
-        padding: "1px 4px",
-        userSelect: "none",
-        zIndex: 10,
-        minWidth: 30, minHeight: 16,
-      }}
-    >
-      <span style={{ position: "absolute", top: -14, left: 0, fontSize: 9, background: "rgba(0,0,0,.8)", color, padding: "1px 4px", borderRadius: 2, whiteSpace: "nowrap", pointerEvents: "none" }}>{label}</span>
+    <div ref={ref} onMouseDown={onDown} title={`Trascina: ${label}`}
+      style={{ position: "absolute", left: dispX, top: dispY, cursor: "move",
+        border: `1.5px dashed ${color}`, background: `${color}18`,
+        borderRadius: 3, padding: "1px 4px", userSelect: "none", zIndex: 10,
+        minWidth: 30, minHeight: 16 }}>
+      <span style={{ position: "absolute", top: -14, left: 0, fontSize: 9,
+        background: "rgba(0,0,0,.8)", color, padding: "1px 4px",
+        borderRadius: 2, whiteSpace: "nowrap", pointerEvents: "none" }}>{label}</span>
       {children}
     </div>
   );
 }
 
-// ─── STILE PANNELLO ───────────────────────────────────────────────────────────
+// ─── STILI PANNELLO ───────────────────────────────────────────────────────────
 const P = { background: "#1a1917", color: "#cdccca", fontFamily: "system-ui,sans-serif", fontSize: 13 };
 const BD = "#2e2d2b", G = "#4f98a3", SURFACE = "#201f1d";
 
@@ -296,13 +250,19 @@ function Lbl({ children }) {
 function TF({ value, onChange, placeholder, disabled, type = "text" }) {
   return (
     <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
-      style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`, borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box", outline: "none", marginBottom: 6, opacity: disabled ? 0.4 : 1 }} />
+      style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
+        borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box",
+        outline: "none", marginBottom: 6, opacity: disabled ? 0.4 : 1 }} />
   );
 }
 function TFArea({ value, onChange, placeholder, disabled, rows = 3 }) {
   return (
-    <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled} rows={rows}
-      style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`, borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box", outline: "none", resize: "vertical", marginBottom: 6, opacity: disabled ? 0.4 : 1, fontFamily: "system-ui,sans-serif" }} />
+    <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+      disabled={disabled} rows={rows}
+      style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
+        borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box",
+        outline: "none", resize: "vertical", marginBottom: 6,
+        opacity: disabled ? 0.4 : 1, fontFamily: "system-ui,sans-serif" }} />
   );
 }
 function Sld({ label, value, onChange, min, max, step = 0.5 }) {
@@ -311,7 +271,8 @@ function Sld({ label, value, onChange, min, max, step = 0.5 }) {
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#797876", marginBottom: 2 }}>
         <span>{label}</span><span style={{ color: G }}>{typeof value === "number" ? value.toFixed(1) : value}</span>
       </div>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))}
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={e => onChange(Number(e.target.value))}
         style={{ width: "100%", accentColor: G }} />
     </div>
   );
@@ -321,7 +282,10 @@ function Row({ children }) {
 }
 function Btn({ children, onClick, color = G, small }) {
   return (
-    <button onClick={onClick} style={{ background: color, color: "#fff", border: "none", borderRadius: 5, padding: small ? "3px 8px" : "6px 14px", fontSize: small ? 11 : 13, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
+    <button onClick={onClick}
+      style={{ background: color, color: "#fff", border: "none", borderRadius: 5,
+        padding: small ? "3px 8px" : "6px 14px", fontSize: small ? 11 : 13,
+        cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
       {children}
     </button>
   );
@@ -330,7 +294,9 @@ function Section({ title, children }) {
   const [open, setOpen] = useState(true);
   return (
     <div style={{ marginBottom: 8, border: `1px solid ${BD}`, borderRadius: 6, overflow: "hidden" }}>
-      <div onClick={() => setOpen(o => !o)} style={{ background: SURFACE, padding: "7px 12px", cursor: "pointer", fontWeight: 600, fontSize: 12, display: "flex", justifyContent: "space-between", color: "#aaa" }}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{ background: SURFACE, padding: "7px 12px", cursor: "pointer",
+          fontWeight: 600, fontSize: 12, display: "flex", justifyContent: "space-between", color: "#aaa" }}>
         <span>{title}</span><span>{open ? "▲" : "▼"}</span>
       </div>
       {open && <div style={{ padding: "10px 12px" }}>{children}</div>}
@@ -342,103 +308,138 @@ function AlignBtns({ value, onChange }) {
     <Row>
       {["left", "center", "right"].map(a => (
         <button key={a} onClick={() => onChange(a)}
-          style={{ flex: 1, background: value === a ? G : "#252420", color: value === a ? "#000" : "#797876", border: `1px solid ${BD}`, borderRadius: 4, padding: "3px 0", fontSize: 12, cursor: "pointer" }}>
+          style={{ flex: 1, background: value === a ? G : "#252420",
+            color: value === a ? "#000" : "#797876", border: `1px solid ${BD}`,
+            borderRadius: 4, padding: "3px 0", fontSize: 12, cursor: "pointer" }}>
           {a === "left" ? "◀" : a === "center" ? "◆" : "▶"}
         </button>
       ))}
     </Row>
   );
 }
+
+// ─── FIX #3: Color Picker più grande e leggibile ──────────────────────────────
 function CP({ label, value, onChange }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+    <div style={{ marginBottom: 8 }}>
       <Lbl>{label}</Lbl>
-      <input type="color" value={value} onChange={e => onChange(e.target.value)}
-        style={{ width: 32, height: 26, border: `1px solid ${BD}`, borderRadius: 4, background: "none", cursor: "pointer", padding: 1 }} />
-      <input type="text" value={value} onChange={e => onChange(e.target.value)}
-        style={{ flex: 1, background: "#252420", color: "#cdccca", border: `1px solid ${BD}`, borderRadius: 4, padding: "3px 6px", fontSize: 12, outline: "none" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          type="color"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          style={{
+            width: 44,
+            height: 36,
+            border: `1px solid ${BD}`,
+            borderRadius: 6,
+            background: "none",
+            cursor: "pointer",
+            padding: 2,
+            flexShrink: 0,
+          }}
+        />
+        <input
+          type="text"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          style={{
+            flex: 1,
+            background: "#252420",
+            color: "#cdccca",
+            border: `1px solid ${BD}`,
+            borderRadius: 4,
+            padding: "5px 8px",
+            fontSize: 13,
+            outline: "none",
+            minWidth: 0,
+          }}
+        />
+      </div>
     </div>
   );
 }
 
 // ─── COMPONENTE PRINCIPALE ───────────────────────────────────────────────────
 export default function TokenEditor() {
-  const canvasRef  = useRef();   // canvas preview (DISPLAY_W × DISPLAY_H)
+  const canvasRef  = useRef();
   const artInput   = useRef();
-  const stateInput  = useRef();  // input file per caricare stato JSON
+  const stateInput = useRef();
 
-  // Stato carta
-  const [artUrl,      setArtUrl]     = useState("");
-  const [frameIdx,    setFrameIdx]   = useState(0);
-  const [frameSet,    setFrameSet]   = useState(Object.keys(FRAME_MAP)[0] || "");
-  const [ptFrameIdx,  setPtFrameIdx] = useState(0);
+  const [artUrl,       setArtUrl]      = useState("");
+  const [frameIdx,     setFrameIdx]    = useState(0);
+  const [frameSet,     setFrameSet]    = useState(Object.keys(FRAME_MAP)[0] || "");
+  const [ptFrameIdx,   setPtFrameIdx]  = useState(0);
 
-  const [name,        setName]       = useState("CONSTRUCT");
-  const [nameStyle,   setNameStyle]  = useState({ x: 0, y: 75, fontSize: 29, color: "#181818", align: "center" });
+  const [name,         setName]        = useState("CONSTRUCT");
+  const [nameStyle,    setNameStyle]   = useState({ x: 0, y: 75, fontSize: 29, color: "#181818", align: "center" });
 
-  const [type,        setType]       = useState("Token Artifact Creature — Construct");
-  const [typeStyle,   setTypeStyle]  = useState({ x: 53, y: 730, fontSize: 24, color: "#181818" });
+  const [type,         setType]        = useState("Token Artifact Creature — Construct");
+  const [typeStyle,    setTypeStyle]   = useState({ x: 53, y: 730, fontSize: 24, color: "#181818" });
 
-  const [ability,     setAbility]    = useState("This creature gets +1/+1 for each artifact you control.\n{T}: Add {G} or {R}.");
-  const [abilityStyle,setAbilityStyle] = useState({ x: 43, y: 760, fontSize: 15.5, color: "#181818" });
-  const [showAbility, setShowAbility]= useState(true);
+  const [ability,      setAbility]     = useState("This creature gets +1/+1 for each artifact you control.\n{T}: Add {G} or {R}.");
+  const [abilityStyle, setAbilityStyle]= useState({ x: 43, y: 760, fontSize: 15.5, color: "#181818" });
+  const [showAbility,  setShowAbility] = useState(true);
 
-  const [pt,          setPt]         = useState({ power: "0", toughness: "0" });
-  const [ptStyle,     setPtStyle]    = useState({ x: 503, y: 775, frameX: 498, frameY: 778, width: 89, height: 58, fontSize: 34, color: "#181818", powerOffsetX: 0 });
-  const [showPT,      setShowPT]     = useState(true);
+  const [pt,           setPt]          = useState({ power: "0", toughness: "0" });
+  const [ptStyle,      setPtStyle]     = useState({ x: 503, y: 775, frameX: 498, frameY: 778, width: 89, height: 58, fontSize: 34, color: "#181818", powerOffsetX: 0 });
+  const [showPT,       setShowPT]      = useState(true);
 
-  const [infoLeft,    setInfoLeft]   = useState({ x: 9, y: 21, fontSize: 13, year: "2025", rarity: "T", setCode: "MTG", lang: "EN", artist: "Jn Avon" });
-  const [showInfoLeft,setShowInfoLeft]=useState(true);
-  const [showArtist,  setShowArtist] = useState(true);
+  const [infoLeft,     setInfoLeft]    = useState({ x: 9, y: 21, fontSize: 13, year: "2025", rarity: "T", setCode: "MTG", lang: "EN", artist: "Jn Avon" });
+  const [showInfoLeft, setShowInfoLeft]= useState(true);
+  const [showArtist,   setShowArtist]  = useState(true);
 
-  const [copyright,   setCopyright]  = useState({ x: 24, y: 21, fontSize: 13, year: "2025", color: "#b2b2b2" });
+  const [copyright,    setCopyright]   = useState({ x: 24, y: 21, fontSize: 13, year: "2025", color: "#b2b2b2" });
   const [showCopyright,setShowCopyright]=useState(true);
 
-  const [downloading, setDownloading]= useState(false);
-  const [showGrid,    setShowGrid]   = useState(true);
+  const [downloading,  setDownloading] = useState(false);
+  const [showGrid,     setShowGrid]    = useState(true);
 
   const frame   = (FRAME_MAP[frameSet] || [])[frameIdx];
   const ptFrame = PT_FRAMES[ptFrameIdx];
 
-  // ── Stato completo per renderCard ──────────────────────────────────────────
-  const cardState = { artUrl, frame, ptFrame, name, nameStyle, type, typeStyle, ability, abilityStyle, showAbility, pt, ptStyle, showPT, infoLeft, showInfoLeft, showArtist, copyright, showCopyright };
+  const cardState = {
+    artUrl, frame, ptFrame,
+    name, nameStyle,
+    type, typeStyle,
+    ability, abilityStyle, showAbility,
+    pt, ptStyle, showPT,
+    infoLeft, showInfoLeft, showArtist,
+    copyright, showCopyright,
+  };
 
-  // ── Ridisegna il canvas ogni volta che cambia qualcosa ──────────────────────
+  // ─── FIX #1: useEffect con dipendenze esplicite — niente re-render spurio ───
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
-    // Imposta dimensioni display
-    c.style.width  = DISPLAY_W + "px";
-    c.style.height = DISPLAY_H + "px";
-    // Risoluzione interna = nativa canvas (620×890)
     c.width  = CW;
     c.height = CH;
+    c.style.width  = DISPLAY_W + "px";
+    c.style.height = DISPLAY_H + "px";
     renderCard(c, cardState);
-  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    artUrl, frame, ptFrame,
+    name, nameStyle,
+    type, typeStyle,
+    ability, abilityStyle, showAbility,
+    pt, ptStyle, showPT,
+    infoLeft, showInfoLeft, showArtist,
+    copyright, showCopyright,
+  ]);
 
-  // ── Export: il canvas ha già tutto renderizzato — basta scaricarlo ──────────
+  // ─── FIX #1 (continua): Download usa il canvas già renderizzato ─────────────
   const handleDownload = async () => {
     if (downloading) return;
     setDownloading(true);
     try {
-      const BLEED = 21; // px nel sistema canvas nativo 620×890 (~3mm)
-      const S     = 4;  // 4× scala export
+      const BLEED = 21;
+      const S     = 4;
 
-      // ── Step 1: disegna carta su canvas nativo (identico alla preview) ──────
+      // Ridisegna su canvas offscreen per l'export UHD
       const cardCanvas = document.createElement("canvas");
-      const cardState  = {
-        artUrl, frame, ptFrame,
-        name, nameStyle,
-        type, typeStyle,
-        ability, abilityStyle, showAbility,
-        pt, ptStyle, showPT,
-        infoLeft, showInfoLeft, showArtist,
-        copyright, showCopyright,
-      };
       await renderCard(cardCanvas, cardState);
-      // cardCanvas ora è 620×890 con tutto renderizzato correttamente
 
-      // ── Step 2: canvas export = (620+42)×(890+42) × 4 ──────────────────────
       const EW = (CW + BLEED * 2) * S;
       const EH = (CH + BLEED * 2) * S;
       const exportCanvas = document.createElement("canvas");
@@ -447,27 +448,15 @@ export default function TokenEditor() {
       const ctx = exportCanvas.getContext("2d");
       ctx.clearRect(0, 0, EW, EH);
 
-      // ── Step 3: artwork esteso nel bleed ─────────────────────────────────────
-      // Disegna l'artwork leggermente ingrandito così copre l'area bleed
       if (artUrl) {
-        try {
-          const img = await loadImg(artUrl);
-          ctx.drawImage(img, 0, 0, EW, EH);
-        } catch {}
+        try { const img = await loadImg(artUrl); ctx.drawImage(img, 0, 0, EW, EH); } catch {}
       }
 
-      // ── Step 4: copia cardCanvas (620×890) al centro del canvas export ───────
-      // con scala S e offset BLEED*S per il bleed
-      ctx.drawImage(
-        cardCanvas,
-        0, 0, CW, CH,                          // sorgente: intera carta
-        BLEED * S, BLEED * S, CW * S, CH * S   // destinazione: con bleed + scala
-      );
+      ctx.drawImage(cardCanvas, 0, 0, CW, CH, BLEED * S, BLEED * S, CW * S, CH * S);
 
-      // ── Step 5: crop marks agli angoli del bordo taglio reale ─────────────────
-      const bx   = BLEED * S, by = BLEED * S;
-      const cw   = CW * S,    ch = CH * S;
-      const MARK = 10 * S,    GAP = 3 * S;
+      const bx = BLEED * S, by = BLEED * S;
+      const cw = CW * S,    ch = CH * S;
+      const MARK = 10 * S,  GAP = 3 * S;
       ctx.save();
       ctx.strokeStyle = "#555555";
       ctx.lineWidth   = S * 0.6;
@@ -481,23 +470,15 @@ export default function TokenEditor() {
       for (const c of corners) {
         const sx = c.x === bx ? -1 : 1;
         const sy = c.y === by ? -1 : 1;
-        ctx.beginPath();
-        ctx.moveTo(c.x + sx * GAP, c.y);
-        ctx.lineTo(c.x + sx * (GAP + MARK), c.y);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(c.x, c.y + sy * GAP);
-        ctx.lineTo(c.x, c.y + sy * (GAP + MARK));
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(c.x + sx * GAP, c.y); ctx.lineTo(c.x + sx * (GAP + MARK), c.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(c.x, c.y + sy * GAP); ctx.lineTo(c.x, c.y + sy * (GAP + MARK)); ctx.stroke();
       }
       ctx.restore();
 
-      // ── Download ──────────────────────────────────────────────────────────────
       const link = document.createElement("a");
       link.download = `${(name || "token").replace(/[^a-z0-9_]/gi, "_")}_PRINT.png`;
       link.href = exportCanvas.toDataURL("image/png");
       link.click();
-
     } catch (err) {
       console.error("Errore export:", err);
       alert("Errore export: " + err.message);
@@ -506,22 +487,14 @@ export default function TokenEditor() {
     }
   };
 
-  // ─── SALVA / CARICA STATO CARTA ─────────────────────────────────────────────
-  const SAVE_KEYS = [
-    "frameSet","frameIdx","ptFrameIdx",
-    "name","nameStyle",
-    "type","typeStyle",
-    "ability","abilityStyle","showAbility",
-    "pt","ptStyle","showPT",
-    "infoLeft","showInfoLeft","showArtist",
-    "copyright","showCopyright",
-    "showGrid"
-  ];
-
+  // ─── FIX #2: Salva stato completo con nomi frame (non solo indici) ──────────
   const handleSaveState = () => {
     const snapshot = {
-      _version: 1,
-      frameSet, frameIdx, ptFrameIdx,
+      _version: 2,
+      frameSet,
+      frameName:   frame?.name   ?? null,
+      ptFrameName: ptFrame?.name ?? null,
+      artUrl,
       name, nameStyle,
       type, typeStyle,
       ability, abilityStyle, showAbility,
@@ -538,6 +511,7 @@ export default function TokenEditor() {
     URL.revokeObjectURL(a.href);
   };
 
+  // ─── FIX #2 (continua): Carica stato cercando frame per nome ────────────────
   const handleLoadState = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -545,34 +519,51 @@ export default function TokenEditor() {
     reader.onload = (ev) => {
       try {
         const s = JSON.parse(ev.target.result);
-        if (s.frameSet    !== undefined) setFrameSet(s.frameSet);
-        if (s.frameIdx    !== undefined) setFrameIdx(s.frameIdx);
-        if (s.ptFrameIdx  !== undefined) setPtFrameIdx(s.ptFrameIdx);
-        if (s.name        !== undefined) setName(s.name);
-        if (s.nameStyle   !== undefined) setNameStyle(s.nameStyle);
-        if (s.type        !== undefined) setType(s.type);
-        if (s.typeStyle   !== undefined) setTypeStyle(s.typeStyle);
-        if (s.ability     !== undefined) setAbility(s.ability);
-        if (s.abilityStyle!== undefined) setAbilityStyle(s.abilityStyle);
-        if (s.showAbility !== undefined) setShowAbility(s.showAbility);
-        if (s.pt          !== undefined) setPt(s.pt);
-        if (s.ptStyle     !== undefined) setPtStyle(s.ptStyle);
-        if (s.showPT      !== undefined) setShowPT(s.showPT);
-        if (s.infoLeft    !== undefined) setInfoLeft(s.infoLeft);
-        if (s.showInfoLeft!== undefined) setShowInfoLeft(s.showInfoLeft);
-        if (s.showArtist  !== undefined) setShowArtist(s.showArtist);
-        if (s.copyright   !== undefined) setCopyright(s.copyright);
-        if (s.showCopyright!==undefined) setShowCopyright(s.showCopyright);
-        if (s.showGrid    !== undefined) setShowGrid(s.showGrid);
+
+        // Ripristina frameSet e cerca il frame per NOME (non per indice)
+        if (s.frameSet !== undefined) {
+          setFrameSet(s.frameSet);
+          if (s.frameName && FRAME_MAP[s.frameSet]) {
+            const idx = FRAME_MAP[s.frameSet].findIndex(f => f.name === s.frameName);
+            setFrameIdx(idx >= 0 ? idx : 0);
+          } else if (s.frameIdx !== undefined) {
+            // fallback retrocompatibilità con _version:1
+            setFrameIdx(s.frameIdx);
+          }
+        }
+
+        // Ripristina PT frame per nome
+        if (s.ptFrameName) {
+          const idx = PT_FRAMES.findIndex(f => f.name === s.ptFrameName);
+          setPtFrameIdx(idx >= 0 ? idx : 0);
+        } else if (s.ptFrameIdx !== undefined) {
+          setPtFrameIdx(s.ptFrameIdx);
+        }
+
+        if (s.artUrl        !== undefined) setArtUrl(s.artUrl);
+        if (s.name          !== undefined) setName(s.name);
+        if (s.nameStyle     !== undefined) setNameStyle(s.nameStyle);
+        if (s.type          !== undefined) setType(s.type);
+        if (s.typeStyle     !== undefined) setTypeStyle(s.typeStyle);
+        if (s.ability       !== undefined) setAbility(s.ability);
+        if (s.abilityStyle  !== undefined) setAbilityStyle(s.abilityStyle);
+        if (s.showAbility   !== undefined) setShowAbility(s.showAbility);
+        if (s.pt            !== undefined) setPt(s.pt);
+        if (s.ptStyle       !== undefined) setPtStyle(s.ptStyle);
+        if (s.showPT        !== undefined) setShowPT(s.showPT);
+        if (s.infoLeft      !== undefined) setInfoLeft(s.infoLeft);
+        if (s.showInfoLeft  !== undefined) setShowInfoLeft(s.showInfoLeft);
+        if (s.showArtist    !== undefined) setShowArtist(s.showArtist);
+        if (s.copyright     !== undefined) setCopyright(s.copyright);
+        if (s.showCopyright !== undefined) setShowCopyright(s.showCopyright);
+        if (s.showGrid      !== undefined) setShowGrid(s.showGrid);
       } catch (err) {
         alert("File non valido: " + err.message);
       }
     };
     reader.readAsText(file);
-    e.target.value = null; // reset input per permettere ricarico stesso file
+    e.target.value = null; // permette ricaricamento dello stesso file
   };
-
-// ─── FINE PATCH ──────────────────────────────────────────────────────────────
 
   const allFrameKeys = Object.keys(FRAME_MAP);
 
@@ -591,14 +582,18 @@ export default function TokenEditor() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 6 }}>
             {(FRAME_MAP[frameSet] || []).map((f, i) => (
               <img key={f.url} src={f.url} alt={f.name} title={f.name} onClick={() => setFrameIdx(i)}
-                style={{ width: 44, height: 63, objectFit: "cover", borderRadius: 3, cursor: "pointer", border: i === frameIdx ? `2px solid ${G}` : `2px solid transparent`, opacity: i === frameIdx ? 1 : 0.6 }} />
+                style={{ width: 44, height: 63, objectFit: "cover", borderRadius: 3, cursor: "pointer",
+                  border: i === frameIdx ? `2px solid ${G}` : `2px solid transparent`,
+                  opacity: i === frameIdx ? 1 : 0.6 }} />
             ))}
           </div>
           <Lbl>Frame P/T</Lbl>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 6 }}>
             {PT_FRAMES.map((f, i) => (
               <img key={f.url} src={f.url} alt={f.name} title={f.name} onClick={() => setPtFrameIdx(i)}
-                style={{ width: 44, height: 32, objectFit: "cover", borderRadius: 3, cursor: "pointer", border: i === ptFrameIdx ? `2px solid ${G}` : `2px solid transparent`, opacity: i === ptFrameIdx ? 1 : 0.6 }} />
+                style={{ width: 44, height: 32, objectFit: "cover", borderRadius: 3, cursor: "pointer",
+                  border: i === ptFrameIdx ? `2px solid ${G}` : `2px solid transparent`,
+                  opacity: i === ptFrameIdx ? 1 : 0.6 }} />
             ))}
           </div>
           <Btn onClick={() => artInput.current.click()} color="#6366f1">📁 Carica Artwork</Btn>
@@ -677,7 +672,9 @@ export default function TokenEditor() {
         {/* Toolbar */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
           <button onClick={() => setShowGrid(g => !g)}
-            style={{ background: showGrid ? G : "#252420", color: showGrid ? "#000" : "#797876", border: `1px solid ${BD}`, borderRadius: 5, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+            style={{ background: showGrid ? G : "#252420", color: showGrid ? "#000" : "#797876",
+              border: `1px solid ${BD}`, borderRadius: 5, padding: "5px 12px",
+              fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
             {showGrid ? "✅ Box ON" : "📐 Box OFF"}
           </button>
           <span style={{ color: "#4a4948", fontSize: 11, alignSelf: "center" }}>Trascina i box colorati per riposizionare</span>
@@ -685,11 +682,8 @@ export default function TokenEditor() {
 
         {/* Carta: canvas + overlay DragBox */}
         <div style={{ position: "relative", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14, overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,.7)", flexShrink: 0 }}>
-
-          {/* Canvas principale — unica fonte di verità visiva */}
           <canvas ref={canvasRef} style={{ display: "block", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14 }} />
 
-          {/* Overlay drag boxes — visibili solo se showGrid */}
           {showGrid && (
             <>
               <DragBox label="NOME" style={nameStyle} color="#c9a227"
@@ -716,32 +710,35 @@ export default function TokenEditor() {
           )}
         </div>
 
-        {/* Pulsante download */}
+        {/* Download PNG UHD */}
         <button onClick={handleDownload} disabled={downloading}
-          style={{ background: downloading ? "#333" : "#c9a227", color: downloading ? "#666" : "#000", border: "none", borderRadius: 8, padding: "10px 32px", fontSize: 15, fontWeight: 700, cursor: downloading ? "not-allowed" : "pointer", letterSpacing: ".03em", boxShadow: "0 2px 12px rgba(201,162,39,.3)" }}>
+          style={{ background: downloading ? "#333" : "#c9a227", color: downloading ? "#666" : "#000",
+            border: "none", borderRadius: 8, padding: "10px 32px", fontSize: 15, fontWeight: 700,
+            cursor: downloading ? "not-allowed" : "pointer", letterSpacing: ".03em",
+            boxShadow: "0 2px 12px rgba(201,162,39,.3)" }}>
           {downloading ? "⏳ Esportazione…" : "⬇ Scarica PNG UHD (4×)"}
         </button>
 
-      </div>
-
-
-        {/* Salva / Carica stato */}
-        <div style={{ display:"flex", gap:8, marginTop:8 }}>
-          <button
-            onClick={handleSaveState}
-            title="Salva stato carta come JSON"
-            style={{ flex:1, background:"#1e3a2f", color:"#4f98a3", border:"1px solid #4f98a3", borderRadius:8, padding:"8px 0", fontSize:13, fontWeight:700, cursor:"pointer", letterSpacing:".02em" }}>
+        {/* Salva / Carica stato COMPLETO */}
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button onClick={handleSaveState} title="Salva stato carta come JSON"
+            style={{ flex: 1, background: "#1e3a2f", color: "#4f98a3", border: "1px solid #4f98a3",
+              borderRadius: 8, padding: "8px 0", fontSize: 13, fontWeight: 700,
+              cursor: "pointer", letterSpacing: ".02em" }}>
             💾 Salva stato
           </button>
-          <button
-            onClick={() => stateInput.current.click()}
-            title="Carica stato carta da JSON"
-            style={{ flex:1, background:"#1e2a3a", color:"#7ab4c9", border:"1px solid #4f98a3", borderRadius:8, padding:"8px 0", fontSize:13, fontWeight:700, cursor:"pointer", letterSpacing:".02em" }}>
+          <button onClick={() => stateInput.current.click()} title="Carica stato carta da JSON"
+            style={{ flex: 1, background: "#1e2a3a", color: "#7ab4c9", border: "1px solid #4f98a3",
+              borderRadius: 8, padding: "8px 0", fontSize: 13, fontWeight: 700,
+              cursor: "pointer", letterSpacing: ".02em" }}>
             📂 Carica stato
           </button>
           <input ref={stateInput} type="file" accept=".json,application/json"
-            style={{ display:"none" }} onChange={handleLoadState} />
+            style={{ display: "none" }} onChange={handleLoadState} />
         </div>
+
+      </div>
+
       {/* ── PANNELLO DESTRO — posizioni fini ─────────────────────────────── */}
       <div style={{ width: 220, minWidth: 180, background: "#1a1917", borderLeft: `1px solid ${BD}`, overflowY: "auto", padding: 10 }}>
 
