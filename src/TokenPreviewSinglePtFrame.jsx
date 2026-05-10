@@ -115,9 +115,9 @@ async function renderCard(canvas, state) {
     copyright, showCopyright,
   } = state;
 
-  const ctx = canvas.getContext("2d");
   canvas.width  = CW;
   canvas.height = CH;
+  const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, CW, CH);
 
   if (artUrl) {
@@ -378,15 +378,25 @@ export default function TokenEditor() {
   // ── useEffect: ridisegna SOLO quando i dati della carta cambiano ──────────
   // Non dipende da `downloading` → nessun re-render spurio durante l'export
   useEffect(() => {
+    if (downloading) return; // blocca re-render durante il download
     const c = canvasRef.current;
     if (!c) return;
     c.width  = CW;
     c.height = CH;
     c.style.width  = DISPLAY_W + "px";
     c.style.height = DISPLAY_H + "px";
-    renderCard(c, stateRef.current);
+    renderCard(c, {
+      artUrl, frame, ptFrame,
+      name, nameStyle,
+      type, typeStyle,
+      ability, abilityStyle, showAbility,
+      pt, ptStyle, showPT,
+      infoLeft, showInfoLeft, showArtist,
+      copyright, showCopyright,
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    downloading,
     artUrl, frame, ptFrame,
     name, nameStyle,
     type, typeStyle,
@@ -401,14 +411,21 @@ export default function TokenEditor() {
     if (downloading) return;
     setDownloading(true);
     try {
-      const snap = stateRef.current;
-      const S = 4; // scala UHD 4x
+      const snap = {
+        artUrl, frame, ptFrame,
+        name, nameStyle,
+        type, typeStyle,
+        ability, abilityStyle, showAbility,
+        pt, ptStyle, showPT,
+        infoLeft, showInfoLeft, showArtist,
+        copyright, showCopyright,
+      };
+      const S = 4;
 
-      // Canvas nativo 620x890 con carta completa
+      // Canvas isolato per il download — non tocca mai canvasRef della preview
       const cardCanvas = document.createElement("canvas");
       await renderCard(cardCanvas, snap);
 
-      // Export canvas = carta scalata 4x, niente bleed
       const exportCanvas = document.createElement("canvas");
       exportCanvas.width  = CW * S;
       exportCanvas.height = CH * S;
