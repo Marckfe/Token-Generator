@@ -417,222 +417,170 @@ export default function TokenEditor() {
 
   // ── Export: il canvas ha già tutto renderizzato — basta scaricarlo ──────────
   const handleDownload = async () => {
-  const CW = 620, CH = 890;          // dimensioni native carta
-  const EXPORT_SCALE = 4;            // 4× = 2480×3560 px (UHD)
-  const EW = CW * EXPORT_SCALE;
-  const EH = CH * EXPORT_SCALE;
-  const S = EXPORT_SCALE;            // alias breve
+    // ── Bleed tipografico 3mm ─────────────────────────────────────────────────
+    // Bleed: 3mm proporzionato al canvas 620×890 = ~21px per lato
+    const BLEED = 21;
+    const TW = CW + BLEED * 2;   // 662 px
+    const TH = CH + BLEED * 2;   // 932 px
+    const S  = 4;                 // 4× export scale → 2648×3728 px
+    const EW = TW * S;
+    const EH = TH * S;
+    const OX = BLEED * S;         // offset carta nell'area bleed
+    const OY = BLEED * S;
 
-  const exportCanvas = document.createElement("canvas");
-  exportCanvas.width  = EW;
-  exportCanvas.height = EH;
-  const ctx = exportCanvas.getContext("2d");
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width  = EW;
+    exportCanvas.height = EH;
+    const ctx = exportCanvas.getContext("2d");
+    ctx.clearRect(0, 0, EW, EH);
 
-  // Helper: carica un URL come HTMLImageElement
-  function loadImg(src) {
-    return new Promise((res, rej) => {
-      if (!src) return rej(new Error("no src"));
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload  = () => res(img);
-      img.onerror = rej;
-      img.src = src;
-    });
-  }
+    if (downloading) return;
+    setDownloading(true);
 
-  // Helper: trova URL simbolo mana dal symbolMap (es. "T", "W", "G")
-  function findSymbolUrl(sym) {
-    const key = Object.keys(simbolImport).find(p => {
-      const fn = p.split("/").pop().replace(/\.[^.]+$/, "");
-      return fn === sym || fn.toLowerCase() === sym.toLowerCase();
-    });
-    return key ? simbolImport[key] : null;
-  }
+    try {
+      // 1. ARTWORK — esteso sull'intera area bleed (nessun bordo bianco)
+      if (artUrl) {
+        const img = await loadImg(artUrl);
+        ctx.drawImage(img, 0, 0, EW, EH);
+      }
 
-  // Helper: disegna testo con simboli mana inline su canvas
-  // Ritorna la Y di fine blocco
-  async function drawManaText(text, x, y, fontSize, color, fontFamily, maxW) {
-    const rx = /{([^}]+)}/g;
-    const symH = fontSize * 1.15;
-    ctx.font = `${fontSize}px ${fontFamily}`;
-    ctx.fillStyle = color;
-    ctx.textBaseline = "top";
-    let cx = x, cy = y;
-    let last = 0, m;
+      // 2. FRAME — anch'esso esteso sull'intera area bleed
+      if (frame) {
+        const img = await loadImg(frame.url);
+        ctx.drawImage(img, 0, 0, EW, EH);
+      }
 
-    while ((m = rx.exec(text)) !== null) {
-      // testo prima del simbolo
-      if (m.index > last) {
-        const words = text.slice(last, m.index).split(" ");
-        for (let i = 0; i < words.length; i++) {
-          const w = (i === 0 ? "" : " ") + words[i];
-          if (maxW && cx + ctx.measureText(w).width > x + maxW && cx > x) {
-            cx = x; cy += fontSize * 1.5;
-          }
-          ctx.fillText(w, cx, cy);
-          cx += ctx.measureText(w).width;
+      // 3. NOME
+      {
+        const fs = nameStyle.fontSize * S;
+        ctx.save();
+        ctx.font         = `bold ${fs}px ${FT}`;
+        ctx.fillStyle    = nameStyle.color;
+        ctx.textBaseline = "middle";
+        ctx.textAlign    = nameStyle.align || "center";
+        const nameX = nameStyle.align === "left"  ? OX + 10
+                    : nameStyle.align === "right" ? OX + CW * S - 10
+                    : OX + (CW * S) / 2;
+        ctx.fillText(name.toUpperCase(), nameX, OY + nameStyle.y * S);
+        ctx.restore();
+      }
+
+      // 4. TIPO
+      {
+        const fs = typeStyle.fontSize * S;
+        ctx.save();
+        ctx.font         = `bold ${fs}px ${FT}`;
+        ctx.fillStyle    = typeStyle.color;
+        ctx.textBaseline = "middle";
+        ctx.textAlign    = "left";
+        ctx.fillText(type, OX + typeStyle.x * S, OY + typeStyle.y * S);
+        ctx.restore();
+      }
+
+      // 5. ABILITÀ con simboli mana
+      if (showAbility && ability) {
+        const lines2 = ability.split("\n");
+        const fs     = abilityStyle.fontSize * S;
+        let   curY   = OY + abilityStyle.y * S;
+        for (const line of lines2) {
+          curY = await drawManaText(
+            ctx, line,
+            OX + abilityStyle.x * S, curY,
+            fs, abilityStyle.color, FB,
+            (CW - abilityStyle.x - 20) * S
+          );
+          curY += fs * 1.45 + 2;
         }
       }
-      // simbolo mana
-      const url = findSymbolUrl(m[1].trim());
-      if (url) {
-        try {
-          const img = await loadImg(url);
-          ctx.drawImage(img, cx, cy - 1, symH, symH);
-          cx += symH + 1;
-        } catch {
-          ctx.fillText(`{${m[1]}}`, cx, cy);
-          cx += ctx.measureText(`{${m[1]}}`).width;
-        }
-      } else {
-        ctx.fillText(`{${m[1]}}`, cx, cy);
-        cx += ctx.measureText(`{${m[1]}}`).width;
-      }
-      last = rx.lastIndex;
-    }
-    // testo dopo l'ultimo simbolo
-    if (last < text.length) {
-      const words = text.slice(last).split(" ");
-      for (let i = 0; i < words.length; i++) {
-        const w = (i === 0 ? "" : " ") + words[i];
-        if (maxW && cx + ctx.measureText(w).width > x + maxW && cx > x) {
-          cx = x; cy += fontSize * 1.5;
-        }
-        ctx.fillText(w, cx, cy);
-        cx += ctx.measureText(w).width;
-      }
-    }
-    return cy;
-  }
 
-  try {
-    // ── 1. ARTWORK ──────────────────────────────────────────────────────────
-    if (artUrl) {
-      const img = await loadImg(artUrl);
-      ctx.drawImage(img, 0, 0, EW, EH);
-    }
-
-    // ── 2. FRAME PRINCIPALE ─────────────────────────────────────────────────
-    const frameObj = FRAME_MAP[mainFrameSet]?.[mainFrameIdx];
-    if (frameObj) {
-      const img = await loadImg(frameObj.url);
-      ctx.drawImage(img, 0, 0, EW, EH);
-    }
-
-    // ── 3. NOME ─────────────────────────────────────────────────────────────
-    {
-      const fs = nameStyle.fontSize * S;
-      ctx.save();
-      ctx.font      = `bold ${fs}px Beleren, MatrixSC, Cinzel, Georgia, serif`;
-      ctx.fillStyle = nameStyle.color;
-      ctx.textBaseline = "middle";
-      ctx.textAlign    = "center";
-      // nameStyle.x è 0 → centrato sull'intera larghezza
-      ctx.fillText(name.toUpperCase(), EW / 2, nameStyle.y * S);
-      ctx.restore();
-    }
-
-    // ── 4. TIPO ─────────────────────────────────────────────────────────────
-    {
-      const fs = typeStyle.fontSize * S;
-      ctx.save();
-      ctx.font      = `bold ${fs}px Beleren, MatrixSC, Cinzel, Georgia, serif`;
-      ctx.fillStyle = typeStyle.color;
-      ctx.textBaseline = "middle";
-      ctx.textAlign    = "left";
-      ctx.fillText(type, typeStyle.x * S, typeStyle.y * S);
-      ctx.restore();
-    }
-
-    // ── 5. ABILITÀ con simboli mana ─────────────────────────────────────────
-    if (showAbility && ability) {
-      const lines  = ability.split("\n");
-      const fs     = abilityStyle.fontSize * S;
-      const ax     = abilityStyle.x * S;
-      const maxW   = (CW - abilityStyle.x - 20) * S;
-      let   ay     = abilityStyle.y * S;
-      ctx.save();
-      for (const line of lines) {
-        ay = await drawManaText(
-          line, ax, ay, fs,
-          abilityStyle.color,
-          "MPlantin, Palatino Linotype, Book Antiqua, Georgia, serif",
-          maxW
+      // 6. Frame P/T
+      if (showPT && ptFrame) {
+        const img = await loadImg(ptFrame.url);
+        ctx.drawImage(img,
+          OX + ptStyle.frameX * S, OY + ptStyle.frameY * S,
+          ptStyle.width * S, ptStyle.height * S
         );
-        ay += fs * 1.5;
       }
-      ctx.restore();
+
+      // 7. Testo P/T
+      if (showPT) {
+        const fs   = ptStyle.fontSize * S;
+        const ptCX = OX + (ptStyle.frameX + ptStyle.width / 2 + (ptStyle.powerOffsetX || 0)) * S;
+        const ptCY = OY + (ptStyle.frameY + ptStyle.height / 2) * S;
+        ctx.save();
+        ctx.font         = `bold ${fs}px ${FT}`;
+        ctx.fillStyle    = ptStyle.color;
+        ctx.textBaseline = "middle";
+        ctx.textAlign    = "center";
+        ctx.fillText(`${pt.power}/${pt.toughness}`, ptCX, ptCY);
+        ctx.restore();
+      }
+
+      // 8. Info bassa sinistra
+      if (showInfoLeft) {
+        const fs  = infoLeft.fontSize * S;
+        const ix  = OX + infoLeft.x * S;
+        const iy1 = OY + CH * S - infoLeft.y * S - fs * 1.2;
+        const iy2 = OY + CH * S - infoLeft.y * S;
+        ctx.save();
+        ctx.font         = `${fs}px ${FB}`;
+        ctx.fillStyle    = "#9a9a9a";
+        ctx.textBaseline = "bottom";
+        ctx.textAlign    = "left";
+        ctx.fillText(`${infoLeft.rarity} ${infoLeft.setCode} • ${infoLeft.lang}`, ix, iy1);
+        if (showArtist) ctx.fillText(`Illus. ${infoLeft.artist}`, ix, iy2);
+        ctx.restore();
+      }
+
+      // 9. Copyright
+      if (showCopyright) {
+        const fs = copyright.fontSize * 0.85 * S;
+        ctx.save();
+        ctx.font         = `${fs}px ${FB}`;
+        ctx.fillStyle    = copyright.color;
+        ctx.textBaseline = "bottom";
+        ctx.textAlign    = "right";
+        ctx.fillText(`™ & © ${copyright.year} Wizards of the Coast`,
+          OX + CW * S - copyright.x * S,
+          OY + CH * S - copyright.y * S
+        );
+        ctx.restore();
+      }
+
+      // 10. Crop marks agli angoli (bordo taglio reale)
+      {
+        const MARK = 15 * S, GAP = 4 * S;
+        ctx.save();
+        ctx.strokeStyle = "#808080";
+        ctx.lineWidth   = 0.8 * S;
+        const corners = [
+          { x: OX, y: OY },
+          { x: OX + CW * S, y: OY },
+          { x: OX, y: OY + CH * S },
+          { x: OX + CW * S, y: OY + CH * S },
+        ];
+        for (const c of corners) {
+          const sx = c.x === OX ? -1 : 1;
+          const sy = c.y === OY ? -1 : 1;
+          ctx.beginPath(); ctx.moveTo(c.x + sx * GAP, c.y); ctx.lineTo(c.x + sx * (GAP + MARK), c.y); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(c.x, c.y + sy * GAP); ctx.lineTo(c.x, c.y + sy * (GAP + MARK)); ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // DOWNLOAD
+      const link = document.createElement("a");
+      link.download = `${(name || "token").replace(/[^a-z0-9_]/gi, "_")}_PRINT.png`;
+      link.href = exportCanvas.toDataURL("image/png");
+      link.click();
+
+    } catch (err) {
+      console.error("Errore export:", err);
+      alert("Errore export: " + err.message);
+    } finally {
+      setDownloading(false);
     }
-
-    // ── 6. FRAME P/T ────────────────────────────────────────────────────────
-    if (showPT && PT_FRAMES[ptFrameIdx]) {
-      const img = await loadImg(PT_FRAMES[ptFrameIdx].url);
-      ctx.drawImage(
-        img,
-        ptStyle.frameX  * S,
-        ptStyle.frameY  * S,
-        ptStyle.width   * S,
-        ptStyle.height  * S
-      );
-    }
-
-    // ── 7. TESTO P/T ────────────────────────────────────────────────────────
-    if (showPT) {
-      const fs   = ptStyle.fontSize * S;
-      const cx   = (ptStyle.frameX + ptStyle.width  / 2 + (ptStyle.powerOffsetX || 0)) * S;
-      const cy   = (ptStyle.frameY + ptStyle.height / 2) * S;
-      ctx.save();
-      ctx.font         = `bold ${fs}px Beleren, MatrixSC, Cinzel, Georgia, serif`;
-      ctx.fillStyle    = ptStyle.color;
-      ctx.textBaseline = "middle";
-      ctx.textAlign    = "center";
-      ctx.fillText(`${pt.power}/${pt.toughness}`, cx, cy);
-      ctx.restore();
-    }
-
-    // ── 8. INFO BASSA SINISTRA ──────────────────────────────────────────────
-    if (showInfoLeft) {
-      const fs  = infoLeft.fontSize * S;
-      const ix  = infoLeft.x * S;
-      const iy1 = EH - infoLeft.y * S - fs * 1.4;
-      const iy2 = EH - infoLeft.y * S;
-      ctx.save();
-      ctx.font         = `${fs}px MPlantin, Palatino Linotype, Georgia, serif`;
-      ctx.fillStyle    = "#9a9a9a";
-      ctx.textBaseline = "bottom";
-      ctx.textAlign    = "left";
-      ctx.fillText(`${infoLeft.year} ${infoLeft.rarity}  ${infoLeft.setCode} • ${infoLeft.lang}`, ix, iy1);
-      if (showArtist) ctx.fillText(`Illus. ${infoLeft.artist}`, ix, iy2);
-      ctx.restore();
-    }
-
-    // ── 9. COPYRIGHT ────────────────────────────────────────────────────────
-    if (showCopyright) {
-      const fs = copyright.fontSize * S * 0.85;
-      ctx.save();
-      ctx.font         = `${fs}px MPlantin, Palatino Linotype, Georgia, serif`;
-      ctx.fillStyle    = copyright.color;
-      ctx.textBaseline = "bottom";
-      ctx.textAlign    = "right";
-      ctx.fillText(
-        `™ & © ${copyright.year} Wizards of the Coast`,
-        EW - copyright.x * S,
-        EH - copyright.y * S
-      );
-      ctx.restore();
-    }
-
-    // ── DOWNLOAD ────────────────────────────────────────────────────────────
-    const link = document.createElement("a");
-    link.download = `${name.replace(/[^a-zA-Z0-9]/g, "_")}_token.png`;
-    link.href     = exportCanvas.toDataURL("image/png");
-    link.click();
-
-  } catch (err) {
-    console.error("Errore export canvas:", err);
-    alert("Errore durante l'export: " + err.message);
-  }
-};
+  };
 // ─── FINE PATCH ──────────────────────────────────────────────────────────────
 
   const allFrameKeys = Object.keys(FRAME_MAP);
