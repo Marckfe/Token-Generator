@@ -568,11 +568,15 @@ export default function TokenEditor() {
         if (s.ability !== undefined) setAbility(s.ability);
         if (s.pt      !== undefined) setPt(s.pt);
 
-        // ── stili posizione ────────────────────────────────────────────────
-        if (s.nameStyle     !== undefined) setNameStyle(s.nameStyle);
-        if (s.typeStyle     !== undefined) setTypeStyle(s.typeStyle);
-        if (s.abilityStyle  !== undefined) setAbilityStyle(s.abilityStyle);
-        if (s.ptStyle       !== undefined) setPtStyle(s.ptStyle);
+        // ── stili posizione: merge con default per garantire tutte le props ──
+        if (s.nameStyle    !== undefined) setNameStyle(    prev => ({ ...prev, ...s.nameStyle,
+          fontSize: s.nameStyle.fontSize !== undefined ? Number(s.nameStyle.fontSize) : prev.fontSize }));
+        if (s.typeStyle    !== undefined) setTypeStyle(    prev => ({ ...prev, ...s.typeStyle,
+          fontSize: s.typeStyle.fontSize !== undefined ? Number(s.typeStyle.fontSize) : prev.fontSize }));
+        if (s.abilityStyle !== undefined) setAbilityStyle( prev => ({ ...prev, ...s.abilityStyle,
+          fontSize: s.abilityStyle.fontSize !== undefined ? Number(s.abilityStyle.fontSize) : prev.fontSize }));
+        if (s.ptStyle      !== undefined) setPtStyle(      prev => ({ ...prev, ...s.ptStyle,
+          fontSize: s.ptStyle.fontSize !== undefined ? Number(s.ptStyle.fontSize) : prev.fontSize }));
 
         // ── visibilità ────────────────────────────────────────────────────
         if (s.showAbility   !== undefined) setShowAbility(s.showAbility);
@@ -582,8 +586,8 @@ export default function TokenEditor() {
         if (s.showCopyright !== undefined) setShowCopyright(s.showCopyright);
 
         // ── info & copyright ──────────────────────────────────────────────
-        if (s.infoLeft  !== undefined) setInfoLeft(s.infoLeft);
-        if (s.copyright !== undefined) setCopyright(s.copyright);
+        if (s.infoLeft  !== undefined) setInfoLeft(  prev => ({ ...prev, ...s.infoLeft  }));
+        if (s.copyright !== undefined) setCopyright( prev => ({ ...prev, ...s.copyright }));
 
         // ── ui ────────────────────────────────────────────────────────────
         if (s.showGrid !== undefined) setShowGrid(s.showGrid);
