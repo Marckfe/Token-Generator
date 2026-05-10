@@ -1,6 +1,12 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  IMPORTANTE: questo file NON usa html2canvas né html-to-image.       ║
+// ║  L'export PNG usa esclusivamente Canvas 2D nativo + FontFace API.    ║
+// ║  Se Vite dà errore su html2canvas: svuota la cache con:              ║
+// ║    rm -rf node_modules/.vite && vite --force                         ║
+// ╚══════════════════════════════════════════════════════════════════════╝
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
-// DIPENDENZA: npm install html-to-image   (usata per l'export PNG — gestisce meglio font custom e position:absolute rispetto a html2canvas)
+// Export PNG: usa Canvas 2D nativo + FontFace API (nessuna dipendenza esterna)
 // ─────────────────────────────────────────────────────────────────────────────
 // ASSET IMPORTS
 // ─────────────────────────────────────────────────────────────────────────────
