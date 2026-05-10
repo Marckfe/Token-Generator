@@ -1,12 +1,10 @@
 // ╔══════════════════════════════════════════════════════════════════════╗
-// ║  IMPORTANTE: questo file NON usa html2canvas né html-to-image.       ║
 // ║  L'export PNG usa esclusivamente Canvas 2D nativo + FontFace API.    ║
-// ║  Se Vite dà errore su html2canvas: svuota la cache con:              ║
 // ║    rm -rf node_modules/.vite && vite --force                         ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
-// Export PNG: usa Canvas 2D nativo + FontFace API (nessuna dipendenza esterna)
+// Export PNG: usa Canvas 2D nativo + FontFace API
 // ─────────────────────────────────────────────────────────────────────────────
 // ASSET IMPORTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -50,7 +48,15 @@ function ManaLine({ text, fontSize = 13, color = "#181818" }) {
   while ((m = rx.exec(text)) !== null) {
     if (m.index > last) parts.push({ t: "txt", v: text.slice(last, m.index) });
     const sym = m[1].trim();
-    const key = Object.keys(SYMBOLS).find(p => p.split("/").pop().replace(/\.[^.]+$/, "") === sym);
+    const key = Object.keys(SYMBOLS).find(p => {
+    const filename = p.split("/").pop().replace(/\.[^.]+$/, "");
+    return (
+      filename === sym ||
+      filename === `{${sym}}` ||
+      filename.toLowerCase() === sym.toLowerCase() ||
+      filename === sym.toUpperCase()
+    );
+  });
     parts.push({ t: "sym", v: sym, url: key ? SYMBOLS[key] : null });
     last = rx.lastIndex;
   }
@@ -488,9 +494,9 @@ export default function MagicTokenEditor() {
       // ── 1. Carica i font custom nel contesto Canvas ───────────────────────
       // Il Canvas 2D NON eredita i @font-face del CSS — vanno caricati esplicitamente.
       const fontPaths = [
-        { name: "Beleren",  url: "/src/assets/fonts/Beleren2016-Bold.ttf",           weight: "bold" },
-        { name: "MPlantin", url: "/src/assets/fonts/Mplantin.ttf",                   weight: "normal" },
-        { name: "MatrixSC", url: "/src/assets/fonts/MatrixBoldSmallCaps Bold.ttf",   weight: "bold" },
+        { name: "Beleren",  url: new URL("/src/assets/fonts/Beleren2016-Bold.ttf", import.meta.url).href,         weight: "bold"   },
+        { name: "MPlantin", url: new URL("/src/assets/fonts/Mplantin.ttf", import.meta.url).href,                 weight: "normal" },
+        { name: "MatrixSC", url: new URL("/src/assets/fonts/MatrixBoldSmallCaps Bold.ttf", import.meta.url).href, weight: "bold"   },
       ];
       await Promise.allSettled(
         fontPaths.map(async ({ name, url, weight }) => {
@@ -518,26 +524,85 @@ export default function MagicTokenEditor() {
         img.src = src;
       });
 
-      // Helper: risolve nome font per canvas (prova custom, poi fallback)
-      const resolveFont = (familyStr) => {
-        const first = familyStr.split(",")[0].replace(/['"]/g, "").trim();
-        return first;
+      // Risolve nome font per canvas
+      const resolveFont = (familyStr) => familyStr.split(",")[0].replace(/['"]/g, "").trim();
+
+      // Precarica immagini simboli mana per il canvas
+      // Legge tutti i simboli già importati (SYMBOLS glob) e li converte in HTMLImageElement
+      const symbolImgCache = {};
+      await Promise.allSettled(
+        Object.entries(SYMBOLS).map(([path, url]) => new Promise((res) => {
+          const key = path.split("/").pop().replace(/\.[^.]+$/, "");
+          const img = new Image();
+          img.onload = () => { symbolImgCache[key] = img; res(); };
+          img.onerror = () => res(); // ignora simboli non trovati
+          img.src = typeof url === "string" ? url : url.default || "";
+        }))
+      );
+
+      // Tokenizza una stringa in segmenti testo/simbolo
+      const tokenize = (text) => {
+        const rx = /\{([^}]+)\}/g;
+        const parts = []; let last = 0, m;
+        while ((m = rx.exec(text)) !== null) {
+          if (m.index > last) parts.push({ t: "txt", v: text.slice(last, m.index) });
+          parts.push({ t: "sym", v: m[1].trim() });
+          last = rx.lastIndex;
+        }
+        if (last < text.length) parts.push({ t: "txt", v: text.slice(last) });
+        return parts;
       };
 
-      // Helper: disegna testo con wrap automatico in un box
+      // Misura larghezza di una riga mista testo+simboli
+      const measureLine = (tokens, fs) => {
+        let w = 0;
+        for (const tok of tokens) {
+          if (tok.t === "txt") w += ctx.measureText(tok.v).width;
+          else w += fs * 1.15; // simbolo quadrato
+        }
+        return w;
+      };
+
+      // Disegna una riga mista testo+simboli a partire da (x, y midline)
+      const drawMixedLine = (tokens, x, y, fs, color) => {
+        let cx = x;
+        for (const tok of tokens) {
+          if (tok.t === "txt") {
+            ctx.fillStyle = color;
+            ctx.fillText(tok.v, cx, y);
+            cx += ctx.measureText(tok.v).width;
+          } else {
+            const symImg = symbolImgCache[tok.v];
+            const sz = fs * 1.1;
+            if (symImg) {
+              ctx.drawImage(symImg, cx, y - sz / 2, sz, sz);
+            } else {
+              // Fallback: cerchio colorato con lettera
+              ctx.fillStyle = "#888";
+              ctx.beginPath();
+              ctx.arc(cx + sz/2, y, sz/2, 0, Math.PI*2);
+              ctx.fill();
+              ctx.fillStyle = "#fff";
+              ctx.font = `bold ${sz * 0.6}px sans-serif`;
+              ctx.textAlign = "center";
+              ctx.fillText(tok.v.slice(0,2), cx + sz/2, y);
+              ctx.textAlign = "left";
+            }
+            cx += sz + 1;
+          }
+        }
+        return cx;
+      };
+
+      // Helper principale: disegna testo con wrap automatico e simboli mana
       const drawBox = (text, box, opts = {}) => {
         if (!text) return;
         const {
           fontSize = 14, color = "#181818",
-          fontFamily = "Georgia,serif",
-          fontWeight = "bold",
-          textTransform = "none",
-          align = "left",
-          lineHeight = 1.35,
-          singleLine = false,
-          italic = false,
-          paddingX = 4,
-          paddingY = 4,
+          fontFamily = "Georgia,serif", fontWeight = "bold",
+          textTransform = "none", align = "left",
+          lineHeight = 1.35, singleLine = false,
+          italic = false, paddingX = 4, paddingY = 4,
         } = opts;
 
         const fs  = fontSize * SCALE;
@@ -547,59 +612,94 @@ export default function MagicTokenEditor() {
         const bw  = box.w * SCALE;
         const bh  = box.h * SCALE;
         const maxW = bw - paddingX * SCALE * 2;
+        const leftEdge = bx + paddingX * SCALE;
 
         let displayText = textTransform === "uppercase" ? text.toUpperCase() : text;
 
         ctx.save();
+        ctx.beginPath();
         ctx.rect(bx, by, bw, bh);
         ctx.clip();
         ctx.font = `${italic ? "italic " : ""}${fontWeight} ${fs}px "${fontFamily}"`;
         ctx.fillStyle = color;
         ctx.textBaseline = "middle";
+        ctx.textAlign = "left";
 
         if (singleLine) {
-          ctx.textAlign = align;
-          const tx = align === "center" ? bx + bw / 2
-                   : align === "right"  ? bx + bw - paddingX * SCALE
-                   : bx + paddingX * SCALE;
-          // Scalatura automatica se il testo è troppo lungo
-          const measured = ctx.measureText(displayText).width;
-          if (measured > maxW) {
+          const toks = tokenize(displayText);
+          const totalW = measureLine(toks, fs);
+          let startX = leftEdge;
+          if (align === "center") startX = bx + (bw - totalW) / 2;
+          else if (align === "right") startX = bx + bw - paddingX * SCALE - totalW;
+          // Scala orizzontalmente se troppo lungo
+          if (totalW > maxW) {
             ctx.save();
-            const sc = maxW / measured;
-            ctx.translate(tx, by + bh / 2);
+            const sc = maxW / totalW;
+            ctx.translate(startX, by + bh / 2);
             ctx.scale(sc, 1);
-            ctx.fillText(displayText, 0, 0);
+            drawMixedLine(toks, 0, 0, fs, color);
             ctx.restore();
           } else {
-            ctx.fillText(displayText, tx, by + bh / 2);
+            drawMixedLine(toks, startX, by + bh / 2, fs, color);
           }
           ctx.restore();
           return;
         }
 
-        // Multi-line wrap (per testo abilità)
-        ctx.textAlign = "left";
+        // Multi-line wrap con simboli mana
         const paragraphs = displayText.split("\n");
         let curY = by + paddingY * SCALE + lh / 2;
 
         for (const para of paragraphs) {
-          // Sostituisce {X} simboli mana con testo leggibile nel canvas
-          const cleaned = para.replace(/\{([^}]+)\}/g, (_, s) => `[${s}]`);
-          const words = cleaned.split(" ");
-          let line = "";
-          for (const word of words) {
-            const test = line ? line + " " + word : word;
-            if (ctx.measureText(test).width > maxW && line) {
-              ctx.fillText(line, bx + paddingX * SCALE, curY);
-              curY += lh;
-              line = word;
+          // Tokenizza in parole+simboli
+          const rawTokens = tokenize(para);
+          // Unisci testo in "parole" spezzate da spazi
+          const wordTokens = [];
+          let buf = "";
+          for (const tok of rawTokens) {
+            if (tok.t === "txt") {
+              const parts = tok.v.split(" ");
+              for (let pi = 0; pi < parts.length; pi++) {
+                if (pi > 0) { wordTokens.push([{ t: "space" }]); }
+                if (parts[pi]) buf += parts[pi];
+                if (buf && (pi < parts.length - 1 || tok === rawTokens[rawTokens.length-1])) {
+                  wordTokens.push([{ t: "txt", v: buf }]); buf = "";
+                }
+              }
+              if (buf && parts[parts.length-1] === "") { wordTokens.push([{ t: "txt", v: buf }]); buf = ""; }
             } else {
-              line = test;
+              if (buf) { wordTokens.push([{ t: "txt", v: buf }]); buf = ""; }
+              wordTokens.push([tok]);
             }
           }
-          if (line) { ctx.fillText(line, bx + paddingX * SCALE, curY); curY += lh; }
-          curY += lh * 0.3;
+          if (buf) wordTokens.push([{ t: "txt", v: buf }]);
+
+          // Accumula in righe
+          let lineTokens = [];
+          let lineW = 0;
+          const spaceW = ctx.measureText(" ").width;
+
+          const flushLine = () => {
+            if (lineTokens.length) {
+              drawMixedLine(lineTokens, leftEdge, curY, fs, color);
+              curY += lh;
+              lineTokens = []; lineW = 0;
+            }
+          };
+
+          for (const wt of wordTokens) {
+            if (wt[0].t === "space") {
+              lineW += spaceW;
+              lineTokens.push({ t: "txt", v: " " });
+              continue;
+            }
+            const ww = measureLine(wt, fs);
+            if (lineW + ww > maxW && lineTokens.length) { flushLine(); }
+            lineTokens.push(...wt);
+            lineW += ww;
+          }
+          flushLine();
+          curY += lh * 0.25; // gap paragrafo
         }
         ctx.restore();
       };
@@ -751,12 +851,37 @@ export default function MagicTokenEditor() {
   const fontFamily = (f) => f === "body" ? FB : FT;
 
   const FONTS = `
-    @font-face{font-family:'Beleren';src:url('/src/assets/fonts/Beleren2016-Bold.ttf') format('truetype');font-weight:bold}
-    @font-face{font-family:'MPlantin';src:url('/src/assets/fonts/Mplantin.ttf') format('truetype')}
-    @font-face{font-family:'MatrixSC';src:url('/src/assets/fonts/MatrixBoldSmallCaps Bold.ttf') format('truetype')}
     @keyframes spin{to{transform:rotate(360deg)}}
     * { box-sizing: border-box; }
   `;
+
+  // Carica i font custom via FontFace API — funziona sia in local che su Vercel/CDN
+  // Non dipende da @font-face CSS che potrebbe non essere servito correttamente
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+  useEffect(() => {
+    const loadFonts = async () => {
+      // Usa import.meta.url per far risolvere a Vite i path corretti in produzione (Vercel)
+      const defs = [
+        { name: "Beleren",  url: new URL("/src/assets/fonts/Beleren2016-Bold.ttf", import.meta.url).href,         weight: "bold",   style: "normal" },
+        { name: "MPlantin", url: new URL("/src/assets/fonts/Mplantin.ttf", import.meta.url).href,                 weight: "normal", style: "normal" },
+        { name: "MatrixSC", url: new URL("/src/assets/fonts/MatrixBoldSmallCaps Bold.ttf", import.meta.url).href, weight: "bold",   style: "normal" },
+      ];
+      const results = await Promise.allSettled(
+        defs.map(async ({ name, url, weight, style }) => {
+          // Evita di ricaricare se già presente
+          if ([...document.fonts].some(f => f.family === name && f.status === "loaded")) return;
+          const ff = new FontFace(name, `url(${url})`, { weight, style });
+          const loaded = await ff.load();
+          document.fonts.add(loaded);
+        })
+      );
+      const failed = results.filter(r => r.status === "rejected");
+      if (failed.length > 0) console.warn("Font non caricati:", failed.map(f => f.reason));
+      await document.fonts.ready;
+      setFontsLoaded(true);
+    };
+    loadFonts();
+  }, []);
 
   // ── Info position (bottom della carta, non draggabile) ────────────────────
   const infoPx = pct(CH, 1);
@@ -779,13 +904,15 @@ export default function MagicTokenEditor() {
             {editMode && <GBtn variant="ghost" onClick={saveLayoutFile}>⬇ Salva .json</GBtn>}
             {editMode && <GBtn variant="ghost" onClick={() => layoutFileInput.current.click()}>📂 Carica .json</GBtn>}
             <input ref={layoutFileInput} type="file" accept=".json,application/json" style={{display:"none"}} onChange={loadLayoutFile} />
-            <div style={{ marginLeft: "auto", fontSize: ".7rem", color: editMode ? "#60a5fa" : "#3a3937" }}>
-              {editMode ? "Trascina e ridimensiona ogni zona testo" : "✏ Doppio click sui testi per editare"}
+            <div style={{ marginLeft: "auto", fontSize: ".7rem", color: editMode ? "#60a5fa" : "#3a3937", display: "flex", alignItems: "center", gap: 6 }}>
+              {!fontsLoaded && <span style={{ color: "#c9a227", fontSize: ".65rem" }}>⏳ Caricamento font…</span>}
+              {fontsLoaded && <span style={{ color: "#4ade80", fontSize: ".65rem" }}>✓ Font pronti</span>}
+              {editMode ? " Trascina e ridimensiona ogni zona testo" : " ✏ Clicca sui testi per modificare"}
             </div>
           </div>
 
           {/* CARTA */}
-          <div ref={cardRef} style={{ width: CW, height: CH, position: "relative", borderRadius: 16, overflow: "hidden", flexShrink: 0, background: "#080806", boxShadow: "0 10px 50px rgba(0,0,0,.85), 0 0 0 1px rgba(201,162,39,.15)", transform: "none", isolation: "isolate" }}>
+          <div ref={cardRef} key={fontsLoaded ? "fonts-ready" : "fonts-loading"} style={{ width: CW, height: CH, position: "relative", borderRadius: 16, overflow: "hidden", flexShrink: 0, background: "#080806", boxShadow: "0 10px 50px rgba(0,0,0,.85), 0 0 0 1px rgba(201,162,39,.15)", transform: "none", isolation: "isolate" }}>
 
             {/* ARTWORK z:1 */}
             <div style={{ position: "absolute", inset: 0, zIndex: 1 }}>
