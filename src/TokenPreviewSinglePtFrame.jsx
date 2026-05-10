@@ -475,165 +475,268 @@ export default function MagicTokenEditor() {
     setDownloading(true);
 
     try {
-      // ── Canvas-based export: WYSIWYG garantito ─────────────────────────────
-      // Non dipende da html2canvas/html-to-image né dai font CSS caricati.
-      // Tutto viene disegnato direttamente su Canvas con le stesse coordinate dei box.
       const SCALE = 4;
       const W = CW * SCALE;
       const H = CH * SCALE;
+
+      // ── 1. Carica i font custom nel contesto Canvas ───────────────────────
+      // Il Canvas 2D NON eredita i @font-face del CSS — vanno caricati esplicitamente.
+      const fontPaths = [
+        { name: "Beleren",  url: "/src/assets/fonts/Beleren2016-Bold.ttf",           weight: "bold" },
+        { name: "MPlantin", url: "/src/assets/fonts/Mplantin.ttf",                   weight: "normal" },
+        { name: "MatrixSC", url: "/src/assets/fonts/MatrixBoldSmallCaps Bold.ttf",   weight: "bold" },
+      ];
+      await Promise.allSettled(
+        fontPaths.map(async ({ name, url, weight }) => {
+          try {
+            const ff = new FontFace(name, `url(${url})`, { weight });
+            const loaded = await ff.load();
+            document.fonts.add(loaded);
+          } catch (_) { /* font non trovato — usa fallback */ }
+        })
+      );
+      // Aspetta che tutti i font siano pronti
+      await document.fonts.ready;
+
+      // ── 2. Crea canvas ────────────────────────────────────────────────────
       const canvas = document.createElement("canvas");
       canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext("2d");
 
+      // Helper: carica immagine
       const loadImg = (src) => new Promise((res, rej) => {
-        const img = new Image(); img.crossOrigin = "anonymous";
-        img.onload = () => res(img); img.onerror = rej; img.src = src;
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => res(img);
+        img.onerror = () => rej(new Error("Immagine non caricabile: " + src));
+        img.src = src;
       });
 
-      // 1. SFONDO
-      ctx.fillStyle = "#080806";
-      ctx.fillRect(0, 0, W, H);
+      // Helper: risolve nome font per canvas (prova custom, poi fallback)
+      const resolveFont = (familyStr) => {
+        const first = familyStr.split(",")[0].replace(/['"]/g, "").trim();
+        return first;
+      };
 
-      // 2. ARTWORK
-      if (artUrl) {
-        const img = await loadImg(artUrl);
-        // Riproduce objectPosition e objectFit: cover
-        const iw = img.naturalWidth, ih = img.naturalHeight;
-        const zf = artZoom / 100;
-        const sw = Math.min(iw, ih * (CW / CH)) / zf;
-        const sh = Math.min(ih, iw * (CH / CW)) / zf;
-        const sx = (iw - sw) * (artX / 100);
-        const sy = (ih - sh) * (artY / 100);
-        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
-      }
+      // Helper: disegna testo con wrap automatico in un box
+      const drawBox = (text, box, opts = {}) => {
+        if (!text) return;
+        const {
+          fontSize = 14, color = "#181818",
+          fontFamily = "Georgia,serif",
+          fontWeight = "bold",
+          textTransform = "none",
+          align = "left",
+          lineHeight = 1.35,
+          singleLine = false,
+          italic = false,
+          paddingX = 4,
+          paddingY = 4,
+        } = opts;
 
-      // 3. FRAME
-      if (frame) {
-        const fimg = await loadImg(frame.url);
-        ctx.drawImage(fimg, 0, 0, W, H);
-      }
-
-      // Helper: disegna testo con wrap automatico dentro un box
-      const drawTextBox = (text, box, opts = {}) => {
-        const { fontSize = 14, color = "#181818", fontFamily = "serif", fontWeight = "bold",
-                textTransform = "none", letterSpacing = 0, align = "left",
-                lineHeight = 1.35, italic = false } = opts;
-        const fs = fontSize * SCALE;
-        const fstr = `${italic ? "italic " : ""}${fontWeight} ${fs}px ${fontFamily}`;
-        ctx.font = fstr;
-        ctx.fillStyle = color;
-        ctx.textAlign = align;
-        ctx.textBaseline = "top";
-
-        const bx = box.x * SCALE, by = box.y * SCALE;
-        const bw = box.w * SCALE, bh = box.h * SCALE;
+        const fs  = fontSize * SCALE;
+        const lh  = fs * lineHeight;
+        const bx  = box.x * SCALE;
+        const by  = box.y * SCALE;
+        const bw  = box.w * SCALE;
+        const bh  = box.h * SCALE;
+        const maxW = bw - paddingX * SCALE * 2;
 
         let displayText = textTransform === "uppercase" ? text.toUpperCase() : text;
 
-        // Linea singola (nome, tipo, pt)
-        if (opts.singleLine) {
-          const tx = align === "center" ? bx + bw / 2 : align === "right" ? bx + bw : bx;
-          const ty = by + (bh - fs) / 2;
-          ctx.fillText(displayText, tx, ty, bw);
+        ctx.save();
+        ctx.rect(bx, by, bw, bh);
+        ctx.clip();
+        ctx.font = `${italic ? "italic " : ""}${fontWeight} ${fs}px "${fontFamily}"`;
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle";
+
+        if (singleLine) {
+          ctx.textAlign = align;
+          const tx = align === "center" ? bx + bw / 2
+                   : align === "right"  ? bx + bw - paddingX * SCALE
+                   : bx + paddingX * SCALE;
+          // Scalatura automatica se il testo è troppo lungo
+          const measured = ctx.measureText(displayText).width;
+          if (measured > maxW) {
+            ctx.save();
+            const sc = maxW / measured;
+            ctx.translate(tx, by + bh / 2);
+            ctx.scale(sc, 1);
+            ctx.fillText(displayText, 0, 0);
+            ctx.restore();
+          } else {
+            ctx.fillText(displayText, tx, by + bh / 2);
+          }
+          ctx.restore();
           return;
         }
 
-        // Multi-line con word wrap per abilità
-        const paragraphs = displayText.split("
-");
-        let curY = by + 4 * SCALE;
-        const lineH = fs * lineHeight;
-        const maxW = bw - 4 * SCALE;
+        // Multi-line wrap (per testo abilità)
+        ctx.textAlign = "left";
+        const paragraphs = displayText.split("\n");
+        let curY = by + paddingY * SCALE + lh / 2;
 
         for (const para of paragraphs) {
-          // Strappa i simboli mana {X} dal testo per il canvas
-          const cleaned = para.replace(/\{[^}]+\}/g, "●");
+          // Sostituisce {X} simboli mana con testo leggibile nel canvas
+          const cleaned = para.replace(/\{([^}]+)\}/g, (_, s) => `[${s}]`);
           const words = cleaned.split(" ");
           let line = "";
           for (const word of words) {
             const test = line ? line + " " + word : word;
             if (ctx.measureText(test).width > maxW && line) {
-              ctx.fillText(line, bx + 2 * SCALE, curY);
-              curY += lineH;
+              ctx.fillText(line, bx + paddingX * SCALE, curY);
+              curY += lh;
               line = word;
-            } else { line = test; }
+            } else {
+              line = test;
+            }
           }
-          if (line) { ctx.fillText(line, bx + 2 * SCALE, curY); curY += lineH; }
-          curY += 2 * SCALE; // gap tra paragrafi
+          if (line) { ctx.fillText(line, bx + paddingX * SCALE, curY); curY += lh; }
+          curY += lh * 0.3;
         }
+        ctx.restore();
       };
 
-      // 4. NOME
-      drawTextBox(name, boxes.name, {
+      // ── 3. Sfondo ─────────────────────────────────────────────────────────
+      ctx.fillStyle = "#080806";
+      ctx.fillRect(0, 0, W, H);
+
+      // ── 4. Artwork ────────────────────────────────────────────────────────
+      if (artUrl) {
+        try {
+          const img = await loadImg(artUrl);
+          const iw = img.naturalWidth, ih = img.naturalHeight;
+          const cardAR = CW / CH;
+          const imgAR  = iw / ih;
+          const zf = artZoom / 100;
+
+          let sw, sh;
+          if (imgAR > cardAR) {
+            sh = ih / zf; sw = sh * cardAR;
+          } else {
+            sw = iw / zf; sh = sw / cardAR;
+          }
+          const sx = Math.max(0, (iw - sw)) * (artX / 100);
+          const sy = Math.max(0, (ih - sh)) * (artY / 100);
+          ctx.drawImage(img, sx, sy, Math.min(sw, iw - sx), Math.min(sh, ih - sy), 0, 0, W, H);
+        } catch (e) { console.warn("Artwork non caricabile", e); }
+      }
+
+      // ── 5. Frame ──────────────────────────────────────────────────────────
+      if (frame) {
+        try {
+          const fimg = await loadImg(frame.url);
+          ctx.drawImage(fimg, 0, 0, W, H);
+        } catch (e) { console.warn("Frame non caricabile", e); }
+      }
+
+      // ── 6. Testi ──────────────────────────────────────────────────────────
+      const titleFont = resolveFont(FT);
+      const bodyFont  = resolveFont(FB);
+
+      // Nome
+      drawBox(name, boxes.name, {
         fontSize: nameFs, color: nameColor,
-        fontFamily: FT.split(",")[0].replace(/'/g, "").trim(),
+        fontFamily: nameFont === "body" ? bodyFont : titleFont,
         fontWeight: nameBold ? "bold" : "normal",
-        textTransform: "uppercase", letterSpacing: 0.03,
+        textTransform: "uppercase",
         align: nameAlign, singleLine: true,
       });
 
-      // 5. TIPO
-      drawTextBox(type, boxes.type, {
+      // Tipo
+      drawBox(type, boxes.type, {
         fontSize: typeFs, color: typeColor,
-        fontFamily: FT.split(",")[0].replace(/'/g, "").trim(),
-        fontWeight: "bold", align: typeAlign, singleLine: true,
+        fontFamily: titleFont, fontWeight: "bold",
+        align: typeAlign, singleLine: true,
       });
 
-      // 6. ABILITÀ
-      if (showAbility) {
-        drawTextBox(ability, boxes.text, {
+      // Abilità
+      if (showAbility && ability) {
+        drawBox(ability, boxes.text, {
           fontSize: abilityFs, color: abilityColor,
-          fontFamily: FB.split(",")[0].replace(/'/g, "").trim(),
-          fontWeight: "normal", lineHeight: 1.45,
+          fontFamily: bodyFont, fontWeight: "normal",
+          lineHeight: 1.45,
         });
+        // Flavor text
+        if (showFlavor && flavor) {
+          const flavorBox = {
+            x: boxes.text.x,
+            y: boxes.text.y + boxes.text.h * 0.6,
+            w: boxes.text.w,
+            h: boxes.text.h * 0.4,
+          };
+          drawBox(flavor, flavorBox, {
+            fontSize: flavorFs, color: abilityColor,
+            fontFamily: bodyFont, fontWeight: "normal",
+            italic: true, lineHeight: 1.35,
+          });
+        }
       }
 
-      // 7. P/T FRAME
+      // P/T frame
       if (showPT && ptFrame) {
-        const ptimg = await loadImg(ptFrame.url);
-        ctx.drawImage(ptimg, boxes.pt.x * SCALE, boxes.pt.y * SCALE, boxes.pt.w * SCALE, boxes.pt.h * SCALE);
+        try {
+          const ptimg = await loadImg(ptFrame.url);
+          ctx.drawImage(ptimg,
+            boxes.pt.x * SCALE, boxes.pt.y * SCALE,
+            boxes.pt.w * SCALE, boxes.pt.h * SCALE
+          );
+        } catch (e) { console.warn("PT frame non caricabile", e); }
       }
 
-      // 8. P/T TESTO
+      // P/T testo
       if (showPT) {
-        drawTextBox(`${power}/${toughness}`, boxes.pt, {
+        drawBox(`${power}/${toughness}`, boxes.pt, {
           fontSize: ptFs, color: ptColor,
-          fontFamily: FT.split(",")[0].replace(/'/g, "").trim(),
-          fontWeight: "bold", align: "center", singleLine: true,
+          fontFamily: titleFont, fontWeight: "bold",
+          align: "center", singleLine: true,
         });
       }
 
-      // 9. INFO BASSA
+      // ── 7. Info bassa ────────────────────────────────────────────────────
       if (showInfo) {
-        const infoY = (CH - 18) * SCALE;
         ctx.font = `${infoFs * SCALE}px monospace`;
-        ctx.fillStyle = "#909090"; ctx.textAlign = "left"; ctx.textBaseline = "top";
-        ctx.fillText(`${rarity} ${setCode} • ${lang}`, pct(CW, 1.5) * SCALE, infoY);
-        ctx.fillText(`Illus. ${artist}`, pct(CW, 1.5) * SCALE, infoY + infoFs * SCALE * 1.3);
+        ctx.fillStyle = "#909090";
+        ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+        const iy = (CH - 20) * SCALE;
+        ctx.fillText(`${rarity} ${setCode} \u2022 ${lang}`, pct(CW, 1.5) * SCALE, iy);
+        ctx.fillText(`Illus. ${artist}`,                     pct(CW, 1.5) * SCALE, iy + infoFs * SCALE * 1.3);
       }
       if (showCopy) {
-        const copyY = (CH - 18) * SCALE;
         ctx.font = `${infoFs * SCALE}px monospace`;
-        ctx.fillStyle = "#909090"; ctx.textAlign = "right"; ctx.textBaseline = "top";
-        ctx.fillText(`™ & © ${year} Wizards of the Coast`, (CW - pct(CW, 2)) * SCALE, copyY);
+        ctx.fillStyle = "#909090";
+        ctx.textAlign = "right"; ctx.textBaseline = "alphabetic";
+        ctx.fillText(`\u2122 & \u00A9 ${year} Wizards of the Coast`,
+          (CW - pct(CW, 2)) * SCALE, (CH - 20) * SCALE);
       }
 
-      // 10. Arrotondamento bordi carta
-      ctx.globalCompositeOperation = "destination-in";
+      // ── 8. Border-radius ──────────────────────────────────────────────────
       const r = 16 * SCALE;
-      ctx.beginPath();
-      ctx.roundRect(0, 0, W, H, r);
-      ctx.fill();
-      ctx.globalCompositeOperation = "source-over";
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = W; tempCanvas.height = H;
+      const tc = tempCanvas.getContext("2d");
+      tc.beginPath();
+      tc.moveTo(r, 0);
+      tc.lineTo(W - r, 0); tc.quadraticCurveTo(W, 0, W, r);
+      tc.lineTo(W, H - r); tc.quadraticCurveTo(W, H, W - r, H);
+      tc.lineTo(r, H);     tc.quadraticCurveTo(0, H, 0, H - r);
+      tc.lineTo(0, r);     tc.quadraticCurveTo(0, 0, r, 0);
+      tc.closePath();
+      tc.fillStyle = "#000";
+      tc.fill();
+      tc.globalCompositeOperation = "source-in";
+      tc.drawImage(canvas, 0, 0);
 
-      // Download
+      // ── 9. Download ───────────────────────────────────────────────────────
       const link = document.createElement("a");
-      link.download = `${name.replace(/[^a-z0-9_]/gi, "_")}_token.png`;
-      link.href = canvas.toDataURL("image/png");
+      link.download = `${name.replace(/[^a-z0-9_]/gi, "_") || "token"}_token.png`;
+      link.href = tempCanvas.toDataURL("image/png");
       link.click();
 
     } catch (err) {
-      alert("Errore export: " + err.message + "\n" + err.stack);
+      alert("Errore export: " + err.message);
+      console.error(err);
     } finally {
       setDownloading(false);
     }
