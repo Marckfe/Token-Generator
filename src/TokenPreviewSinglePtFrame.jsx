@@ -420,18 +420,62 @@ export default function TokenEditor() {
         infoLeft, showInfoLeft, showArtist,
         copyright, showCopyright,
       };
-      const S = 4;
+      const S     = 4;    // scala UHD 4x
+      const BLEED = 21;   // ~3mm a 72dpi nello spazio canvas 620x890
 
-      // Canvas isolato per il download — non tocca mai canvasRef della preview
+      // 1. Renderizza carta completa su canvas nativo isolato
       const cardCanvas = document.createElement("canvas");
       await renderCard(cardCanvas, snap);
 
+      // 2. Export canvas con bleed sui 4 lati
+      const EW = (CW + BLEED * 2) * S;
+      const EH = (CH + BLEED * 2) * S;
       const exportCanvas = document.createElement("canvas");
-      exportCanvas.width  = CW * S;
-      exportCanvas.height = CH * S;
+      exportCanvas.width  = EW;
+      exportCanvas.height = EH;
       const ctx = exportCanvas.getContext("2d");
-      ctx.drawImage(cardCanvas, 0, 0, CW, CH, 0, 0, CW * S, CH * S);
 
+      // 3. Sfondo bleed: artwork scalato cover su tutto l'export canvas
+      //    (il bleed è la parte di artwork che "fuoriesce" oltre i bordi carta)
+      if (snap.artUrl) {
+        try {
+          const img = await loadImg(snap.artUrl);
+          // cover: scala mantenendo aspect ratio coprendo tutto EW x EH
+          const scale = Math.max(EW / img.width, EH / img.height);
+          const dw = img.width * scale;
+          const dh = img.height * scale;
+          const dx = (EW - dw) / 2;
+          const dy = (EH - dh) / 2;
+          ctx.drawImage(img, dx, dy, dw, dh);
+        } catch {
+          ctx.fillStyle = "#1a1a1a";
+          ctx.fillRect(0, 0, EW, EH);
+        }
+      } else {
+        ctx.fillStyle = "#1a1a1a";
+        ctx.fillRect(0, 0, EW, EH);
+      }
+
+      // 4. Carta centrata sopra il bleed — UNA SOLA drawImage
+      ctx.drawImage(cardCanvas, 0, 0, CW, CH, BLEED * S, BLEED * S, CW * S, CH * S);
+
+      // 5. Crop marks sul bordo taglio reale
+      const bx = BLEED * S, by = BLEED * S;
+      const cw = CW * S,    ch = CH * S;
+      const MARK = 10 * S,  GAP = 3 * S;
+      ctx.save();
+      ctx.strokeStyle = "#444";
+      ctx.lineWidth   = S * 0.5;
+      ctx.lineCap     = "square";
+      for (const [px, py] of [[bx, by], [bx+cw, by], [bx, by+ch], [bx+cw, by+ch]]) {
+        const sx = px === bx ? -1 : 1;
+        const sy = py === by ? -1 : 1;
+        ctx.beginPath(); ctx.moveTo(px + sx*GAP, py); ctx.lineTo(px + sx*(GAP+MARK), py); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(px, py + sy*GAP); ctx.lineTo(px, py + sy*(GAP+MARK)); ctx.stroke();
+      }
+      ctx.restore();
+
+      // 6. Download
       const link = document.createElement("a");
       link.download = `${(snap.name || "token").replace(/[^a-z0-9_]/gi, "_")}_PRINT.png`;
       link.href = exportCanvas.toDataURL("image/png");
