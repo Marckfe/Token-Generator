@@ -1,1192 +1,819 @@
-// ╔══════════════════════════════════════════════════════════════════════╗
-// ║  L'export PNG usa esclusivamente Canvas 2D nativo + FontFace API.    ║
-// ║    rm -rf node_modules/.vite && vite --force                         ║
-// ╚══════════════════════════════════════════════════════════════════════╝
-import React, { useState, useRef, useEffect, useCallback } from "react";
 
-// Export PNG: usa Canvas 2D nativo + FontFace API
-// ─────────────────────────────────────────────────────────────────────────────
-// ASSET IMPORTS
-// ─────────────────────────────────────────────────────────────────────────────
+import React, { useState, useRef, useMemo } from "react";
+import html2canvas from "html2canvas";
+import {
+  Accordion, AccordionSummary, AccordionDetails,
+  Box, Button, Divider, FormControl, FormGroup, Grid, InputLabel,
+  MenuItem, Select, Slider, Switch, TextField, Typography, FormControlLabel
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+
 const ALL_FRAME_SETS = import.meta.glob(
   "/src/assets/frames/masterframes/*/*.{png,jpg,jpeg,webp,svg}",
   { eager: true, import: "default" }
 );
-function groupFramesBySet(all) {
+
+function groupFramesBySet(allFrames) {
   const map = {};
-  for (const path in all) {
-    const m = path.match(/masterframes\/([^/]+)\//);
-    if (!m) continue;
-    const k = m[1];
-    if (!map[k]) map[k] = [];
-    map[k].push({ name: path.split("/").pop().replace(/\.[a-z]+$/, ""), url: all[path] });
+  for (const path in allFrames) {
+    const match = path.match(/masterframes\/([^/]+)\//);
+    if (!match) continue;
+    const setKey = match[1];
+    if (!map[setKey]) map[setKey] = [];
+    map[setKey].push({
+      name: path.split("/").pop().replace(/\.[a-z]+$/, ""),
+      url: allFrames[path],
+    });
   }
-  for (const k in map) map[k].sort((a, b) => a.name.localeCompare(b.name));
+  for (const k in map) {
+    map[k] = map[k].sort((a, b) => a.name.localeCompare(b.name));
+  }
   return map;
 }
 const FRAME_MAP = groupFramesBySet(ALL_FRAME_SETS);
-const framePT   = import.meta.glob("/src/assets/frames/pt/*.{png,jpg,jpeg,webp,svg}", { eager: true, import: "default" });
-const PT_FRAMES = Object.entries(framePT).map(([p, url]) => ({ name: p.split("/").pop().replace(/\.[a-z]+$/, ""), url }));
-const SYMBOLS   = import.meta.glob("/src/assets/simbol/*.{svg,png,jpg,jpeg,webp}", { eager: true, import: "default" });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DIMENSIONI CARTA — proporzione reale MTG 63×88mm
-// ─────────────────────────────────────────────────────────────────────────────
-const CW = 460;
-const CH = Math.round(CW * 88 / 63); // 644px
+const framePT = import.meta.glob(
+  "/src/assets/frames/pt/*.{png,jpg,jpeg,webp,svg}",
+  { eager: true, import: "default" }
+);
+const PT_FRAMES = Object.entries(framePT).map(([p, url]) => ({
+  name: p.split("/").pop().replace(/\.[a-z]+$/, ""),
+  url,
+}));
 
-// Font
-const FT = "'Beleren','MatrixSC','Cinzel','Georgia',serif";
-const FB = "'MPlantin','Palatino Linotype','Book Antiqua','Georgia',serif";
+const simbolImport = import.meta.glob(
+  "/src/assets/simbol/*.{svg,png,jpg,jpeg,webp}",
+  { eager: true, import: "default" }
+);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MANA PARSER
-// ─────────────────────────────────────────────────────────────────────────────
-function ManaLine({ text, fontSize = 13, color = "#181818" }) {
-  const rx = /{([^}]+)}/g;
-  const parts = []; let last = 0, m;
-  while ((m = rx.exec(text)) !== null) {
-    if (m.index > last) parts.push({ t: "txt", v: text.slice(last, m.index) });
-    const sym = m[1].trim();
-    const key = Object.keys(SYMBOLS).find(p => {
-    const filename = p.split("/").pop().replace(/\.[^.]+$/, "");
-    return (
-      filename === sym ||
-      filename === `{${sym}}` ||
-      filename.toLowerCase() === sym.toLowerCase() ||
-      filename === sym.toUpperCase()
-    );
-  });
-    parts.push({ t: "sym", v: sym, url: key ? SYMBOLS[key] : null });
-    last = rx.lastIndex;
-  }
-  if (last < text.length) parts.push({ t: "txt", v: text.slice(last) });
-  return (
-    <span style={{ fontSize, color, fontFamily: FB, lineHeight: 1.4, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-      {parts.map((p, i) =>
-        p.t === "txt" ? <span key={i}>{p.v}</span>
-        : p.url
-          ? <img key={i} src={p.url} alt={`{${p.v}}`}
-              style={{ width: fontSize * 1.1, height: fontSize * 1.1, verticalAlign: "middle", display: "inline-block", margin: "0 1px", position: "relative", top: -1 }} />
-          : <span key={i} style={{ color: "#c9a227", fontWeight: 700 }}>{`{${p.v}}`}</span>
-      )}
-    </span>
+function getAvailableSymbolsFromFolder(simbolsObj) {
+  // Estrae tutti i simboli validi dal nome del file
+  // esempio: "/src/assets/simbol/W.svg" => 'W'
+  return Object.keys(simbolsObj).map(p =>
+    p.split("/").pop().replace(/\.[^/.]+$/, "")
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DRAGGABLE + RESIZABLE TEXT BOX — il cuore del sistema
-// ─────────────────────────────────────────────────────────────────────────────
-// box: { x, y, w, h } — tutte in px, relative alla carta
-// onUpdate(newBox)
-// editMode: true = mostra bordi/handle, false = solo testo
-function DRBox({ box, onUpdate, editMode, accentColor = "#c9a227", label, children }) {
-  const dragging = useRef(false);
-  const resizing = useRef(null); // quale handle: "se","sw","ne","nw","e","w","s","n"
-  const startRef = useRef({});
-  const boxRef   = useRef(box);
-  boxRef.current = box;
+const CARD_WIDTH = 620, CARD_HEIGHT = 890;
 
-  // ── DRAG ─────────────────────────────────────────────────────────────────
-  const startDrag = useCallback((e) => {
-    if (!editMode) return;
-    e.preventDefault(); e.stopPropagation();
-    dragging.current = true;
-    startRef.current = { mx: e.clientX, my: e.clientY, bx: box.x, by: box.y };
-  }, [editMode, box]);
-
-  // ── RESIZE ───────────────────────────────────────────────────────────────
-  const startResize = useCallback((e, handle) => {
-    if (!editMode) return;
-    e.preventDefault(); e.stopPropagation();
-    resizing.current = handle;
-    startRef.current = { mx: e.clientX, my: e.clientY, ...boxRef.current };
-  }, [editMode]);
-
-  useEffect(() => {
-    const MIN = 40;
-    const onMove = (e) => {
-      const dx = e.clientX - startRef.current.mx;
-      const dy = e.clientY - startRef.current.my;
-      if (dragging.current) {
-        onUpdate({
-          ...boxRef.current,
-          x: Math.max(0, Math.min(CW - boxRef.current.w, startRef.current.bx + dx)),
-          y: Math.max(0, Math.min(CH - boxRef.current.h, startRef.current.by + dy)),
-        });
-      } else if (resizing.current) {
-        const h = resizing.current;
-        let { x, y, w, ww: ow, h: oh } = { ...startRef.current, ww: startRef.current.w };
-        let nx = x, ny = y, nw = ow, nh = oh;
-        if (h.includes("e"))  nw = Math.max(MIN, ow + dx);
-        if (h.includes("w"))  { nw = Math.max(MIN, ow - dx); nx = x + (ow - nw); }
-        if (h.includes("s"))  nh = Math.max(MIN, oh + dy);
-        if (h.includes("n"))  { nh = Math.max(MIN, oh - dy); ny = y + (oh - nh); }
-        onUpdate({
-          x: Math.max(0, nx),
-          y: Math.max(0, ny),
-          w: Math.min(CW - Math.max(0, nx), nw),
-          h: Math.min(CH - Math.max(0, ny), nh),
-        });
-      }
-    };
-    const onUp = () => { dragging.current = false; resizing.current = null; };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup",   onUp);
-    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-  }, [onUpdate]);
-
-  const handleStyle = (pos) => {
-    const SIZE = 10;
-    const half = SIZE / 2;
-    const base = { position: "absolute", width: SIZE, height: SIZE, background: accentColor, borderRadius: 2, zIndex: 20, cursor: `${pos}-resize` };
-    const corners = {
-      nw: { top: -half, left: -half }, ne: { top: -half, right: -half },
-      sw: { bottom: -half, left: -half }, se: { bottom: -half, right: -half },
-      n:  { top: -half, left: "50%", transform: "translateX(-50%)" },
-      s:  { bottom: -half, left: "50%", transform: "translateX(-50%)" },
-      e:  { right: -half, top: "50%", transform: "translateY(-50%)" },
-      w:  { left: -half, top: "50%", transform: "translateY(-50%)" },
-    };
-    return { ...base, ...corners[pos] };
-  };
-
+function ColorControl({ setter, keyName, value, label }) {
   return (
-    <div
-      style={{
-        position: "absolute",
-        left: box.x, top: box.y, width: box.w, height: box.h,
-        zIndex: editMode ? 10 : 4,
-        cursor: editMode ? "move" : "default",
-        boxSizing: "border-box",
-        border: editMode ? `2px dashed ${accentColor}99` : "none",
-        background: editMode ? `${accentColor}18` : "transparent",
-        borderRadius: 3,
-        userSelect: editMode ? "none" : "auto",
-      }}
-      onMouseDown={startDrag}
-    >
-      {/* Etichetta zona */}
-      {editMode && (
-        <div style={{ position: "absolute", top: -20, left: 0, fontSize: 9, fontWeight: 700, color: accentColor, background: "rgba(0,0,0,.75)", padding: "1px 5px", borderRadius: 3, whiteSpace: "nowrap", zIndex: 21, letterSpacing: ".04em", textTransform: "uppercase" }}>
+    <Grid container spacing={1} alignItems="center" sx={{ mb: 2 }}>
+      <Grid item xs={12}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
           {label}
-        </div>
-      )}
-
-      {/* Contenuto — overflow visible per non tagliare testo, hidden solo in export */}
-      <div style={{ width: "100%", height: "100%", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
-        {children}
-      </div>
-
-      {/* Resize handles — solo in editMode */}
-      {editMode && ["nw","ne","sw","se","n","s","e","w"].map(h => (
-        <div key={h} style={handleStyle(h)} onMouseDown={e => startResize(e, h)} />
-      ))}
-    </div>
+        </Typography>
+      </Grid>
+      <Grid item>
+        <input
+          type="color"
+          value={value}
+          onChange={e => setter(val => ({ ...val, [keyName]: e.target.value }))}
+          style={{
+            width: 38,
+            height: 34,
+            border: "2.5px solid #777",
+            borderRadius: 5,
+            background: "#f9fafb",
+            margin: 0,
+            cursor: "pointer"
+          }}
+          aria-label={label}
+        />
+      </Grid>
+      <Grid item xs>
+        <TextField
+          label="Hex"
+          value={value}
+          size="small"
+          variant="outlined"
+          onChange={e =>
+            setter(val => ({ ...val, [keyName]: e.target.value }))
+          }
+          sx={{ ml: 1, maxWidth: 100 }}
+          inputProps={{
+            style: { fontFamily: "monospace" },
+            maxLength: 7
+          }}
+        />
+      </Grid>
+    </Grid>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ARTWORK DRAG
-// ─────────────────────────────────────────────────────────────────────────────
-function ArtLayer({ url, posX, posY, zoom, onUpdate }) {
-  const drag = useRef(false);
-  const s    = useRef({});
-  const onDown = useCallback(e => {
-    if (e.button !== 0) return;
-    drag.current = true;
-    s.current = { x: e.clientX, y: e.clientY, px: posX, py: posY };
-    e.preventDefault();
-  }, [posX, posY]);
-  useEffect(() => {
-    const mv = e => {
-      if (!drag.current) return;
-      const sens = 0.1;
-      onUpdate(
-        Math.max(0, Math.min(100, s.current.px + (s.current.x - e.clientX) * sens)),
-        Math.max(0, Math.min(100, s.current.py + (s.current.y - e.clientY) * sens))
-      );
-    };
-    const up = () => { drag.current = false; };
-    window.addEventListener("mousemove", mv);
-    window.addEventListener("mouseup",   up);
-    return () => { window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); };
-  }, [onUpdate]);
-  return (
-    <div onMouseDown={onDown} style={{ position: "absolute", inset: 0, cursor: "move", overflow: "hidden" }}>
-      <img src={url} alt="art" draggable={false}
-        style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-          width: `${zoom}%`, height: `${zoom}%`, minWidth: "100%", minHeight: "100%",
-          objectFit: "cover", objectPosition: `${posX}% ${posY}%`,
-          userSelect: "none", pointerEvents: "none" }} />
-    </div>
-  );
-}
+// Parser per sostituire {SYMBOL} con l'immagine dalla cartella simboli
+function parseManaSymbols(text, symbolMap) {
+  const regex = /{([^}]+)}/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  let key = 0;
+  // Calcola l'elenco simboli validi solo una volta
+  const validSymbols = useMemo(() =>
+    Object.keys(symbolMap).map(p =>
+      p.split("/").pop().replace(/\.[^/.]+$/, "")
+    )
+  , [symbolMap]);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// INLINE EDIT — click singolo per entrare in editing
-// ─────────────────────────────────────────────────────────────────────────────
-function InlineEdit({ value, onChange, multiline, style }) {
-  const ref = useRef();
-  // Stile comune — trasparente, nessun bordo, eredita tutto dal parent
-  const inputStyle = {
-    ...style,
-    background: "transparent",
-    border: "none",
-    outline: "none",
-    boxShadow: "none",
-    width: "100%",
-    boxSizing: "border-box",
-    resize: "none",
-    padding: 0,
-    margin: 0,
-    lineHeight: style?.lineHeight || 1.3,
-    fontFamily: style?.fontFamily || "inherit",
-    fontSize: style?.fontSize || "inherit",
-    fontWeight: style?.fontWeight || "inherit",
-    color: style?.color || "inherit",
-    textAlign: style?.textAlign || "left",
-    textTransform: style?.textTransform || "none",
-    letterSpacing: style?.letterSpacing || "normal",
-    cursor: "text",
-    caretColor: "#c9a227",
-    // Importante: evita che il browser aggiunga stili nativi agli input
-    WebkitAppearance: "none",
-    appearance: "none",
-  };
-  if (multiline) return (
-    <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)}
-      style={{ ...inputStyle, height: "100%", wordBreak: "break-word", whiteSpace: "pre-wrap", overflowY: "hidden" }} />
-  );
-  return <input ref={ref} type="text" value={value} onChange={e => onChange(e.target.value)} style={inputStyle} />;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// UI PRIMITIVES
-// ─────────────────────────────────────────────────────────────────────────────
-const G = "#c9a227";
-const PBG = "#1c1b19";
-const BD = "#2a2927";
-
-function Acc({ icon, title, open: def = false, children }) {
-  const [open, setOpen] = useState(def);
-  return (
-    <div style={{ background: PBG, border: `1px solid ${BD}`, borderRadius: 10, overflow: "hidden", marginBottom: 5 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "11px 15px", background: "none", border: "none", color: G, fontWeight: 700, fontSize: ".87rem", cursor: "pointer" }}>
-        <span>{icon} {title}</span>
-        <span style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .2s", display: "inline-block" }}>▾</span>
-      </button>
-      {open && <div style={{ padding: "12px 14px", borderTop: `1px solid ${BD}`, display: "flex", flexDirection: "column", gap: 9 }}>{children}</div>}
-    </div>
-  );
-}
-const Lbl = ({ c, children }) => <div style={{ fontSize: ".7rem", color: c || "#797876", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 2 }}>{children}</div>;
-
-const TF = ({ value, onChange, multiline, rows, disabled, placeholder }) => {
-  const s = { background: "#252420", border: `1px solid ${BD}`, borderRadius: 6, color: "#cdccca", padding: "7px 10px", fontSize: ".83rem", width: "100%", outline: "none", fontFamily: "inherit", boxSizing: "border-box" };
-  if (multiline) return <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows || 4} disabled={disabled} placeholder={placeholder} style={{ ...s, resize: "vertical", lineHeight: 1.5 }} />;
-  return <input type="text" value={value} onChange={e => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} style={s} />;
-};
-
-const Sld = ({ label, value, onChange, min, max, step = 1 }) => (
-  <div>
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".7rem", color: "#797876", marginBottom: 2 }}>
-      <span>{label}</span>
-      <span style={{ color: G, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{Number(value).toFixed(step < 1 ? 1 : 0)}</span>
-    </div>
-    <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} style={{ width: "100%", accentColor: G }} />
-  </div>
-);
-
-const CP = ({ label, value, onChange }) => (
-  <div>
-    {label && <Lbl>{label}</Lbl>}
-    <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
-      <input type="color" value={value} onChange={e => onChange(e.target.value)} style={{ width: 32, height: 28, border: `2px solid ${BD}`, borderRadius: 4, background: "none", cursor: "pointer", padding: 0, flexShrink: 0 }} />
-      <input type="text" value={value} onChange={e => onChange(e.target.value)} style={{ background: "#252420", border: `1px solid ${BD}`, borderRadius: 6, color: "#cdccca", padding: "5px 8px", fontSize: ".78rem", width: 84, fontFamily: "monospace", outline: "none" }} />
-    </div>
-  </div>
-);
-
-const Chk = ({ label, checked, onChange }) => (
-  <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", fontSize: ".83rem", color: "#797876", userSelect: "none" }}>
-    <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ width: 14, height: 14, accentColor: G }} />
-    {label}
-  </label>
-);
-
-const GBtn = ({ onClick, children, variant = "gold", full, disabled }) => {
-  const v = {
-    gold:  { background: G, color: "#0f0e0c", border: "none", fontWeight: 900 },
-    ghost: { background: "none", color: "#797876", border: `1px solid ${BD}`, fontWeight: 600 },
-    blue:  { background: "#1d4ed8", color: "#fff", border: "none", fontWeight: 700 },
-    teal:  { background: "#0d7377", color: "#fff", border: "none", fontWeight: 700 },
-  };
-  return (
-    <button onClick={onClick} disabled={disabled}
-      style={{ ...v[variant], borderRadius: 8, padding: "8px 14px", fontSize: ".82rem", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? .5 : 1, width: full ? "100%" : "auto", transition: "filter .15s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
-      onMouseEnter={e => !disabled && (e.currentTarget.style.filter = "brightness(1.12)")}
-      onMouseLeave={e => e.currentTarget.style.filter = ""}>
-      {children}
-    </button>
-  );
-};
-
-const CPRESETS = ["#181818","#f5f5f0","#c9a227","#e8dfc8","#ffffff"];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DEFAULT BOX POSITIONS — percentuali convertite in px, facilmente modificabili
-// ─────────────────────────────────────────────────────────────────────────────
-const pct = (base, p) => Math.round(base * p / 100);
-const DEFAULT_BOXES = {
-  name: { x: pct(CW, 9),  y: pct(CH, 2.8), w: pct(CW, 72), h: pct(CH, 6.5) },
-  type: { x: pct(CW, 7.5),y: pct(CH, 79),  w: pct(CW, 72), h: pct(CH, 5.5) },
-  text: { x: pct(CW, 7),  y: pct(CH, 85),  w: pct(CW, 86), h: pct(CH, 12.5) },
-  pt:   { x: pct(CW, 83), y: pct(CH, 90),  w: pct(CW, 13), h: pct(CH, 7) },
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN
-// ─────────────────────────────────────────────────────────────────────────────
-export default function MagicTokenEditor() {
-  const allSets = Object.keys(FRAME_MAP);
-
-  // Boxes — ogni testo ha la sua posizione/dimensione draggabile
-  const [boxes, setBoxes] = useState({ ...DEFAULT_BOXES });
-  const updateBox = (key, b) => setBoxes(prev => ({ ...prev, [key]: b }));
-  const resetBoxes = () => setBoxes({ ...DEFAULT_BOXES });
-  const exportLayout = () => {
-    const data = JSON.stringify(boxes, null, 2);
-    navigator.clipboard.writeText(data).then(
-      () => alert("✅ Layout copiato negli appunti!"),
-      () => {
-        // fallback: download file
-        const blob = new Blob([data], { type: "application/json" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `layout_${name.replace(/[^a-z0-9_]/gi,"_")}.json`;
-        a.click();
-      }
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const symbol = match[1].trim();
+    // Trova la key della mappa con il simbolo richiesto (case sensitive)
+    const symbolKey = Object.keys(symbolMap).find(p =>
+      p.split("/").pop().replace(/\.[^/.]+$/, "") === symbol
     );
-  };
+    let imgSrc = symbolKey ? symbolMap[symbolKey] : null;
+    parts.push(
+      imgSrc ?
+        <img
+          key={`manaimg-${key++}`}
+          src={imgSrc}
+          alt={`{${symbol}}`}
+          style={{
+            width: '22px',
+            height: '22px',
+            verticalAlign: 'middle',
+            margin: '0 2px',
+            display: 'inline-block',
+          }}
+        />
+      :
+        `{${match[1]}}`
+    );
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return parts;
+}
 
-  const importLayout = () => {
-    const s = prompt("📥 Incolla il JSON del layout:");
-    if (!s) return;
-    try {
-      const parsed = JSON.parse(s);
-      // Valida che abbia le chiavi giuste
-      const required = ["name","type","text","pt"];
-      for (const k of required) {
-        if (!parsed[k] || typeof parsed[k].x !== "number") throw new Error(`Chiave mancante: ${k}`);
-      }
-      setBoxes(parsed);
-    } catch (e) { alert("❌ JSON non valido: " + e.message); }
-  };
+export default function MagicTokenEditor() {
+  const [name, setName] = useState("CONSTRUCT");
+  const [nameStyle, setNameStyle] = useState({ x: 0, y: 45, fontSize: 29.2, color: "#181818" });
 
-  const saveLayoutFile = () => {
-    const data = JSON.stringify(boxes, null, 2);
-    const blob = new Blob([data], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `layout_${name.replace(/[^a-z0-9_]/gi,"_") || "token"}.json`;
-    a.click();
-  };
+  const [type, setType] = useState("Token Artifact Creature â€” Construct");
+  const [typeStyle, setTypeStyle] = useState({ x: 53, y: 730, fontSize: 24, color: "#181818" });
 
-  const loadLayoutFile = (e) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const parsed = JSON.parse(ev.target.result);
-        const required = ["name","type","text","pt"];
-        for (const k of required) {
-          if (!parsed[k] || typeof parsed[k].x !== "number") throw new Error(`Chiave mancante: ${k}`);
-        }
-        setBoxes(parsed);
-        alert("✅ Layout importato!");
-      } catch (ex) { alert("❌ File non valido: " + ex.message); }
-    };
-    reader.readAsText(file); e.target.value = null;
-  };
+  const [ability, setAbility] = useState("This creature gets +1/+1 for each {W} you control.\n{T}: Add {G} or {R}.");
+  const [abilityStyle, setAbilityStyle] = useState({ x: 43, y: 787, fontSize: 15.6, color: "#181818" });
+  const [showAbility, setShowAbility] = useState(true);
 
+  const [pt, setPT] = useState({ power: 0, toughness: 0 });
+  const [ptStyle, setPTStyle] = useState({
+    x: 503, y: 775, frameX: 498, frameY: 778, width: 89, height: 58,
+    fontSize: 36, color: "#181818",
+    powerOffsetX: 0, slashOffsetX: 0, toughnessOffsetX: 0
+  });
+  const [showPT, setShowPT] = useState(true);
 
-  // Modalità edit overlay
-  const [editMode, setEditMode] = useState(true); // default ON per guidare l'utente
-  const [activeBox, setActiveBox] = useState(null); // quale pannello è aperto
+  const allFrameKeys = Object.keys(FRAME_MAP);
+  const [mainFrameSet, setMainFrameSet] = useState(allFrameKeys[0] || "");
+  const [mainFrameIdx, setMainFrameIdx] = useState(0);
+  const [ptFrameIdx, setPTFrameIdx] = useState(0);
 
-  // Testo
-  const [name,         setName]          = useState("CONSTRUCT");
-  const [nameFs,       setNameFs]         = useState(20);
-  const [nameColor,    setNameColor]      = useState("#181818");
-  const [nameAlign,    setNameAlign]      = useState("center");
-  const [nameBold,     setNameBold]       = useState(true);
-  const [nameFont,     setNameFont]       = useState("title"); // title|body
+  const [showInfoLeft, setShowInfoLeft] = useState(true);
+  const [showArtist, setShowArtist] = useState(true);
+  const [infoLeft, setInfoLeft] = useState({
+    year: "2025", rarity: "P", setCode: "MTG", lang: "EN",
+    fontSize: 13, x: 9, y: 21, artist: "Jn Avon"
+  });
 
-  const [manaCost,     setManaCost]       = useState("{5}");
-  const [showMana,     setShowMana]       = useState(false);
+  const [copyright, setCopyright] = useState({ year: "2025", color: "#b2b2b2", x: 24, y: 21, fontSize: 15.5 });
+  const [showCopyright, setShowCopyright] = useState(true);
 
-  const [type,         setType]           = useState("Token Artifact Creature — Construct");
-  const [typeFs,       setTypeFs]         = useState(14);
-  const [typeColor,    setTypeColor]      = useState("#181818");
-  const [typeAlign,    setTypeAlign]      = useState("left");
-
-  const [ability,      setAbility]        = useState("This creature gets +1/+1 for each artifact you control.\n{T}: Add {G} or {R}.");
-  const [abilityFs,    setAbilityFs]      = useState(11);
-  const [abilityColor, setAbilityColor]   = useState("#181818");
-  const [showAbility,  setShowAbility]    = useState(true);
-
-  const [flavor,       setFlavor]         = useState("");
-  const [showFlavor,   setShowFlavor]     = useState(false);
-  const [flavorFs,     setFlavorFs]       = useState(10);
-
-  const [power,        setPower]          = useState("0");
-  const [toughness,    setToughness]      = useState("0");
-  const [ptFs,         setPtFs]           = useState(22);
-  const [ptColor,      setPtColor]        = useState("#181818");
-  const [showPT,       setShowPT]         = useState(true);
-
-  // Frame
-  const [frameSet,     setFrameSet]       = useState(allSets[0] || "");
-  const [frameIdx,     setFrameIdx]       = useState(0);
-  const [ptFrameIdx,   setPtFrameIdx]     = useState(0);
-
-  // Artwork
-  const [artUrl,       setArtUrl]         = useState("");
-  const [artX,         setArtX]           = useState(50);
-  const [artY,         setArtY]           = useState(30);
-  const [artZoom,      setArtZoom]        = useState(100);
-
-  // Info
-  const [year,         setYear]           = useState("2025");
-  const [rarity,       setRarity]         = useState("T");
-  const [setCode,      setSetCode]        = useState("MTG");
-  const [lang,         setLang]           = useState("EN");
-  const [artist,       setArtist]         = useState("Jn Avon");
-  const [showInfo,     setShowInfo]       = useState(true);
-  const [showCopy,     setShowCopy]       = useState(true);
-  const [infoFs,       setInfoFs]         = useState(8);
-
-  const [downloading,  setDownloading]    = useState(false);
-
+  const [artUrl, setArtUrl] = useState("");
   const artInput = useRef();
-  const layoutFileInput = useRef();
-  const cardRef  = useRef();
-  const frame    = FRAME_MAP[frameSet]?.[frameIdx];
-  const ptFrame  = PT_FRAMES[ptFrameIdx];
+  const cardRef = useRef();
 
-  const handleArt = e => {
-    const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader();
-    r.onloadend = () => { setArtUrl(r.result); setArtX(50); setArtY(30); setArtZoom(100); };
-    r.readAsDataURL(f); e.target.value = null;
+  const symbolMap = simbolImport;
+  const availableSymbols = useMemo(
+    () => getAvailableSymbolsFromFolder(symbolMap),
+    [symbolMap]
+  );
+
+  function handleSlider(setter, key) {
+    return (event, newValue) => {
+      if (typeof newValue === 'number') {
+        setter(val => ({ ...val, [key]: newValue }));
+      }
+    };
+  }
+  function handleInputChange(setter, key, min, max) {
+    return e => {
+      const value = e.target.value;
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        let clampedValue = numValue;
+        if (min !== undefined) clampedValue = Math.max(min, clampedValue);
+        if (max !== undefined) clampedValue = Math.min(max, clampedValue);
+        setter(val => ({ ...val, [key]: clampedValue }));
+      } else if (value === '') {
+        setter(val => ({ ...val, [key]: value }));
+      }
+    };
+  }
+  const handleInputBlur = (setter, key, min, max, defaultValue = min !== undefined ? min : 0) => (e) => {
+    const value = e.target.value;
+    const numValue = parseFloat(value);
+    if (value === '' || isNaN(numValue)) {
+      setter(val => ({ ...val, [key]: defaultValue }));
+    } else {
+      let clampedValue = numValue;
+      if (min !== undefined) clampedValue = Math.max(min, clampedValue);
+      if (max !== undefined) clampedValue = Math.min(max, clampedValue);
+      if (clampedValue !== numValue) {
+        setter(val => ({ ...val, [key]: clampedValue }));
+      } else {
+        setter(val => ({ ...val, [key]: numValue }));
+      }
+    }
   };
-
   const handleDownload = async () => {
-    if (downloading) return;
-    setDownloading(true);
-
+    if (!cardRef.current) return;
+    const cardElement = cardRef.current;
+    const originalOverflow = cardElement.style.overflow;
+    const originalBorder = cardElement.style.border;
+    const originalBoxShadow = cardElement.style.boxShadow;
+    cardElement.style.overflow = 'visible';
+    cardElement.style.border = 'none';
+    cardElement.style.boxShadow = 'none';
     try {
-      const SCALE = 4;
-      const W = CW * SCALE;
-      const H = CH * SCALE;
-
-      // ── 1. Carica i font custom nel contesto Canvas ───────────────────────
-      // Il Canvas 2D NON eredita i @font-face del CSS — vanno caricati esplicitamente.
-      const fontPaths = [
-        { name: "Beleren",  url: new URL("/src/assets/fonts/Beleren2016-Bold.ttf", import.meta.url).href,         weight: "bold"   },
-        { name: "MPlantin", url: new URL("/src/assets/fonts/Mplantin.ttf", import.meta.url).href,                 weight: "normal" },
-        { name: "MatrixSC", url: new URL("/src/assets/fonts/MatrixBoldSmallCaps Bold.ttf", import.meta.url).href, weight: "bold"   },
-      ];
-      await Promise.allSettled(
-        fontPaths.map(async ({ name, url, weight }) => {
-          try {
-            const ff = new FontFace(name, `url(${url})`, { weight });
-            const loaded = await ff.load();
-            document.fonts.add(loaded);
-          } catch (_) { /* font non trovato — usa fallback */ }
-        })
-      );
-      // Aspetta che tutti i font siano pronti
-      await document.fonts.ready;
-
-      // ── 2. Crea canvas ────────────────────────────────────────────────────
-      const canvas = document.createElement("canvas");
-      canvas.width = W; canvas.height = H;
-      const ctx = canvas.getContext("2d");
-
-      // Helper: carica immagine
-      const loadImg = (src) => new Promise((res, rej) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => res(img);
-        img.onerror = () => rej(new Error("Immagine non caricabile: " + src));
-        img.src = src;
+      const html2canvasLib = (await import('html2canvas')).default;
+      const canvas = await html2canvasLib(cardElement, {
+        scale: 3, useCORS: true, logging: false
       });
-
-      // Risolve nome font per canvas
-      const resolveFont = (familyStr) => familyStr.split(",")[0].replace(/['"]/g, "").trim();
-
-      // Precarica immagini simboli mana per il canvas
-      // Legge tutti i simboli già importati (SYMBOLS glob) e li converte in HTMLImageElement
-      const symbolImgCache = {};
-      await Promise.allSettled(
-        Object.entries(SYMBOLS).map(([path, url]) => new Promise((res) => {
-          const key = path.split("/").pop().replace(/\.[^.]+$/, "");
-          const img = new Image();
-          img.onload = () => { symbolImgCache[key] = img; res(); };
-          img.onerror = () => res(); // ignora simboli non trovati
-          img.src = typeof url === "string" ? url : url.default || "";
-        }))
-      );
-
-      // Tokenizza una stringa in segmenti testo/simbolo
-      const tokenize = (text) => {
-        const rx = /\{([^}]+)\}/g;
-        const parts = []; let last = 0, m;
-        while ((m = rx.exec(text)) !== null) {
-          if (m.index > last) parts.push({ t: "txt", v: text.slice(last, m.index) });
-          parts.push({ t: "sym", v: m[1].trim() });
-          last = rx.lastIndex;
-        }
-        if (last < text.length) parts.push({ t: "txt", v: text.slice(last) });
-        return parts;
-      };
-
-      // Misura larghezza di una riga mista testo+simboli
-      const measureLine = (tokens, fs) => {
-        let w = 0;
-        for (const tok of tokens) {
-          if (tok.t === "txt") w += ctx.measureText(tok.v).width;
-          else w += fs * 1.15; // simbolo quadrato
-        }
-        return w;
-      };
-
-      // Disegna una riga mista testo+simboli a partire da (x, y midline)
-      const drawMixedLine = (tokens, x, y, fs, color) => {
-        let cx = x;
-        for (const tok of tokens) {
-          if (tok.t === "txt") {
-            ctx.fillStyle = color;
-            ctx.fillText(tok.v, cx, y);
-            cx += ctx.measureText(tok.v).width;
-          } else {
-            const symImg = symbolImgCache[tok.v];
-            const sz = fs * 1.1;
-            if (symImg) {
-              ctx.drawImage(symImg, cx, y - sz / 2, sz, sz);
-            } else {
-              // Fallback: cerchio colorato con lettera
-              ctx.fillStyle = "#888";
-              ctx.beginPath();
-              ctx.arc(cx + sz/2, y, sz/2, 0, Math.PI*2);
-              ctx.fill();
-              ctx.fillStyle = "#fff";
-              ctx.font = `bold ${sz * 0.6}px sans-serif`;
-              ctx.textAlign = "center";
-              ctx.fillText(tok.v.slice(0,2), cx + sz/2, y);
-              ctx.textAlign = "left";
-            }
-            cx += sz + 1;
-          }
-        }
-        return cx;
-      };
-
-      // Helper principale: disegna testo con wrap automatico e simboli mana
-      const drawBox = (text, box, opts = {}) => {
-        if (!text) return;
-        const {
-          fontSize = 14, color = "#181818",
-          fontFamily = "Georgia,serif", fontWeight = "bold",
-          textTransform = "none", align = "left",
-          lineHeight = 1.35, singleLine = false,
-          italic = false, paddingX = 4, paddingY = 4,
-        } = opts;
-
-        const fs  = fontSize * SCALE;
-        const lh  = fs * lineHeight;
-        const bx  = box.x * SCALE;
-        const by  = box.y * SCALE;
-        const bw  = box.w * SCALE;
-        const bh  = box.h * SCALE;
-        const maxW = bw - paddingX * SCALE * 2;
-        const leftEdge = bx + paddingX * SCALE;
-
-        let displayText = textTransform === "uppercase" ? text.toUpperCase() : text;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(bx, by, bw, bh);
-        ctx.clip();
-        ctx.font = `${italic ? "italic " : ""}${fontWeight} ${fs}px "${fontFamily}"`;
-        ctx.fillStyle = color;
-        ctx.textBaseline = "middle";
-        ctx.textAlign = "left";
-
-        if (singleLine) {
-          const toks = tokenize(displayText);
-          const totalW = measureLine(toks, fs);
-          let startX = leftEdge;
-          if (align === "center") startX = bx + (bw - totalW) / 2;
-          else if (align === "right") startX = bx + bw - paddingX * SCALE - totalW;
-          // Scala orizzontalmente se troppo lungo
-          if (totalW > maxW) {
-            ctx.save();
-            const sc = maxW / totalW;
-            ctx.translate(startX, by + bh / 2);
-            ctx.scale(sc, 1);
-            drawMixedLine(toks, 0, 0, fs, color);
-            ctx.restore();
-          } else {
-            drawMixedLine(toks, startX, by + bh / 2, fs, color);
-          }
-          ctx.restore();
-          return;
-        }
-
-        // Multi-line wrap con simboli mana
-        const paragraphs = displayText.split("\n");
-        let curY = by + paddingY * SCALE + lh / 2;
-
-        for (const para of paragraphs) {
-          // Tokenizza in parole+simboli
-          const rawTokens = tokenize(para);
-          // Unisci testo in "parole" spezzate da spazi
-          const wordTokens = [];
-          let buf = "";
-          for (const tok of rawTokens) {
-            if (tok.t === "txt") {
-              const parts = tok.v.split(" ");
-              for (let pi = 0; pi < parts.length; pi++) {
-                if (pi > 0) { wordTokens.push([{ t: "space" }]); }
-                if (parts[pi]) buf += parts[pi];
-                if (buf && (pi < parts.length - 1 || tok === rawTokens[rawTokens.length-1])) {
-                  wordTokens.push([{ t: "txt", v: buf }]); buf = "";
-                }
-              }
-              if (buf && parts[parts.length-1] === "") { wordTokens.push([{ t: "txt", v: buf }]); buf = ""; }
-            } else {
-              if (buf) { wordTokens.push([{ t: "txt", v: buf }]); buf = ""; }
-              wordTokens.push([tok]);
-            }
-          }
-          if (buf) wordTokens.push([{ t: "txt", v: buf }]);
-
-          // Accumula in righe
-          let lineTokens = [];
-          let lineW = 0;
-          const spaceW = ctx.measureText(" ").width;
-
-          const flushLine = () => {
-            if (lineTokens.length) {
-              drawMixedLine(lineTokens, leftEdge, curY, fs, color);
-              curY += lh;
-              lineTokens = []; lineW = 0;
-            }
-          };
-
-          for (const wt of wordTokens) {
-            if (wt[0].t === "space") {
-              lineW += spaceW;
-              lineTokens.push({ t: "txt", v: " " });
-              continue;
-            }
-            const ww = measureLine(wt, fs);
-            if (lineW + ww > maxW && lineTokens.length) { flushLine(); }
-            lineTokens.push(...wt);
-            lineW += ww;
-          }
-          flushLine();
-          curY += lh * 0.25; // gap paragrafo
-        }
-        ctx.restore();
-      };
-
-      // ── 3. Sfondo ─────────────────────────────────────────────────────────
-      ctx.fillStyle = "#080806";
-      ctx.fillRect(0, 0, W, H);
-
-      // ── 4. Artwork ────────────────────────────────────────────────────────
-      if (artUrl) {
-        try {
-          const img = await loadImg(artUrl);
-          const iw = img.naturalWidth, ih = img.naturalHeight;
-          const cardAR = CW / CH;
-          const imgAR  = iw / ih;
-          const zf = artZoom / 100;
-
-          let sw, sh;
-          if (imgAR > cardAR) {
-            sh = ih / zf; sw = sh * cardAR;
-          } else {
-            sw = iw / zf; sh = sw / cardAR;
-          }
-          const sx = Math.max(0, (iw - sw)) * (artX / 100);
-          const sy = Math.max(0, (ih - sh)) * (artY / 100);
-          ctx.drawImage(img, sx, sy, Math.min(sw, iw - sx), Math.min(sh, ih - sy), 0, 0, W, H);
-        } catch (e) { console.warn("Artwork non caricabile", e); }
-      }
-
-      // ── 5. Frame ──────────────────────────────────────────────────────────
-      if (frame) {
-        try {
-          const fimg = await loadImg(frame.url);
-          ctx.drawImage(fimg, 0, 0, W, H);
-        } catch (e) { console.warn("Frame non caricabile", e); }
-      }
-
-      // ── 6. Testi ──────────────────────────────────────────────────────────
-      const titleFont = resolveFont(FT);
-      const bodyFont  = resolveFont(FB);
-
-      // Nome
-      drawBox(name, boxes.name, {
-        fontSize: nameFs, color: nameColor,
-        fontFamily: nameFont === "body" ? bodyFont : titleFont,
-        fontWeight: nameBold ? "bold" : "normal",
-        textTransform: "uppercase",
-        align: nameAlign, singleLine: true,
-      });
-
-      // Tipo
-      drawBox(type, boxes.type, {
-        fontSize: typeFs, color: typeColor,
-        fontFamily: titleFont, fontWeight: "bold",
-        align: typeAlign, singleLine: true,
-      });
-
-      // Abilità
-      if (showAbility && ability) {
-        drawBox(ability, boxes.text, {
-          fontSize: abilityFs, color: abilityColor,
-          fontFamily: bodyFont, fontWeight: "normal",
-          lineHeight: 1.45,
-        });
-        // Flavor text
-        if (showFlavor && flavor) {
-          const flavorBox = {
-            x: boxes.text.x,
-            y: boxes.text.y + boxes.text.h * 0.6,
-            w: boxes.text.w,
-            h: boxes.text.h * 0.4,
-          };
-          drawBox(flavor, flavorBox, {
-            fontSize: flavorFs, color: abilityColor,
-            fontFamily: bodyFont, fontWeight: "normal",
-            italic: true, lineHeight: 1.35,
-          });
-        }
-      }
-
-      // P/T frame
-      if (showPT && ptFrame) {
-        try {
-          const ptimg = await loadImg(ptFrame.url);
-          ctx.drawImage(ptimg,
-            boxes.pt.x * SCALE, boxes.pt.y * SCALE,
-            boxes.pt.w * SCALE, boxes.pt.h * SCALE
-          );
-        } catch (e) { console.warn("PT frame non caricabile", e); }
-      }
-
-      // P/T testo
-      if (showPT) {
-        drawBox(`${power}/${toughness}`, boxes.pt, {
-          fontSize: ptFs, color: ptColor,
-          fontFamily: titleFont, fontWeight: "bold",
-          align: "center", singleLine: true,
-        });
-      }
-
-      // ── 7. Info bassa ────────────────────────────────────────────────────
-      if (showInfo) {
-        ctx.font = `${infoFs * SCALE}px monospace`;
-        ctx.fillStyle = "#909090";
-        ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-        const iy = (CH - 20) * SCALE;
-        ctx.fillText(`${rarity} ${setCode} \u2022 ${lang}`, pct(CW, 1.5) * SCALE, iy);
-        ctx.fillText(`Illus. ${artist}`,                     pct(CW, 1.5) * SCALE, iy + infoFs * SCALE * 1.3);
-      }
-      if (showCopy) {
-        ctx.font = `${infoFs * SCALE}px monospace`;
-        ctx.fillStyle = "#909090";
-        ctx.textAlign = "right"; ctx.textBaseline = "alphabetic";
-        ctx.fillText(`\u2122 & \u00A9 ${year} Wizards of the Coast`,
-          (CW - pct(CW, 2)) * SCALE, (CH - 20) * SCALE);
-      }
-
-      // ── 8. Border-radius ──────────────────────────────────────────────────
-      const r = 16 * SCALE;
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = W; tempCanvas.height = H;
-      const tc = tempCanvas.getContext("2d");
-      tc.beginPath();
-      tc.moveTo(r, 0);
-      tc.lineTo(W - r, 0); tc.quadraticCurveTo(W, 0, W, r);
-      tc.lineTo(W, H - r); tc.quadraticCurveTo(W, H, W - r, H);
-      tc.lineTo(r, H);     tc.quadraticCurveTo(0, H, 0, H - r);
-      tc.lineTo(0, r);     tc.quadraticCurveTo(0, 0, r, 0);
-      tc.closePath();
-      tc.fillStyle = "#000";
-      tc.fill();
-      tc.globalCompositeOperation = "source-in";
-      tc.drawImage(canvas, 0, 0);
-
-      // ── 9. Download ───────────────────────────────────────────────────────
       const link = document.createElement("a");
-      link.download = `${name.replace(/[^a-z0-9_]/gi, "_") || "token"}_token.png`;
-      link.href = tempCanvas.toDataURL("image/png");
+      link.download = `${name.replace(/[^a-zA-Z0-9]/g, '_')}_token.png`;
+      link.href = canvas.toDataURL("image/png");
       link.click();
-
-    } catch (err) {
-      alert("Errore export: " + err.message);
-      console.error(err);
+    } catch (error) {
+      console.error("Errore durante il download:", error);
     } finally {
-      setDownloading(false);
+      cardElement.style.overflow = originalOverflow;
+      cardElement.style.border = originalBorder;
+      cardElement.style.boxShadow = originalBoxShadow;
+    }
+  };
+  const handleArtChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setArtUrl(reader.result);
+      };
+      reader.onerror = (error) => {
+        console.error("Errore FileReader:", error);
+      };
+      reader.readAsDataURL(file);
+      e.target.value = null;
     }
   };
 
-  const fontFamily = (f) => f === "body" ? FB : FT;
-
-  const FONTS = `
-    @keyframes spin{to{transform:rotate(360deg)}}
-    * { box-sizing: border-box; }
-  `;
-
-  // Carica i font custom via FontFace API — funziona sia in local che su Vercel/CDN
-  // Non dipende da @font-face CSS che potrebbe non essere servito correttamente
-  const [fontsLoaded, setFontsLoaded] = useState(false);
-  useEffect(() => {
-    const loadFonts = async () => {
-      // Usa import.meta.url per far risolvere a Vite i path corretti in produzione (Vercel)
-      const defs = [
-        { name: "Beleren",  url: new URL("/src/assets/fonts/Beleren2016-Bold.ttf", import.meta.url).href,         weight: "bold",   style: "normal" },
-        { name: "MPlantin", url: new URL("/src/assets/fonts/Mplantin.ttf", import.meta.url).href,                 weight: "normal", style: "normal" },
-        { name: "MatrixSC", url: new URL("/src/assets/fonts/MatrixBoldSmallCaps Bold.ttf", import.meta.url).href, weight: "bold",   style: "normal" },
-      ];
-      const results = await Promise.allSettled(
-        defs.map(async ({ name, url, weight, style }) => {
-          // Evita di ricaricare se già presente
-          if ([...document.fonts].some(f => f.family === name && f.status === "loaded")) return;
-          const ff = new FontFace(name, `url(${url})`, { weight, style });
-          const loaded = await ff.load();
-          document.fonts.add(loaded);
-        })
-      );
-      const failed = results.filter(r => r.status === "rejected");
-      if (failed.length > 0) console.warn("Font non caricati:", failed.map(f => f.reason));
-      await document.fonts.ready;
-      setFontsLoaded(true);
-    };
-    loadFonts();
-  }, []);
-
-  // ── Info position (bottom della carta, non draggabile) ────────────────────
-  const infoPx = pct(CH, 1);
-
   return (
-    <>
-      <style>{FONTS}</style>
-      <div style={{ display: "flex", gap: 22, alignItems: "flex-start", flexWrap: "wrap" }}>
+    <Box
+      sx={{
+        width: "100%",
+        maxWidth: "100%",
+        bgcolor: "#f5f7fa",
+        p: { xs: 1, md: 4 },
+        boxSizing: "border-box"
+      }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", md: "row" },
+          justifyContent: "flex-start",
+          alignItems: { xs: "center", md: "flex-start" },
+          gap: { xs: 2, md: 6 },
+          width: "100%",
+          maxWidth: "100%"
+        }}
+      >
+        <Box ref={cardRef}
+          sx={{
+            width: CARD_WIDTH,
+            height: CARD_HEIGHT,
+            position: "relative",
+            background: "#deefff",
+            overflow: "hidden",
+            borderRadius: '17px',
+            boxShadow: 6,
+            flexShrink: 0,
+            mr: { md: 4, xs: 0 },
+            alignSelf: "flex-start",
+            left: 0
+          }}>
+          {artUrl
+            ? <img src={artUrl} alt="Token artwork" crossOrigin="anonymous" style={{
+              position: "absolute", width: "100%", height: "100%", objectFit: "cover",
+              left: 0, top: 0, zIndex: 1, borderRadius: '17px'
+            }} />
+            : <Box sx={{
+              position: "absolute", left: 0, top: 0, width: "100%", height: "100%",
+              background: "#ccd7ee", color: "#9ab", fontSize: 22, display: "flex",
+              alignItems: "center", justifyContent: "center", zIndex: 1, borderRadius: '17px'
+            }}>
+              Nessuna immagine
+            </Box>
+          }
+          {FRAME_MAP[mainFrameSet] && FRAME_MAP[mainFrameSet][mainFrameIdx] && (
+            <img
+              src={FRAME_MAP[mainFrameSet][mainFrameIdx].url}
+              alt={FRAME_MAP[mainFrameSet][mainFrameIdx].name}
+              style={{
+                position: "absolute", left: 0, top: 0,
+                width: "100%", height: "100%",
+                zIndex: 8, pointerEvents: "none"
+              }}
+            />
+          )}
 
-        {/* ═══════════ CARTA ═══════════ */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center", flexShrink: 0 }}>
+          <Typography component="div" sx={{
+            position: "absolute", left: nameStyle.x, top: nameStyle.y,
+            color: nameStyle.color, fontSize: nameStyle.fontSize, fontWeight: 700, textAlign: "center",
+            fontFamily: "BelerenBold, Beleren, serif", letterSpacing: ".13em", zIndex: 30,
+            width: CARD_WIDTH
+          }}>{name}</Typography>
 
-          {/* Toolbar sopra la carta */}
-          <div style={{ display: "flex", gap: 8, width: CW, alignItems: "center", flexWrap: "wrap" }}>
-            <GBtn variant={editMode ? "blue" : "ghost"} onClick={() => setEditMode(e => !e)}>
-              {editMode ? "✅ Layout ON" : "📐 Modifica layout"}
-            </GBtn>
-            {editMode && <GBtn variant="ghost" onClick={resetBoxes}>↺ Reset posizioni</GBtn>}
-            {editMode && <GBtn variant="teal" onClick={exportLayout}>📋 Copia layout</GBtn>}
-            {editMode && <GBtn variant="ghost" onClick={saveLayoutFile}>⬇ Salva .json</GBtn>}
-            {editMode && <GBtn variant="ghost" onClick={() => layoutFileInput.current.click()}>📂 Carica .json</GBtn>}
-            <input ref={layoutFileInput} type="file" accept=".json,application/json" style={{display:"none"}} onChange={loadLayoutFile} />
-            <div style={{ marginLeft: "auto", fontSize: ".7rem", color: editMode ? "#60a5fa" : "#3a3937", display: "flex", alignItems: "center", gap: 6 }}>
-              {!fontsLoaded && <span style={{ color: "#c9a227", fontSize: ".65rem" }}>⏳ Caricamento font…</span>}
-              {fontsLoaded && <span style={{ color: "#4ade80", fontSize: ".65rem" }}>✓ Font pronti</span>}
-              {editMode ? " Trascina e ridimensiona ogni zona testo" : " ✏ Clicca sui testi per modificare"}
-            </div>
-          </div>
+          <Typography component="div" sx={{
+            position: "absolute", left: typeStyle.x, top: typeStyle.y,
+            color: typeStyle.color, fontSize: typeStyle.fontSize, fontWeight: 680, textAlign: "left",
+            fontFamily: "MatrixBoldSmallCaps, MatrixBold, serif", letterSpacing: ".01em", zIndex: 29,
+            whiteSpace: "pre-line"
+          }}>{type}</Typography>
 
-          {/* CARTA */}
-          <div ref={cardRef} key={fontsLoaded ? "fonts-ready" : "fonts-loading"} style={{ width: CW, height: CH, position: "relative", borderRadius: 16, overflow: "hidden", flexShrink: 0, background: "#080806", boxShadow: "0 10px 50px rgba(0,0,0,.85), 0 0 0 1px rgba(201,162,39,.15)", transform: "none", isolation: "isolate" }}>
+          {showAbility && (
+            <Typography component="div" sx={{
+              position: "absolute", left: abilityStyle.x, top: abilityStyle.y,
+              color: abilityStyle.color, fontSize: abilityStyle.fontSize,
+              textAlign: "left", fontFamily: "Matrix, serif",
+              fontWeight: 500, padding: "2px 9px", background: "rgba(255,255,255,0.02)",
+              borderRadius: 7, zIndex: 25, whiteSpace: "pre-line"
+            }}>
+              {parseManaSymbols(ability, symbolMap)}
+            </Typography>
+          )}
 
-            {/* ARTWORK z:1 */}
-            <div style={{ position: "absolute", inset: 0, zIndex: 1 }}>
-              {artUrl
-                ? <ArtLayer url={artUrl} posX={artX} posY={artY} zoom={artZoom} onUpdate={(x, y) => { setArtX(x); setArtY(y); }} />
-                : <div onClick={() => artInput.current.click()} style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.22)", gap: 10, cursor: "pointer" }}>
-                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                    <span style={{ fontSize: 13, fontStyle: "italic" }}>Clicca per caricare artwork</span>
-                  </div>
-              }
-            </div>
+          {showPT && PT_FRAMES[ptFrameIdx] && (
+            <img
+              src={PT_FRAMES[ptFrameIdx].url}
+              alt={PT_FRAMES[ptFrameIdx].name}
+              style={{
+                position: "absolute",
+                left: ptStyle.frameX, top: ptStyle.frameY,
+                width: ptStyle.width, height: ptStyle.height,
+                zIndex: 45, pointerEvents: "none"
+              }}
+            />
+          )}
 
-            {/* FRAME z:2 */}
-            {frame && <img src={frame.url} alt="frame" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "fill", zIndex: 2, pointerEvents: "none" }} />}
+          {showPT && (
+            <Box component="div" sx={{
+              position: "absolute", left: ptStyle.x, top: ptStyle.y,
+              width: ptStyle.width, height: ptStyle.height, zIndex: 50,
+              display: "flex", alignItems: "center", justifyContent: "center"
+            }}>
+              <Typography component="span" sx={{
+                fontFamily: "MatrixBoldSmallCaps, serif", fontSize: ptStyle.fontSize,
+                color: ptStyle.color, fontWeight: 800, letterSpacing: ".003em",
+                transform: `translateX(${ptStyle.powerOffsetX}px)`
+              }}>
+                {pt.power}
+              </Typography>
+              <Typography component="span" sx={{
+                fontFamily: "MatrixBoldSmallCaps, serif", fontSize: ptStyle.fontSize,
+                color: ptStyle.color, fontWeight: 800, letterSpacing: ".003em",
+                transform: `translateX(${ptStyle.slashOffsetX}px)`
+              }}>
+                /
+              </Typography>
+              <Typography component="span" sx={{
+                fontFamily: "MatrixBoldSmallCaps, serif", fontSize: ptStyle.fontSize,
+                color: ptStyle.color, fontWeight: 800, letterSpacing: ".003em",
+                transform: `translateX(${ptStyle.toughnessOffsetX}px)`
+              }}>
+                {pt.toughness}
+              </Typography>
+            </Box>
+          )}
 
-            {/* ── NOME ── */}
-            <DRBox box={boxes.name} onUpdate={b => updateBox("name", b)} editMode={editMode} accentColor="#c9a227" label="Nome">
-              <InlineEdit value={name} onChange={setName}
-                style={{ fontSize: nameFs, color: nameColor, fontFamily: fontFamily(nameFont), fontWeight: nameBold ? 700 : 400, textTransform: "uppercase", letterSpacing: ".03em", lineHeight: 1.2, textAlign: nameAlign, width: "100%" }} />
-            </DRBox>
+          {showInfoLeft && (
+            <Typography component="div" sx={{
+              position: "absolute", left: infoLeft.x, bottom: infoLeft.y,
+              fontFamily: "MatrixBoldSmallCaps, serif", fontSize: infoLeft.fontSize,
+              color: "#fff", letterSpacing: ".055em", zIndex: 90,
+              display: "flex", flexDirection: "row", alignItems: "center"
+            }}>
+              <Box component="span" sx={{ marginRight: 0.5, fontWeight: 600 }}>
+                {infoLeft.year} {infoLeft.rarity}
+              </Box>
+              <Box component="span" sx={{ marginRight: 0.5, fontWeight: 600 }}>
+                {infoLeft.setCode} â€¢ {infoLeft.lang}
+              </Box>
+              {showArtist && (
+                <Box component="span"
+                  sx={{
+                    marginLeft: 1,
+                    fontFamily: "Matrix, serif",
+                    fontSize: infoLeft.fontSize - 1, color: "#fff"
+                  }}>
+                  Illus. <Box component="b">{infoLeft.artist}</Box>
+                </Box>
+              )}
+            </Typography>
+          )}
 
-            {/* ── MANA (solo in editMode o se attivo) ── */}
-            {showMana && (
-              <div style={{ position: "absolute", left: boxes.name.x + boxes.name.w, top: boxes.name.y, height: boxes.name.h, display: "flex", alignItems: "center", paddingLeft: 4, zIndex: editMode ? 10 : 4 }}>
-                <ManaLine text={manaCost} fontSize={nameFs * 0.9} color={nameColor} />
-              </div>
-            )}
+          {showCopyright && (
+          <Typography component="div" sx={{
+            position: "absolute", right: copyright.x, bottom: copyright.y,
+            color: copyright.color, fontFamily: "Matrix, serif", fontSize: copyright.fontSize, zIndex: 99
+          }}>
+            Â© {copyright.year} Wizards of the Coast
+          </Typography>
+          )}
+        </Box>
+        <Box
+          sx={{
+            width: { xs: "100%", md: 470 },
+            bgcolor: 'background.paper',
+            borderRadius: '18px',
+            boxShadow: 4,
+            p: 1,
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            alignSelf: "flex-start",
+            minWidth: { xs: "unset", md: 320 },
+            maxWidth: 520,
+            overflowY: "auto"
+          }}
+        >
 
-            {/* ── TIPO ── */}
-            <DRBox box={boxes.type} onUpdate={b => updateBox("type", b)} editMode={editMode} accentColor="#60a5fa" label="Tipo">
-              <InlineEdit value={type} onChange={setType}
-                style={{ fontSize: typeFs, color: typeColor, fontFamily: FT, fontWeight: 700, lineHeight: 1.2, textAlign: typeAlign, width: "100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} />
-            </DRBox>
-
-            {/* ── TEXTBOX ABILITÀ ── */}
-            {showAbility && (
-              <DRBox box={boxes.text} onUpdate={b => updateBox("text", b)} editMode={editMode} accentColor="#4ade80" label="Abilità">
-                {/* In editMode mostra textarea semplice, altrimenti renderizza con mana symbols */}
-                {editMode
-                  ? <InlineEdit value={ability} onChange={setAbility} multiline
-                      style={{ fontSize: abilityFs, color: abilityColor, fontFamily: FB, fontWeight: 400, lineHeight: 1.45, width: "100%", height: "100%" }} />
-                  : <div style={{ width: "100%", overflow: "hidden" }}>
-                      {ability.split("\n").map((line, i, arr) => (
-                        <div key={i} style={{ marginBottom: i < arr.length - 1 ? 4 : 0 }}>
-                          <ManaLine text={line} fontSize={abilityFs} color={abilityColor} />
-                        </div>
-                      ))}
-                      {showFlavor && flavor && (
-                        <div style={{ marginTop: 5, paddingTop: 4, borderTop: `1px solid ${abilityColor}55` }}>
-                          <span style={{ fontFamily: FB, fontSize: flavorFs, color: abilityColor, fontStyle: "italic", lineHeight: 1.35 }}>{flavor}</span>
-                        </div>
-                      )}
-                    </div>
-                }
-              </DRBox>
-            )}
-
-            {/* ── P/T FRAME (non draggabile — posizione = box.pt) ── */}
-            {showPT && ptFrame && (
-              <img src={ptFrame.url} alt="pt"
-                style={{ position: "absolute", left: boxes.pt.x, top: boxes.pt.y, width: boxes.pt.w, height: boxes.pt.h, objectFit: "fill", zIndex: 3, pointerEvents: "none" }} />
-            )}
-
-            {/* ── P/T TESTO ── */}
-            {showPT && (
-              <DRBox box={boxes.pt} onUpdate={b => updateBox("pt", b)} editMode={editMode} accentColor="#f87171" label="P/T">
-                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <InlineEdit value={`${power}/${toughness}`} onChange={v => {
-                    const parts = v.split("/");
-                    setPower(parts[0] || "0");
-                    setToughness(parts[1] !== undefined ? parts[1] : toughness);
-                  }}
-                  style={{ fontSize: ptFs, color: ptColor, fontFamily: FT, fontWeight: 700, lineHeight: 1, textAlign: "center", width: "100%" }} />
-                </div>
-              </DRBox>
-            )}
-
-            {/* ── INFO BASSA ── */}
-            {showInfo && (
-              <div style={{ position: "absolute", bottom: infoPx, left: pct(CW, 1.5), zIndex: 5, lineHeight: 1.35, pointerEvents: "none" }}>
-                <div style={{ fontSize: infoFs, color: "#909090", fontFamily: "monospace" }}>{rarity} {setCode} • {lang}</div>
-                <div style={{ fontSize: infoFs, color: "#909090", fontFamily: "monospace" }}>Illus. {artist}</div>
-              </div>
-            )}
-            {showCopy && (
-              <div style={{ position: "absolute", bottom: infoPx, right: pct(CW, 2), zIndex: 5, pointerEvents: "none" }}>
-                <span style={{ fontSize: infoFs, color: "#909090", fontFamily: "monospace" }}>™ & © {year} Wizards of the Coast</span>
-              </div>
-            )}
-          </div>
-
-          <p style={{ fontSize: ".68rem", color: "#3a3937", textAlign: "center", maxWidth: CW, margin: 0 }}>
-            {editMode
-              ? "📐 Trascina le zone colorate · Ridimensiona dai bordi/angoli · Disattiva Layout per editare il testo"
-              : "✏ Clicca su un campo per modificare il testo · 🖱 Trascina artwork per riposizionarlo"}
-          </p>
-
-          <GBtn onClick={handleDownload} disabled={downloading} full>
-            {downloading
-              ? <><span style={{ width: 14, height: 14, border: "2px solid #555", borderTopColor: G, borderRadius: "50%", animation: "spin .6s linear infinite", display: "inline-block" }} />Generazione…</>
-              : "⬇ Scarica PNG UHD (4×)"}
-          </GBtn>
-        </div>
-
-        {/* ═══════════ PANNELLO CONTROLLI ═══════════ */}
-        <div style={{ flex: 1, minWidth: 280, maxWidth: 420 }}>
-
-          {/* Avviso modalità */}
-          <div style={{ background: editMode ? "#1d3461" : "#1c2918", border: `1px solid ${editMode ? "#2d5be3" : "#2d4a1e"}`, borderRadius: 10, padding: "10px 14px", marginBottom: 8, fontSize: ".78rem", color: editMode ? "#93c5fd" : "#86efac" }}>
-            {editMode
-              ? "📐 Modalità Layout: trascina e ridimensiona le zone sulla carta. Qui configura stile testo."
-              : "✏ Modalità Testo: clicca sui campi sulla carta per modificare."}
-          </div>
-
-          {/* FRAME */}
-          <Acc icon="🖼" title="Frame & Artwork" open={true}>
-            <Lbl>Set Frame</Lbl>
-            <select value={frameSet} onChange={e => { setFrameSet(e.target.value); setFrameIdx(0); }}
-              style={{ background: "#252420", border: `1px solid ${BD}`, borderRadius: 6, color: "#cdccca", padding: "7px 10px", fontSize: ".83rem", width: "100%", outline: "none" }}>
-              {allSets.map(k => <option key={k} value={k}>{k}</option>)}
-            </select>
-            {(FRAME_MAP[frameSet] || []).length > 0 && <>
-              <Lbl>Frame specifico</Lbl>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {(FRAME_MAP[frameSet] || []).map((f, i) => (
-                  <button key={f.url} onClick={() => setFrameIdx(i)} title={f.name}
-                    style={{ padding: 2, borderRadius: 4, border: `2px solid ${frameIdx === i ? G : BD}`, background: "#1a1a17", cursor: "pointer" }}>
-                    <img src={f.url} alt={f.name} style={{ width: 38, height: 54, objectFit: "cover", borderRadius: 2, display: "block" }} />
-                  </button>
-                ))}
-              </div>
-            </>}
-            {PT_FRAMES.length > 0 && <>
-              <Lbl>Frame P/T</Lbl>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {PT_FRAMES.map((f, i) => (
-                  <button key={f.url} onClick={() => setPtFrameIdx(i)} title={f.name}
-                    style={{ padding: 2, borderRadius: 4, border: `2px solid ${ptFrameIdx === i ? G : BD}`, background: "#1a1a17", cursor: "pointer" }}>
-                    <img src={f.url} alt={f.name} style={{ width: 52, height: 32, objectFit: "cover", borderRadius: 2, display: "block" }} />
-                  </button>
-                ))}
-              </div>
-            </>}
-            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-              <GBtn onClick={() => artInput.current.click()}>🖼 {artUrl ? "Cambia artwork" : "Carica artwork"}</GBtn>
-              {artUrl && <GBtn variant="ghost" onClick={() => setArtUrl("")}>✕ Rimuovi</GBtn>}
-            </div>
-            <input ref={artInput} type="file" accept="image/*" style={{ display: "none" }} onChange={handleArt} />
-            {artUrl && (
-              <div style={{ background: "#252420", borderRadius: 8, padding: "10px 12px", border: `1px solid ${BD}`, display: "flex", flexDirection: "column", gap: 7 }}>
-                <Lbl>🎯 Posizione artwork (o trascina sulla carta)</Lbl>
-                <Sld label="Orizzontale X" value={artX} onChange={setArtX} min={0} max={100} />
-                <Sld label="Verticale Y"   value={artY} onChange={setArtY} min={0} max={100} />
-                <Sld label="Zoom %"        value={artZoom} onChange={setArtZoom} min={100} max={250} />
-                <GBtn variant="ghost" onClick={() => { setArtX(50); setArtY(30); setArtZoom(100); }}>↺ Reset</GBtn>
-              </div>
-            )}
-          </Acc>
-
-          {/* NOME */}
-          <Acc icon="✏️" title="Nome carta" open={true}>
-            <TF value={name} onChange={setName} placeholder="Nome carta…" />
-            <Sld label="Dimensione font" value={nameFs} onChange={setNameFs} min={8} max={40} />
-            <CP label="Colore" value={nameColor} onChange={setNameColor} />
-            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-              {CPRESETS.map(c => <button key={c} onClick={() => setNameColor(c)} style={{ width: 22, height: 22, borderRadius: 4, background: c, border: nameColor === c ? `2px solid ${G}` : `2px solid ${BD}`, cursor: "pointer" }} />)}
-              <span style={{ fontSize: ".7rem", color: "#4a4948", marginLeft: 4 }}>preset</span>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <div style={{ flex: 1 }}>
-                <Lbl>Allineamento</Lbl>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {["left","center","right"].map(a => (
-                    <button key={a} onClick={() => setNameAlign(a)} style={{ flex: 1, background: nameAlign === a ? G : "#252420", color: nameAlign === a ? "#000" : "#797876", border: `1px solid ${BD}`, borderRadius: 5, padding: "4px 0", fontSize: ".75rem", cursor: "pointer" }}>{a === "left" ? "←" : a === "center" ? "↔" : "→"}</button>
+          <Accordion defaultExpanded>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography fontWeight={700}>Frame & Artwork</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <FormGroup sx={{ mb: 1 }}>
+                <FormControl fullWidth margin="normal">
+                  <InputLabel id="main-frame-set-label">Set Frame</InputLabel>
+                  <Select
+                    labelId="main-frame-set-label"
+                    value={mainFrameSet}
+                    label="Set Frame"
+                    onChange={e => { setMainFrameSet(e.target.value); setMainFrameIdx(0); }}
+                  >
+                    {allFrameKeys.map(setKey => (
+                      <MenuItem value={setKey} key={setKey}>
+                        {setKey.replace("token", "").replace(/([a-z])([A-Z])/g, "\\\\$1 \$2").replace(/^./, a => a.toUpperCase())}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Typography variant="subtitle2" sx={{ mt: 1, mb: 1 }}>Frame specifico:</Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {(FRAME_MAP[mainFrameSet] || []).map((f, idx) => (
+                    <Button
+                      variant={idx === mainFrameIdx ? "contained" : "outlined"}
+                      onClick={() => setMainFrameIdx(idx)}
+                      key={f.url}
+                      sx={{ p: '2.5px', minWidth: 0, '& img': { borderRadius: '2px' } }}
+                    >
+                      <img src={f.url} alt={f.name} style={{ width: 41, height: 56, objectFit: "cover" }} />
+                    </Button>
                   ))}
-                </div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <Lbl>Font</Lbl>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {[["title","MTG"], ["body","Serif"]].map(([v, l]) => (
-                    <button key={v} onClick={() => setNameFont(v)} style={{ flex: 1, background: nameFont === v ? G : "#252420", color: nameFont === v ? "#000" : "#797876", border: `1px solid ${BD}`, borderRadius: 5, padding: "4px 0", fontSize: ".72rem", cursor: "pointer" }}>{l}</button>
+                </Box>
+                <Typography variant="subtitle1" sx={{ mt: 2, mb: 0 }}>Frame P/T</Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {PT_FRAMES.map((f, idx) => (
+                    <Button
+                      variant={idx === ptFrameIdx ? "contained" : "outlined"}
+                      onClick={() => setPTFrameIdx(idx)}
+                      key={f.url}
+                      sx={{ p: '2.5px', minWidth: 0, '& img': { borderRadius: '2px' } }}
+                    >
+                      <img src={f.url} alt={f.name} style={{ width: 33, height: 24, objectFit: "contain" }} />
+                    </Button>
                   ))}
-                </div>
-              </div>
-            </div>
-            <Chk label="Grassetto" checked={nameBold} onChange={setNameBold} />
-          </Acc>
+                </Box>
+                <Divider sx={{my:2}} />
+                <Typography variant="subtitle1" sx={{ mt: 2, mb: 0 }}>Artwork</Typography>
+                <Button
+                  variant="outlined"
+                  color="white"
+                  onClick={() => artInput.current.click()}
+                  sx={{ borderRadius: 13,
+                fontWeight: 900,
+                fontSize: 18,
+                minWidth: 200,
+                py: 1.45,
+                px: 2.8,
+                boxShadow: "0 0 16px 3px #6366f14f, 0 2px 10px #fff3",
+                background: "linear-gradient(99deg,#6366f1 67%,#818cf8 100%)",
+                textTransform: "none",
+                transition: "all 220ms cubic-bezier(.41,.98,.25,1.13)" }}
+                >
+                  Carica immagine
+                </Button>
+                <input ref={artInput} type="file" accept="image/*" hidden onChange={handleArtChange} />
+                {artUrl && (
+                  <img src={artUrl} alt="preview" style={{ width: "100%", borderRadius: 5, objectFit: "cover" }} />
+                )}
+              </FormGroup>
+            </AccordionDetails>
+          </Accordion>
 
-          {/* MANA */}
-          <Acc icon="🔮" title="Costo Mana">
-            <Chk label="Mostra costo mana" checked={showMana} onChange={setShowMana} />
-            <p style={{ fontSize: ".7rem", color: "#4a4948", margin: 0 }}>es: {"{2}{W}{U}"} · {"{X}{R}{R}"}</p>
-            <TF value={manaCost} onChange={setManaCost} disabled={!showMana} />
-          </Acc>
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography fontWeight={700}>Nome</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <TextField label="Nome" value={name} fullWidth sx={{ mb: 1 }} onChange={e => setName(e.target.value)} />
+              <ColorControl setter={setNameStyle} keyName="color" value={nameStyle.color} label="Colore" />
+              <Slider
+                value={nameStyle.fontSize}
+                min={18} max={60} step={0.2}
+                onChange={handleSlider(setNameStyle, "fontSize")}
+                sx={{ mt: 2 }}
+                valueLabelDisplay="auto"
+                marks={[{ value: 18, label: "18" }, { value: 29.2, label: "Default" }, { value: 60, label: "60" }]}
+              />
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField label="Pos X" type="number"
+                  value={nameStyle.x}
+                  onChange={handleInputChange(setNameStyle, "x", 0)}
+                  onBlur={handleInputBlur(setNameStyle, "x", 0, CARD_WIDTH - 50)}
+                  size="small" />
+                <TextField label="Pos Y" type="number"
+                  value={nameStyle.y}
+                  onChange={handleInputChange(setNameStyle, "y", 0)}
+                  onBlur={handleInputBlur(setNameStyle, "y", 0, CARD_HEIGHT)}
+                  size="small" />
+              </Box>
+            </AccordionDetails>
+          </Accordion>
 
-          {/* TIPO */}
-          <Acc icon="📋" title="Riga Tipo">
-            <TF value={type} onChange={setType} />
-            <Sld label="Dimensione font" value={typeFs} onChange={setTypeFs} min={8} max={22} />
-            <CP label="Colore" value={typeColor} onChange={setTypeColor} />
-            <div style={{ display: "flex", gap: 4 }}>
-              {["left","center","right"].map(a => (
-                <button key={a} onClick={() => setTypeAlign(a)} style={{ flex: 1, background: typeAlign === a ? G : "#252420", color: typeAlign === a ? "#000" : "#797876", border: `1px solid ${BD}`, borderRadius: 5, padding: "4px 0", fontSize: ".75rem", cursor: "pointer" }}>{a === "left" ? "←" : a === "center" ? "↔" : "→"}</button>
-              ))}
-            </div>
-          </Acc>
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography fontWeight={700}>Tipo</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <TextField label="Tipo" value={type} fullWidth sx={{ mb: 1 }} onChange={e => setType(e.target.value)} />
+              <ColorControl setter={setTypeStyle} keyName="color" value={typeStyle.color} label="Colore" />
+              <Slider
+                value={typeStyle.fontSize}
+                min={12} max={40} step={0.2}
+                onChange={handleSlider(setTypeStyle, "fontSize")}
+                sx={{ mt: 2 }}
+                valueLabelDisplay="auto"
+                marks={[{ value: 12, label: "12" }, { value: 24, label: "Default" }, { value: 40, label: "40" }]}
+              />
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField label="Pos X" type="number"
+                  value={typeStyle.x}
+                  onChange={handleInputChange(setTypeStyle, "x", 0)}
+                  onBlur={handleInputBlur(setTypeStyle, "x", 0, CARD_WIDTH - 100)}
+                  size="small" />
+                <TextField label="Pos Y" type="number"
+                  value={typeStyle.y}
+                  onChange={handleInputChange(setTypeStyle, "y", 0)}
+                  onBlur={handleInputBlur(setTypeStyle, "y", 0, CARD_HEIGHT)}
+                  size="small" />
+              </Box>
+            </AccordionDetails>
+          </Accordion>
 
-          {/* ABILITÀ */}
-          <Acc icon="⚡" title="Testo & Abilità">
-            <Chk label="Mostra testo abilità" checked={showAbility} onChange={setShowAbility} />
-            <p style={{ fontSize: ".7rem", color: "#4a4948", margin: 0, lineHeight: 1.5 }}>
-              Simboli: {"{W}"} {"{U}"} {"{B}"} {"{R}"} {"{G}"} {"{T}"} {"{2}"} {"{X}"}<br/>Invio = paragrafo separato.
-            </p>
-            <TF value={ability} onChange={setAbility} multiline rows={5} disabled={!showAbility} />
-            <Sld label="Dimensione font" value={abilityFs} onChange={setAbilityFs} min={6} max={18} step={0.5} />
-            <CP label="Colore testo" value={abilityColor} onChange={setAbilityColor} />
-            <div style={{ borderTop: `1px solid ${BD}`, paddingTop: 8 }}>
-              <Chk label="Flavor text (corsivo)" checked={showFlavor} onChange={setShowFlavor} />
-              {showFlavor && <>
-                <TF value={flavor} onChange={setFlavor} multiline rows={2} placeholder="Testo flavor…" />
-                <Sld label="Dim. flavor" value={flavorFs} onChange={setFlavorFs} min={6} max={16} step={0.5} />
-              </>}
-            </div>
-          </Acc>
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography fontWeight={700}>AbilitÃ </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <FormControlLabel
+                control={<Switch checked={showAbility} onChange={e => setShowAbility(e.target.checked)} />}
+                label="Mostra testo AbilitÃ "
+              />
+              <TextField label="Testo AbilitÃ " value={ability} fullWidth sx={{ mb: 1 }} onChange={e => setAbility(e.target.value)} disabled={!showAbility} />
+              <ColorControl setter={setAbilityStyle} keyName="color" value={abilityStyle.color} label="Colore" />
+              <Slider
+                value={abilityStyle.fontSize}
+                min={9} max={32} step={0.1}
+                onChange={handleSlider(setAbilityStyle, "fontSize")}
+                sx={{ mt: 2 }}
+                valueLabelDisplay="auto"
+                marks={[{ value: 9, label: "9" }, { value: 15.6, label: "Default" }, { value: 32, label: "32" }]}
+                disabled={!showAbility}
+              />
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField label="Pos X" type="number"
+                  value={abilityStyle.x}
+                  onChange={handleInputChange(setAbilityStyle, "x", 0)}
+                  onBlur={handleInputBlur(setAbilityStyle, "x", 0, CARD_WIDTH - 100)}
+                  size="small"
+                  disabled={!showAbility}
+                />
+                <TextField label="Pos Y" type="number"
+                  value={abilityStyle.y}
+                  onChange={handleInputChange(setAbilityStyle, "y", 0)}
+                  onBlur={handleInputBlur(setAbilityStyle, "y", 0, CARD_HEIGHT)}
+                  size="small"
+                  disabled={!showAbility}
+                />
+              </Box>
+            </AccordionDetails>
+          </Accordion>
 
-          {/* P/T */}
-          <Acc icon="⚔️" title="Power / Toughness">
-            <Chk label="Mostra P/T" checked={showPT} onChange={setShowPT} />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 16px 1fr", gap: 8, alignItems: "end" }}>
-              <div><Lbl>Power</Lbl><TF value={power} onChange={setPower} /></div>
-              <div style={{ textAlign: "center", color: "#797876", fontSize: "1.1rem", paddingBottom: 7 }}>/</div>
-              <div><Lbl>Toughness</Lbl><TF value={toughness} onChange={setToughness} /></div>
-            </div>
-            <Sld label="Dimensione font P/T" value={ptFs} onChange={setPtFs} min={10} max={44} />
-            <CP label="Colore P/T" value={ptColor} onChange={setPtColor} />
-          </Acc>
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography fontWeight={700}>Power / Toughness</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <FormControlLabel
+                control={<Switch checked={showPT} onChange={e => setShowPT(e.target.checked)} />}
+                label="Mostra Power/Toughness"
+              />
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField label="Power" type="number" value={pt.power} disabled={!showPT}
+                  onChange={e => setPT(ptf => ({ ...ptf, power: e.target.value }))}
+                  size="small" />
+                <TextField label="Toughness" type="number" value={pt.toughness} disabled={!showPT}
+                  onChange={e => setPT(ptf => ({ ...ptf, toughness: e.target.value }))}
+                  size="small" />
+              </Box>
+              <ColorControl setter={setPTStyle} keyName="color" value={ptStyle.color} label="Colore" />
+              <Slider
+                value={ptStyle.fontSize}
+                min={16} max={60} step={0.1}
+                onChange={handleSlider(setPTStyle, "fontSize")}
+                sx={{ mt: 2 }}
+                valueLabelDisplay="auto"
+                marks={[{ value: 16, label: "16" }, { value: 36, label: "Default" }, { value: 60, label: "60" }]}
+                disabled={!showPT}
+              />
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField label="Pos X" type="number"
+                  value={ptStyle.x}
+                  onChange={handleInputChange(setPTStyle, "x", 0)}
+                  onBlur={handleInputBlur(setPTStyle, "x", 0, CARD_WIDTH - 90)}
+                  size="small"
+                  disabled={!showPT}
+                />
+                <TextField label="Pos Y" type="number"
+                  value={ptStyle.y}
+                  onChange={handleInputChange(setPTStyle, "y", 0)}
+                  onBlur={handleInputBlur(setPTStyle, "y", 0, CARD_HEIGHT)}
+                  size="small"
+                  disabled={!showPT}
+                />
+              </Box>
+              <Typography variant="subtitle2" sx={{ mt: 1 }}>Offset Power, Slash, Toughness</Typography>
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField label="Power X" type="number"
+                  value={ptStyle.powerOffsetX}
+                  onChange={handleInputChange(setPTStyle, "powerOffsetX")}
+                  size="small"
+                  disabled={!showPT}
+                />
+                <TextField label="Slash X" type="number"
+                  value={ptStyle.slashOffsetX}
+                  onChange={handleInputChange(setPTStyle, "slashOffsetX")}
+                  size="small"
+                  disabled={!showPT}
+                />
+                <TextField label="Tough X" type="number"
+                  value={ptStyle.toughnessOffsetX}
+                  onChange={handleInputChange(setPTStyle, "toughnessOffsetX")}
+                  size="small"
+                  disabled={!showPT}
+                />
+              </Box>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle2" sx={{ mb: 1, mt: 2 }}>Spostamento Frame P/T</Typography>
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField
+                  label="Frame X"
+                  type="number"
+                  value={ptStyle.frameX}
+                  onChange={handleInputChange(setPTStyle, "frameX", 0, CARD_WIDTH - ptStyle.width)}
+                  size="small"
+                  disabled={!showPT}
+                />
+                <TextField
+                  label="Frame Y"
+                  type="number"
+                  value={ptStyle.frameY}
+                  onChange={handleInputChange(setPTStyle, "frameY", 0, CARD_HEIGHT - ptStyle.height)}
+                  size="small"
+                  disabled={!showPT}
+                />
+              </Box>
+            </AccordionDetails>
+          </Accordion>
 
-          {/* LAYOUT EXPORT/IMPORT */}
-          <Acc icon="📐" title="Salva / Carica layout posizioni">
-            <p style={{ fontSize: ".75rem", color: "#797876", margin: 0, lineHeight: 1.5 }}>
-              Salva le posizioni di nome, tipo, abilità e P/T per riusarle con lo stesso frame in futuro. Ogni frame MTG ha posizioni diverse — salvale una volta, caricale sempre.
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <GBtn variant="teal" onClick={exportLayout}>📋 Copia JSON</GBtn>
-              <GBtn variant="ghost" onClick={saveLayoutFile}>⬇ Scarica .json</GBtn>
-              <GBtn variant="ghost" onClick={() => layoutFileInput.current.click()}>📂 Carica .json</GBtn>
-              <GBtn variant="ghost" onClick={resetBoxes}>↺ Reset default</GBtn>
-            </div>
-            <div style={{ background: "#252420", borderRadius: 8, padding: "10px 12px", border: `1px solid ${BD}`, marginTop: 2 }}>
-              <Lbl>Layout corrente (px)</Lbl>
-              <pre style={{ fontSize: ".68rem", color: "#4ade80", margin: 0, lineHeight: 1.6, overflow: "auto", maxHeight: 160, fontFamily: "monospace" }}>
-                {JSON.stringify(boxes, null, 2)}
-              </pre>
-            </div>
-          </Acc>
+          <Accordion>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography fontWeight={700}>Info Basso &amp; Copyright</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <FormControlLabel
+                control={<Switch checked={showInfoLeft} onChange={e => setShowInfoLeft(e.target.checked)} />}
+                label="Mostra Info Bassa Sinistra"
+              />
+              <FormControlLabel
+                control={<Switch checked={showArtist} onChange={e => setShowArtist(e.target.checked)} />}
+                label="Mostra Artista"
+              />
+              <TextField label="Anno" type="text" value={infoLeft.year}
+                onChange={e => setInfoLeft(val => ({ ...val, year: e.target.value }))}
+                sx={{ my: 1 }} size="small" disabled={!showInfoLeft} />
+              <TextField label="RaritÃ " type="text" value={infoLeft.rarity}
+                onChange={e => setInfoLeft(val => ({ ...val, rarity: e.target.value }))}
+                sx={{ mb: 1 }} size="small" disabled={!showInfoLeft} />
+              <TextField label="Set" type="text" value={infoLeft.setCode}
+                onChange={e => setInfoLeft(val => ({ ...val, setCode: e.target.value }))}
+                sx={{ mb: 1 }} size="small" disabled={!showInfoLeft} />
+              <TextField label="Lingua" type="text" value={infoLeft.lang}
+                onChange={e => setInfoLeft(val => ({ ...val, lang: e.target.value }))}
+                sx={{ mb: 1 }} size="small" disabled={!showInfoLeft} />
+              <TextField label="Artista" type="text" value={infoLeft.artist}
+                onChange={e => setInfoLeft(val => ({ ...val, artist: e.target.value }))}
+                sx={{ mb: 1 }} size="small" disabled={!showArtist || !showInfoLeft} />
+              <Slider
+                value={infoLeft.fontSize}
+                min={7} max={36} step={0.1}
+                onChange={handleSlider(setInfoLeft, "fontSize")}
+                sx={{ mt: 2 }}
+                valueLabelDisplay="auto"
+                marks={[{ value: 7, label: "7" }, { value: 13, label: "Default" }, { value: 36, label: "36" }]}
+                disabled={!showInfoLeft}
+              />
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField label="Pos X" type="number"
+                  value={infoLeft.x}
+                  onChange={handleInputChange(setInfoLeft, "x")}
+                  size="small"
+                  disabled={!showInfoLeft}
+                />
+                <TextField label="Pos Y" type="number"
+                  value={infoLeft.y}
+                  onChange={handleInputChange(setInfoLeft, "y")}
+                  size="small"
+                  disabled={!showInfoLeft}
+                />
+              </Box>
+              <Divider sx={{ my: 1 }} />
+              <FormControlLabel
+                control={<Switch checked={showCopyright} onChange={e => setShowCopyright(e.target.checked)} />}
+                label="Mostra Copyright"
+              />
+              <TextField label="Anno Copyright" type="text" value={copyright.year}
+                onChange={e => setCopyright(val => ({ ...val, year: e.target.value }))}
+                sx={{ mb: 1 }} size="small" disabled={!showCopyright} />
+              <ColorControl setter={setCopyright} keyName="color" value={copyright.color} label="Colore Copyright" />
+              <Slider
+                value={copyright.fontSize}
+                min={5} max={36} step={0.1}
+                onChange={handleSlider(setCopyright, "fontSize")}
+                sx={{ mt: 2 }} valueLabelDisplay="auto"
+                marks={[{ value: 5, label: "5" }, { value: 15.5, label: "Def." }, { value: 36, label: "36" }]}
+                disabled={!showCopyright}
+              />
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <TextField label="Pos X" type="number"
+                  value={copyright.x}
+                  onChange={handleInputChange(setCopyright, "x")}
+                  size="small"
+                  disabled={!showCopyright}
+                />
+                <TextField label="Pos Y" type="number"
+                  value={copyright.y}
+                  onChange={handleInputChange(setCopyright, "y")}
+                  size="small"
+                  disabled={!showCopyright}
+                />
+              </Box>
+            </AccordionDetails>
+          </Accordion>
 
-          {/* INFO */}
-          <Acc icon="ℹ️" title="Info & Copyright">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <div><Lbl>Anno</Lbl><TF value={year} onChange={setYear} /></div>
-              <div><Lbl>Rarità</Lbl><TF value={rarity} onChange={setRarity} placeholder="T/C/U/R/M" /></div>
-              <div><Lbl>Set</Lbl><TF value={setCode} onChange={setSetCode} /></div>
-              <div><Lbl>Lingua</Lbl><TF value={lang} onChange={setLang} /></div>
-            </div>
-            <Lbl>Illustratore</Lbl>
-            <TF value={artist} onChange={setArtist} />
-            <Sld label="Dim. font info" value={infoFs} onChange={setInfoFs} min={6} max={14} />
-            <Chk label="Mostra info" checked={showInfo} onChange={setShowInfo} />
-            <Chk label="Mostra copyright" checked={showCopy} onChange={setShowCopy} />
-          </Acc>
-
-        </div>
-      </div>
-    </>
+          <Divider sx={{my:2}} />
+          <Button variant="contained" color="primary" onClick={handleDownload} 
+            sx={{ borderRadius: 13,
+                fontWeight: 900,
+                fontSize: 24,
+                minWidth: 200,
+                py: 1.45,
+                px: 2.8,
+                boxShadow: "0 0 16px 3px #6366f14f, 0 2px 10px #fff3",
+                background: "linear-gradient(99deg,#6366f1 67%,#818cf8 100%)",
+                textTransform: "none",
+                transition: "all 220ms cubic-bezier(.41,.98,.25,1.13)" }}>
+            Scarica come PNG UHD
+          </Button>
+        </Box>
+      </Box>
+    </Box>
   );
 }
