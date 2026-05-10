@@ -1,8 +1,62 @@
 import React, { useState, useRef, useCallback } from "react";
-import TokenPreviewSinglePtFrame from './TokenPreviewSinglePtFrame';
 import { PDFDocument, rgb } from "pdf-lib";
 
-// ── ICONS (inline SVG per evitare dipendenze extra) ────────────────────────────
+// ── COSTANTI ──────────────────────────────────────────────────────────────────
+const CARD_WIDTH_MM = 63, CARD_HEIGHT_MM = 88;
+const BLEED_MM = 3; // bleed tipografico
+const mmToPt = mm => (mm / 25.4) * 72;
+const CARD_W  = mmToPt(CARD_WIDTH_MM);
+const CARD_H  = mmToPt(CARD_HEIGHT_MM);
+const PAGE_W  = 595.28, PAGE_H = 841.89; // A4 in pt
+
+// ── UTILITY: dataURL → ArrayBuffer ────────────────────────────────────────────
+function dataURLtoBuffer(dataUrl) {
+  const base64 = dataUrl.split(",")[1];
+  const bin = atob(base64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+
+// ── UTILITY: carica immagine su canvas e ritorna PNG dataURL ──────────────────
+// Usato per le immagini Scryfall (CORS) — le disegna su canvas per estrarre i byte
+function imgToDataURL(url) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext("2d").drawImage(img, 0, 0);
+      res(c.toDataURL("image/png"));
+    };
+    img.onerror = () => {
+      // fallback: carica senza crossOrigin (alcune CDN lo permettono)
+      const img2 = new Image();
+      img2.onload = () => {
+        const c = document.createElement("canvas");
+        c.width = img2.naturalWidth; c.height = img2.naturalHeight;
+        c.getContext("2d").drawImage(img2, 0, 0);
+        try { res(c.toDataURL("image/png")); } catch { rej(new Error("CORS: impossibile leggere " + url)); }
+      };
+      img2.onerror = rej;
+      img2.src = url;
+    };
+    img.src = url;
+  });
+}
+
+// ── UTILITY: File → dataURL ───────────────────────────────────────────────────
+function fileToDataURL(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onloadend = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+// ── ICONS ─────────────────────────────────────────────────────────────────────
 const Icon = ({ d, size = 16 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -10,26 +64,21 @@ const Icon = ({ d, size = 16 }) => (
   </svg>
 );
 
-const CARD_WIDTH_MM = 63, CARD_HEIGHT_MM = 88;
-const mmToPt = mm => (mm / 25.4) * 72;
-const CARD_W = mmToPt(CARD_WIDTH_MM);
-const CARD_H = mmToPt(CARD_HEIGHT_MM);
-const PAGE_W = 595.28, PAGE_H = 841.89;
-
 export default function MTGProxyCreator() {
-  const [tab, setTab] = useState("proxy");
-  const [images, setImages] = useState([]);
-  const [dragIdx, setDragIdx] = useState(null);
-  const [isDrop, setIsDrop] = useState(false);
-  const [isGen, setIsGen] = useState(false);
-  const [loadRnd, setLoadRnd] = useState(false);
+  const [tab, setTab]             = useState("proxy");
+  const [images, setImages]       = useState([]);
+  const [dragIdx, setDragIdx]     = useState(null);
+  const [isDrop, setIsDrop]       = useState(false);
+  const [isGen, setIsGen]         = useState(false);
+  const [loadRnd, setLoadRnd]     = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [snack, setSnack] = useState({ show: false, msg: "", type: "s" });
+  const [snack, setSnack]         = useState({ show: false, msg: "", type: "s" });
   const [printCols, setPrintCols] = useState(3);
   const [printRows, setPrintRows] = useState(3);
-  const [printGap, setPrintGap] = useState(3);
-  const [cutMarks, setCutMarks] = useState(true);
+  const [printGap, setPrintGap]   = useState(2);
+  const [cutMarks, setCutMarks]   = useState(true);
+  const [bleedPDF, setBleedPDF]   = useState(false); // bleed 3mm nel PDF
   const inputRef = useRef();
 
   const toast = useCallback((msg, type = "s") => {
@@ -38,10 +87,11 @@ export default function MTGProxyCreator() {
   }, []);
 
   const handleFiles = useCallback(files => {
-    const arr = Array.from(files).map(f => ({
-      id: Date.now() + Math.random(), name: f.name,
-      url: URL.createObjectURL(f), file: f,
-    }));
+    const valid = ["image/png","image/jpeg","image/webp","image/gif"];
+    const arr = Array.from(files)
+      .filter(f => valid.includes(f.type))
+      .map(f => ({ id: Date.now() + Math.random(), name: f.name, file: f, url: URL.createObjectURL(f) }));
+    if (!arr.length) { toast("Nessuna immagine valida (PNG/JPG/WEBP)", "w"); return; }
     setImages(prev => [...prev, ...arr]);
     toast(`${arr.length} immagini caricate`);
   }, [toast]);
@@ -61,18 +111,24 @@ export default function MTGProxyCreator() {
   };
 
   const remove = idx => {
-    setImages(prev => { if (prev[idx].file) URL.revokeObjectURL(prev[idx].url); return prev.filter((_, i) => i !== idx); });
-    toast("Immagine rimossa", "w");
+    setImages(prev => {
+      if (prev[idx].file) URL.revokeObjectURL(prev[idx].url);
+      return prev.filter((_, i) => i !== idx);
+    });
+    toast("Rimossa", "w");
   };
 
   const dup = idx => {
-    setImages(prev => { const d = { ...prev[idx], id: Date.now() + Math.random() }; const a = [...prev]; a.splice(idx + 1, 0, d); return a; });
-    toast("Carta duplicata!");
+    setImages(prev => {
+      const d = { ...prev[idx], id: Date.now() + Math.random() };
+      const a = [...prev]; a.splice(idx + 1, 0, d); return a;
+    });
+    toast("Duplicata!");
   };
 
   const clearAll = () => {
     images.forEach(img => { if (img.file) URL.revokeObjectURL(img.url); });
-    setImages([]); setConfirmOpen(false); toast("Tutte le immagini rimosse", "w");
+    setImages([]); setConfirmOpen(false); toast("Tutte rimosse", "w");
   };
 
   const fetchRandom = async () => {
@@ -85,296 +141,301 @@ export default function MTGProxyCreator() {
         if (url) results.push({ id: d.id + "_" + Math.random(), name: d.name, url, srcType: "scryfall" });
       }
       setImages(prev => [...prev, ...results]);
-      toast(`${results.length} carte random aggiunte!`);
+      toast(`${results.length} carte aggiunte!`);
     } catch (e) { toast("Errore Scryfall: " + e.message, "e"); }
     finally { setLoadRnd(false); }
   };
 
+  // ── GENERA PDF ─────────────────────────────────────────────────────────────
   const genPDF = async () => {
-    if (!images.length) { toast("Nessuna carta da stampare", "w"); return; }
+    if (!images.length) { toast("Nessuna carta", "w"); return; }
     setIsGen(true);
     try {
-      const perPage = printCols * printRows;
-      const gapPt = mmToPt(printGap);
+      const perPage  = printCols * printRows;
+      const gapPt    = mmToPt(printGap);
+      // Se bleed attivo, le carte nel PDF sono leggermente più grandi
+      const bleedPt  = bleedPDF ? mmToPt(BLEED_MM) : 0;
+      const cardW    = CARD_W + bleedPt * 2;
+      const cardH    = CARD_H + bleedPt * 2;
+
       const doc = await PDFDocument.create();
+
       for (let start = 0; start < images.length; start += perPage) {
-        const page = doc.addPage([PAGE_W, PAGE_H]);
-        page.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: PAGE_H, color: rgb(1, 1, 1) });
+        const page  = doc.addPage([PAGE_W, PAGE_H]);
+        page.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: PAGE_H, color: rgb(1,1,1) });
+
         const batch = images.slice(start, start + perPage);
-        const gW = printCols * CARD_W + (printCols - 1) * gapPt;
-        const gH = printRows * CARD_H + (printRows - 1) * gapPt;
-        const sx = (PAGE_W - gW) / 2, sy = (PAGE_H - gH) / 2;
+        const gW    = printCols * cardW + (printCols - 1) * gapPt;
+        const gH    = printRows * cardH + (printRows - 1) * gapPt;
+        const sx    = (PAGE_W - gW) / 2;
+        const sy    = (PAGE_H - gH) / 2;
+
         for (let i = 0; i < batch.length; i++) {
+          const item = batch[i];
           try {
-            let bytes = batch[i].file ? await batch[i].file.arrayBuffer() : await fetch(batch[i].url).then(r => r.arrayBuffer());
-            const col = i % printCols, row = Math.floor(i / printCols);
-            const x = sx + col * (CARD_W + gapPt);
-            const y = sy + (printRows - 1 - row) * (CARD_H + gapPt);
+            // ── Ottieni dataURL dell'immagine ────────────────────────────────
+            let dataUrl;
+            if (item.dataUrl) {
+              // già in cache (canvas token)
+              dataUrl = item.dataUrl;
+            } else if (item.file) {
+              // file caricato dall'utente
+              dataUrl = await fileToDataURL(item.file);
+            } else if (item.url) {
+              // URL remoto (es. Scryfall) — passa per canvas per aggirare CORS
+              dataUrl = await imgToDataURL(item.url);
+            } else {
+              throw new Error("Nessuna sorgente immagine");
+            }
+
+            // ── Converti dataURL → buffer → embed in PDF ────────────────────
+            const buf = dataURLtoBuffer(dataUrl);
             let pimg;
-            try { pimg = await doc.embedJpg(bytes); } catch { pimg = await doc.embedPng(bytes); }
-            page.drawImage(pimg, { x, y, width: CARD_W, height: CARD_H });
+            if (dataUrl.startsWith("data:image/jpeg")) {
+              pimg = await doc.embedJpg(buf);
+            } else {
+              pimg = await doc.embedPng(buf);
+            }
+
+            // ── Posizione nella griglia ──────────────────────────────────────
+            const col = i % printCols;
+            const row = Math.floor(i / printCols);
+            const x   = sx + col * (cardW + gapPt);
+            const y   = sy + (printRows - 1 - row) * (cardH + gapPt);
+
+            page.drawImage(pimg, { x, y, width: cardW, height: cardH });
+
+            // ── Crop marks (sul bordo taglio, non sul bleed) ─────────────────
             if (cutMarks) {
-              const mk = 8, g2 = 2, c = rgb(.65, .65, .65), t = .4;
-              [[x, y + CARD_H], [x + CARD_W, y + CARD_H], [x, y], [x + CARD_W, y]].forEach(([cx, cy]) => {
-                page.drawLine({ start: { x: cx - mk - g2, y: cy }, end: { x: cx - g2, y: cy }, color: c, thickness: t });
-                page.drawLine({ start: { x: cx + g2, y: cy }, end: { x: cx + mk + g2, y: cy }, color: c, thickness: t });
-                page.drawLine({ start: { x: cx, y: cy - mk - g2 }, end: { x: cx, y: cy - g2 }, color: c, thickness: t });
-                page.drawLine({ start: { x: cx, y: cy + g2 }, end: { x: cx, y: cy + mk + g2 }, color: c, thickness: t });
+              const mk = mmToPt(4), g2 = mmToPt(1);
+              const c  = rgb(0.5, 0.5, 0.5), t = 0.4;
+              // Coordinate del bordo taglio reale (senza bleed)
+              const cx0 = x + bleedPt, cy0 = y + bleedPt;
+              const cx1 = x + cardW - bleedPt, cy1 = y + cardH - bleedPt;
+              const corners = [[cx0, cy0],[cx1, cy0],[cx0, cy1],[cx1, cy1]];
+              corners.forEach(([px, py]) => {
+                const signX = px === cx0 ? -1 : 1;
+                const signY = py === cy0 ? -1 : 1;
+                page.drawLine({ start:{x: px - signX*(g2+mk), y: py}, end:{x: px - signX*g2, y: py}, color:c, thickness:t });
+                page.drawLine({ start:{x: px + signX*g2,     y: py}, end:{x: px + signX*(g2+mk), y: py}, color:c, thickness:t });
+                page.drawLine({ start:{x: px, y: py - signY*(g2+mk)}, end:{x: px, y: py - signY*g2}, color:c, thickness:t });
+                page.drawLine({ start:{x: px, y: py + signY*g2},     end:{x: px, y: py + signY*(g2+mk)}, color:c, thickness:t });
               });
             }
-          } catch (e) { console.warn("skip img", e); }
+          } catch (e) {
+            console.warn(`Carta ${i} saltata:`, e.message);
+            // Disegna un placeholder grigio per la carta saltata
+            const col = i % printCols, row = Math.floor(i / printCols);
+            const x = sx + col*(cardW+gapPt), y = sy + (printRows-1-row)*(cardH+gapPt);
+            page.drawRectangle({ x, y, width:cardW, height:cardH, color:rgb(0.9,0.9,0.9) });
+            page.drawText("Errore caricamento", { x: x+10, y: y+cardH/2, size:8, color:rgb(0.5,0.5,0.5) });
+          }
         }
       }
+
       const bytes = await doc.save();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-      a.download = "mtg-proxy-print.pdf"; a.click();
-      toast("PDF scaricato!");
-    } catch (e) { toast("Errore PDF: " + e.message, "e"); }
-    finally { setIsGen(false); }
+      a.download = "mtg-proxy-stampa.pdf";
+      a.click();
+      toast("✅ PDF scaricato!");
+    } catch (e) {
+      console.error(e);
+      toast("Errore PDF: " + e.message, "e");
+    } finally {
+      setIsGen(false);
+    }
   };
 
   const perPage = printCols * printRows;
-  const pages = Math.max(1, Math.ceil(images.length / perPage));
+  const pages   = Math.max(1, Math.ceil(images.length / perPage));
 
-  // ── STYLES INLINE ──────────────────────────────────────────────────────────
+  // ── STYLES ────────────────────────────────────────────────────────────────
   const s = {
-    shell: { display: "grid", gridTemplateColumns: "220px 1fr", minHeight: "100vh" },
-    sidebar: { display: "flex", flexDirection: "column", background: "var(--surface)", borderRight: "1px solid var(--border)", padding: "20px 12px", position: "sticky", top: 0, height: "100vh", overflowY: "auto" },
-    main: { display: "flex", flexDirection: "column", padding: "28px 32px", gap: "20px", overflowX: "hidden" },
-    navBtn: (active) => ({ display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", borderRadius: "var(--r-lg)", color: active ? "var(--primary)" : "var(--muted)", background: active ? "var(--primary-hl)" : "transparent", fontSize: ".85rem", fontWeight: active ? 700 : 500, cursor: "pointer", border: "none", width: "100%", textAlign: "left", transition: "all var(--tr)" }),
-    btn: (variant) => ({ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: "var(--r-lg)", fontSize: ".83rem", fontWeight: 600, cursor: "pointer", border: "none", transition: "all var(--tr)", whiteSpace: "nowrap", background: variant === "primary" ? "var(--primary)" : variant === "accent" ? "rgba(79,152,163,.15)" : "transparent", color: variant === "primary" ? "#0f0e0c" : variant === "accent" ? "var(--accent)" : "var(--muted)", ...(variant === "ghost" ? { border: "1px solid var(--border)" } : {}), ...(variant === "accent" ? { border: "1px solid rgba(79,152,163,.35)" } : {}) }),
-    card: { position: "relative", aspectRatio: "63/88", borderRadius: "var(--r-md)", overflow: "hidden", background: "var(--surf-off)", boxShadow: "var(--sh-sm)", cursor: "grab", transition: "transform var(--tr),box-shadow var(--tr)" },
+    shell: { display:"grid", gridTemplateColumns:"220px 1fr", minHeight:"100vh" },
+    sidebar: { display:"flex", flexDirection:"column", background:"var(--surface)", borderRight:"1px solid var(--border)", padding:"20px 12px", position:"sticky", top:0, height:"100vh", overflowY:"auto" },
+    main: { display:"flex", flexDirection:"column", padding:"28px 32px", gap:"20px", overflowX:"hidden" },
+    navBtn: (active) => ({ display:"flex", alignItems:"center", gap:10, padding:"10px 13px", borderRadius:"var(--r-lg)", color: active?"var(--primary)":"var(--muted)", background: active?"var(--primary-hl)":"transparent", fontSize:".85rem", fontWeight: active?700:500, cursor:"pointer", border:"none", width:"100%", textAlign:"left", transition:"all var(--tr)" }),
+    btn: (v) => ({ display:"inline-flex", alignItems:"center", gap:7, padding:"8px 16px", borderRadius:"var(--r-lg)", fontSize:".83rem", fontWeight:600, cursor:"pointer", border:"none", transition:"all var(--tr)", whiteSpace:"nowrap", background: v==="primary"?"var(--primary)":v==="accent"?"rgba(79,152,163,.15)":"transparent", color: v==="primary"?"#0f0e0c":v==="accent"?"var(--accent)":"var(--muted)", ...(v==="ghost"?{border:"1px solid var(--border)"}:{}), ...(v==="accent"?{border:"1px solid rgba(79,152,163,.35)"}:{}) }),
+    card: { position:"relative", aspectRatio:"63/88", borderRadius:"var(--r-md)", overflow:"hidden", background:"var(--surf-off)", boxShadow:"var(--sh-sm)", cursor:"grab", transition:"transform var(--tr),box-shadow var(--tr)" },
   };
 
   return (
     <div style={s.shell}>
-      {/* ── SIDEBAR ── */}
+      {/* SIDEBAR */}
       <aside style={s.sidebar}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid var(--divider)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:28, paddingBottom:20, borderBottom:"1px solid var(--divider)" }}>
           <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
-            <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" stroke="#c9a227" strokeWidth="2" />
-            <polygon points="16,7 25,12 25,20 16,25 7,20 7,12" fill="rgba(201,162,39,.12)" stroke="#c9a227" strokeWidth="1" />
+            <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" stroke="#c9a227" strokeWidth="2"/>
+            <polygon points="16,7 25,12 25,20 16,25 7,20 7,12" fill="rgba(201,162,39,.12)" stroke="#c9a227" strokeWidth="1"/>
             <text x="16" y="20" textAnchor="middle" fill="#c9a227" fontSize="10" fontWeight="900" fontFamily="serif">P</text>
           </svg>
-          <span style={{ fontSize: "1.05rem", fontWeight: 900, color: "var(--primary)", letterSpacing: "-.02em" }}>MTG Proxy</span>
+          <span style={{ fontSize:"1.05rem", fontWeight:900, color:"var(--primary)", letterSpacing:"-.02em" }}>MTG Proxy</span>
         </div>
-        <nav style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1 }}>
-          {[["proxy", "Proxy Stampa", "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"],
-            ["token", "Token Creator", "M2 3h20a0 0 0 0 1 0 14H2zM8 21h8M12 17v4"]].map(([id, label, d]) => (
-            <button key={id} style={s.navBtn(tab === id)} onClick={() => setTab(id)}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d={d} />
-              </svg>
+        <nav style={{ display:"flex", flexDirection:"column", gap:3, flex:1 }}>
+          {[
+            ["proxy","Proxy Stampa","M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"],
+            ["token","Token Creator","M2 3h20v14H2zM8 21h8M12 17v4"]
+          ].map(([id,label,d]) => (
+            <button key={id} style={s.navBtn(tab===id)} onClick={() => setTab(id)}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={d}/></svg>
               {label}
             </button>
           ))}
         </nav>
-        <div style={{ paddingTop: 16, borderTop: "1px solid var(--divider)", fontSize: ".72rem", color: "var(--faint)", textAlign: "center" }}>by Marco Feoli</div>
+        <div style={{ paddingTop:16, borderTop:"1px solid var(--divider)", fontSize:".72rem", color:"var(--faint)", textAlign:"center" }}>by Marco Feoli</div>
       </aside>
 
-      {/* ── MAIN ── */}
+      {/* MAIN */}
       <main style={s.main}>
-        {/* ═══ TAB PROXY ═══ */}
         {tab === "proxy" && (
           <>
-            {/* Header */}
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:14, flexWrap:"wrap" }}>
               <div>
-                <h1 style={{ fontSize: "1.55rem", fontWeight: 900, color: "var(--text)", letterSpacing: "-.03em" }}>Proxy Card Printer</h1>
-                <p style={{ fontSize: ".82rem", color: "var(--muted)", marginTop: 3 }}>Carica, ordina e stampa le tue carte proxy MTG in alta qualità</p>
+                <h1 style={{ fontSize:"1.55rem", fontWeight:900, color:"var(--text)", letterSpacing:"-.03em" }}>Proxy Card Printer</h1>
+                <p style={{ fontSize:".82rem", color:"var(--muted)", marginTop:4 }}>
+                  Carica le tue carte e genera un PDF pronto per la stampa
+                </p>
               </div>
-              {images.length > 0 && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button style={s.btn("ghost")} onClick={() => setConfirmOpen(true)}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-                    Rimuovi tutte
-                  </button>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                <button style={s.btn("ghost")} onClick={() => inputRef.current.click()}>
+                  <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                  Carica immagini
+                </button>
+                <button style={s.btn("accent")} onClick={fetchRandom} disabled={loadRnd}>
+                  <Icon d="M1 4v6h6M23 20v-6h-6M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                  {loadRnd ? "Caricamento…" : "9 carte random"}
+                </button>
+                {images.length > 0 && (
                   <button style={s.btn("primary")} onClick={() => setPrintOpen(true)}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                    Stampa / PDF
+                    <Icon d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>
+                    Genera PDF ({images.length} carte)
                   </button>
+                )}
+              </div>
+            </div>
+            <input ref={inputRef} type="file" accept="image/*" multiple style={{ display:"none" }}
+              onChange={e => { handleFiles(e.target.files); e.target.value=null; }} />
+
+            {/* Drop zone */}
+            <div
+              onDrop={onDrop}
+              onDragOver={e => { e.preventDefault(); setIsDrop(true); }}
+              onDragLeave={() => setIsDrop(false)}
+              onClick={() => !images.length && inputRef.current.click()}
+              style={{ border:`2px dashed ${isDrop?"var(--primary)":"var(--border)"}`, borderRadius:"var(--r-xl)", padding: images.length?"16px":"60px 20px", textAlign:"center", background: isDrop?"var(--primary-hl)":"var(--surf-off)", transition:"all var(--tr)", cursor: images.length?"default":"pointer", minHeight: images.length?"auto":180 }}>
+              {!images.length ? (
+                <div style={{ color:"var(--muted)" }}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin:"0 auto 12px" }}>
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                  </svg>
+                  <p style={{ fontWeight:600, marginBottom:4 }}>Trascina le immagini qui o clicca per caricare</p>
+                  <p style={{ fontSize:".78rem" }}>PNG, JPG, WEBP — puoi caricare carte custom, screenshot, proxy</p>
+                </div>
+              ) : (
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))", gap:10 }}>
+                  {images.map((img, idx) => (
+                    <div key={img.id} draggable
+                      onDragStart={() => setDragIdx(idx)}
+                      onDragOver={e => { e.preventDefault(); reorder(idx); }}
+                      onDragEnd={() => setDragIdx(null)}
+                      style={{ ...s.card, outline: dragIdx===idx?"2px solid var(--primary)":"none" }}>
+                      <img src={img.url} alt={img.name||"card"} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                      <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0)", transition:"background var(--tr)", display:"flex", alignItems:"flex-end", padding:4, gap:3, opacity:0, pointerEvents:"none" }}
+                        onMouseEnter={e => { e.currentTarget.style.background="rgba(0,0,0,.55)"; e.currentTarget.style.opacity=1; e.currentTarget.style.pointerEvents="auto"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background="rgba(0,0,0,0)"; e.currentTarget.style.opacity=0; e.currentTarget.style.pointerEvents="none"; }}>
+                        <button onClick={() => dup(idx)} style={{ flex:1, background:"rgba(255,255,255,.15)", border:"none", color:"#fff", borderRadius:4, fontSize:10, padding:"3px 0", cursor:"pointer" }}>×2</button>
+                        <button onClick={() => remove(idx)} style={{ flex:1, background:"rgba(200,50,50,.7)", border:"none", color:"#fff", borderRadius:4, fontSize:10, padding:"3px 0", cursor:"pointer" }}>✕</button>
+                      </div>
+                      <div style={{ position:"absolute", top:3, left:3, background:"rgba(0,0,0,.6)", color:"#fff", fontSize:9, padding:"1px 4px", borderRadius:3 }}>{idx+1}</div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Slot bar */}
             {images.length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 16px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)" }}>
-                <span style={{ fontSize: ".83rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-                  <strong style={{ color: "var(--primary)" }}>{images.length}</strong> carte · {pages} {pages === 1 ? "pagina" : "pagine"} A4
-                </span>
-                <div style={{ flex: 1, height: 4, background: "var(--surf-off)", borderRadius: 999, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${((images.length % perPage || perPage) / perPage * 100)}%`, background: "linear-gradient(90deg,var(--primary),var(--accent))", borderRadius: 999, transition: "width .4s" }} />
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+                <span style={{ fontSize:".82rem", color:"var(--muted)" }}>{images.length} carte • {pages} pagina{pages!==1?"e":""} PDF</span>
+                <div style={{ display:"flex", gap:8 }}>
+                  <button style={s.btn("ghost")} onClick={() => setPrintOpen(true)}>⚙ Impostazioni stampa</button>
+                  <button style={s.btn("ghost")} onClick={() => setConfirmOpen(true)} title="Rimuovi tutto">✕ Svuota</button>
                 </div>
-              </div>
-            )}
-
-            {/* Drop zone */}
-            <div
-              onDragOver={e => { e.preventDefault(); setIsDrop(true); }}
-              onDragLeave={() => setIsDrop(false)}
-              onDrop={onDrop}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 11, padding: "44px 28px", background: isDrop ? "var(--primary-hl)" : "var(--surface)", border: `2px dashed ${isDrop ? "var(--primary)" : "var(--border)"}`, borderRadius: "var(--r-xl)", textAlign: "center", transition: "all var(--tr)" }}
-            >
-              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke={isDrop ? "var(--primary)" : "var(--faint)"} strokeWidth="1.4"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-              <p style={{ fontSize: "1.08rem", fontWeight: 700, color: "var(--text)" }}>Trascina le immagini qui</p>
-              <p style={{ fontSize: ".82rem", color: "var(--muted)" }}>PNG, JPG, WEBP · Dimensione consigliata 63×88mm</p>
-              <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap", justifyContent: "center" }}>
-                <button style={s.btn("primary")} onClick={() => inputRef.current.click()}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-                  Carica file
-                </button>
-                <button style={{ ...s.btn("accent"), opacity: loadRnd ? .6 : 1 }} onClick={fetchRandom} disabled={loadRnd}>
-                  {loadRnd
-                    ? <><span style={{ width: 14, height: 14, border: "2px solid rgba(79,152,163,.3)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin .7s linear infinite", display: "inline-block" }} /> Ricerca…</>
-                    : <><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg> 9 carte random</>
-                  }
-                </button>
-              </div>
-              <input ref={inputRef} type="file" multiple accept="image/*" style={{ display: "none" }} onChange={e => { handleFiles(e.target.files); e.target.value = ""; }} />
-            </div>
-
-            {/* Gallery */}
-            {images.length > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(118px,1fr))", gap: 10 }}>
-                {images.map((img, idx) => (
-                  <div key={img.id}
-                    draggable
-                    onDragStart={() => setDragIdx(idx)}
-                    onDragEnter={() => reorder(idx)}
-                    onDragEnd={() => setDragIdx(null)}
-                    onDragOver={e => e.preventDefault()}
-                    style={{ ...s.card, opacity: dragIdx === idx ? .5 : 1 }}
-                    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px) scale(1.02)"; e.currentTarget.style.boxShadow = "var(--sh-md)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "var(--sh-sm)"; }}
-                  >
-                    <img src={img.url} alt={img.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    {/* Overlay */}
-                    <div className="card-ov" style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 45%,transparent 55%,rgba(0,0,0,.65) 100%)", opacity: 0, transition: "opacity var(--tr)", display: "flex", justifyContent: "flex-end", alignItems: "flex-start", padding: 6, gap: 4 }}
-                      onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                      onMouseLeave={e => e.currentTarget.style.opacity = 0}
-                    >
-                      <button onClick={e => { e.stopPropagation(); dup(idx); }} style={{ width: 26, height: 26, borderRadius: 5, background: "rgba(255,255,255,.15)", backdropFilter: "blur(4px)", border: "1px solid rgba(255,255,255,.2)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, cursor: "pointer" }} title="Duplica">⧉</button>
-                      <button onClick={e => { e.stopPropagation(); remove(idx); }} style={{ width: 26, height: 26, borderRadius: 5, background: "rgba(248,113,113,.3)", backdropFilter: "blur(4px)", border: "1px solid rgba(248,113,113,.4)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, cursor: "pointer" }} title="Rimuovi">✕</button>
-                    </div>
-                    <span style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(0,0,0,.78)", color: "var(--primary)", fontSize: ".68rem", fontWeight: 700, padding: "2px 5px", borderRadius: 999 }}>{idx + 1}</span>
-                  </div>
-                ))}
               </div>
             )}
           </>
         )}
 
-        {/* ═══ TAB TOKEN ═══ */}
-        {tab === "token" && <TokenPreviewSinglePtFrame />}
+        {tab === "token" && (
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", flex:1, color:"var(--muted)", flexDirection:"column", gap:12 }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 3h20v14H2zM8 21h8M12 17v4"/></svg>
+            <p style={{ fontWeight:600 }}>Token Creator</p>
+            <p style={{ fontSize:".82rem" }}>Usa il Tab Token Creator nel componente dedicato</p>
+          </div>
+        )}
       </main>
 
-      {/* ── MODAL STAMPA ── */}
+      {/* MODAL IMPOSTAZIONI STAMPA */}
       {printOpen && (
-        <div onClick={closePrint} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.82)", backdropFilter: "blur(8px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: "var(--r-xl)", width: "100%", maxWidth: 650, maxHeight: "92vh", overflowY: "auto", boxShadow: "var(--sh-lg)" }}>
-            {/* head */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: "1px solid var(--divider)" }}>
-              <span style={{ fontSize: "1.05rem", fontWeight: 700, display: "flex", alignItems: "center", gap: 9 }}>
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                Opzioni di Stampa
-              </span>
-              <button onClick={() => setPrintOpen(false)} style={{ width: 34, height: 34, borderRadius: "var(--r-md)", background: "none", border: "none", color: "var(--muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>✕</button>
-            </div>
-            {/* body */}
-            <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 20 }}>
-              {/* A4 preview */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 20, alignItems: "start" }}>
-                <div style={{ aspectRatio: "210/297", background: "white", borderRadius: "var(--r-md)", border: "1px solid var(--border)", maxHeight: 280, display: "grid", gridTemplateColumns: `repeat(${printCols},1fr)`, gridTemplateRows: `repeat(${printRows},1fr)`, gap: 3, padding: 6, boxShadow: "var(--sh-md)" }}>
-                  {Array.from({ length: perPage }).map((_, i) => (
-                    <div key={i} style={{ background: "#e0e0e0", borderRadius: 2, overflow: "hidden" }}>
-                      {images[i] && <img src={images[i].url} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {[["Carte totali", images.length], ["Per pagina", perPage], ["Pagine A4", pages]].map(([l, v]) => (
-                    <div key={l} style={{ padding: "10px 13px", background: "var(--surf-off)", borderRadius: "var(--r-lg)", minWidth: 105 }}>
-                      <div style={{ fontSize: ".68rem", color: "var(--faint)", textTransform: "uppercase", letterSpacing: ".07em", fontWeight: 600 }}>{l}</div>
-                      <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "var(--primary)" }}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {/* options */}
-              <div style={{ background: "var(--surf-off)", borderRadius: "var(--r-lg)", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-                <h3 style={{ fontSize: ".78rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".06em" }}>⚙ Layout PDF</h3>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
-                  {[["Colonne", printCols, setPrintCols, 1, 4], ["Righe", printRows, setPrintRows, 1, 4], ["Gap (mm)", printGap, setPrintGap, 0, 10]].map(([l, v, set, min, max]) => (
-                    <div key={l} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                      <label style={{ fontSize: ".73rem", color: "var(--muted)", fontWeight: 600 }}>{l}</label>
-                      <div style={{ display: "flex", alignItems: "center", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
-                        <button onClick={() => set(x => Math.max(min, x - 1))} style={{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: "1.1rem", fontWeight: 600, cursor: "pointer", border: "none", background: "none" }}>−</button>
-                        <span style={{ flex: 1, textAlign: "center", fontSize: ".88rem", fontWeight: 700, color: "var(--text)" }}>{v}</span>
-                        <button onClick={() => set(x => Math.min(max, x + 1))} style={{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: "1.1rem", fontWeight: 600, cursor: "pointer", border: "none", background: "none" }}>+</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <label style={{ display: "flex", alignItems: "center", gap: 9, fontSize: ".83rem", color: "var(--muted)", fontWeight: 500, cursor: "pointer" }}>
-                  <input type="checkbox" checked={cutMarks} onChange={e => setCutMarks(e.target.checked)} style={{ width: 15, height: 15, accentColor: "var(--primary)" }} />
-                  Segni di taglio
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }}
+          onClick={e => e.target===e.currentTarget && setPrintOpen(false)}>
+          <div style={{ background:"var(--surface)", borderRadius:"var(--r-xl)", padding:28, width:400, maxWidth:"90vw", border:"1px solid var(--border)" }}>
+            <h2 style={{ fontWeight:800, marginBottom:20, color:"var(--text)" }}>Impostazioni PDF</h2>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:16 }}>
+              {[["Colonne",printCols,setPrintCols,1,6],["Righe",printRows,setPrintRows,1,6]].map(([label,val,set,min,max]) => (
+                <label key={label} style={{ fontSize:".83rem", color:"var(--muted)" }}>
+                  {label}
+                  <input type="number" min={min} max={max} value={val}
+                    onChange={e => set(Math.max(min,Math.min(max,+e.target.value)))}
+                    style={{ display:"block", width:"100%", marginTop:4, background:"var(--surf-off)", color:"var(--text)", border:"1px solid var(--border)", borderRadius:"var(--r-md)", padding:"6px 10px", fontSize:".9rem" }}/>
                 </label>
-              </div>
+              ))}
+              <label style={{ fontSize:".83rem", color:"var(--muted)" }}>
+                Margine (mm)
+                <input type="number" min={0} max={10} step={0.5} value={printGap}
+                  onChange={e => setPrintGap(+e.target.value)}
+                  style={{ display:"block", width:"100%", marginTop:4, background:"var(--surf-off)", color:"var(--text)", border:"1px solid var(--border)", borderRadius:"var(--r-md)", padding:"6px 10px", fontSize:".9rem" }}/>
+              </label>
             </div>
-            {/* foot */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 9, padding: "16px 22px", borderTop: "1px solid var(--divider)" }}>
-              <button style={s.btn("ghost")} onClick={() => window.print()}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                Stampa diretta
-              </button>
-              <button style={{ ...s.btn("primary"), opacity: isGen ? .7 : 1 }} onClick={genPDF} disabled={isGen}>
-                {isGen
-                  ? <><span style={{ width: 14, height: 14, border: "2px solid rgba(0,0,0,.3)", borderTopColor: "#0f0e0c", borderRadius: "50%", animation: "spin .7s linear infinite", display: "inline-block" }} /> Generazione…</>
-                  : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Scarica PDF</>
-                }
+            <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:".83rem", color:"var(--muted)", marginBottom:10, cursor:"pointer" }}>
+              <input type="checkbox" checked={cutMarks} onChange={e => setCutMarks(e.target.checked)}/> Segni di taglio (crop marks)
+            </label>
+            <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:".83rem", color:"var(--muted)", marginBottom:20, cursor:"pointer" }}>
+              <input type="checkbox" checked={bleedPDF} onChange={e => setBleedPDF(e.target.checked)}/> Bleed tipografico 3mm (consigliato per tipografia)
+            </label>
+            <p style={{ fontSize:".78rem", color:"var(--faint)", marginBottom:20 }}>
+              {printCols}×{printRows} = {perPage} carte per pagina • {pages} pagina{pages!==1?"e":""} • Formato A4
+            </p>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button style={s.btn("ghost")} onClick={() => setPrintOpen(false)}>Annulla</button>
+              <button style={s.btn("primary")} onClick={() => { setPrintOpen(false); genPDF(); }} disabled={isGen}>
+                {isGen ? "⏳ Generazione…" : "⬇ Scarica PDF"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── CONFIRM DIALOG ── */}
+      {/* MODAL CONFERMA SVUOTA */}
       {confirmOpen && (
-        <div onClick={() => setConfirmOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.82)", backdropFilter: "blur(8px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: "var(--r-xl)", padding: "32px 28px", maxWidth: 380, width: "100%", textAlign: "center", boxShadow: "var(--sh-lg)" }}>
-            <div style={{ color: "var(--warn)", display: "flex", justifyContent: "center", marginBottom: 14 }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            </div>
-            <h3 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: 8 }}>Rimuovere tutte le carte?</h3>
-            <p style={{ fontSize: ".85rem", color: "var(--muted)", marginBottom: 22 }}>Questa azione non può essere annullata.</p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <div style={{ background:"var(--surface)", borderRadius:"var(--r-xl)", padding:28, width:340, border:"1px solid var(--border)" }}>
+            <h3 style={{ fontWeight:800, marginBottom:10, color:"var(--text)" }}>Svuotare la lista?</h3>
+            <p style={{ fontSize:".83rem", color:"var(--muted)", marginBottom:20 }}>Tutte le {images.length} carte verranno rimosse.</p>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
               <button style={s.btn("ghost")} onClick={() => setConfirmOpen(false)}>Annulla</button>
-              <button style={{ ...s.btn("primary"), background: "#991b1b", color: "white" }} onClick={clearAll}>Rimuovi tutte</button>
+              <button style={{ ...s.btn("ghost"), color:"#e05050", borderColor:"#e05050" }} onClick={clearAll}>Svuota</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── SNACK ── */}
-      <div style={{
-        position: "fixed", bottom: 22, left: "50%",
-        transform: `translateX(-50%) translateY(${snack.show ? 0 : 80}px)`,
-        zIndex: 500, padding: "9px 20px", borderRadius: 999,
-        fontSize: ".82rem", fontWeight: 600, boxShadow: "var(--sh-lg)",
-        whiteSpace: "nowrap", pointerEvents: "none",
-        opacity: snack.show ? 1 : 0, transition: "transform .25s cubic-bezier(.16,1,.3,1),opacity .25s",
-        background: snack.type === "s" ? "#14532d" : snack.type === "w" ? "#431407" : snack.type === "e" ? "#7f1d1d" : "var(--surface2)",
-        color: snack.type === "s" ? "#86efac" : snack.type === "w" ? "#fdba74" : snack.type === "e" ? "#fca5a5" : "var(--text)",
-        border: `1px solid ${snack.type === "s" ? "#16a34a" : snack.type === "w" ? "#ea580c" : snack.type === "e" ? "#dc2626" : "var(--border)"}`,
-      }}>
-        {snack.msg}
-      </div>
-
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} .card-ov:hover{opacity:1!important}`}</style>
+      {/* TOAST */}
+      {snack.show && (
+        <div style={{ position:"fixed", bottom:24, right:24, background: snack.type==="e"?"#7a1e1e":snack.type==="w"?"#5a4a00":"var(--primary)", color:"#fff", padding:"10px 18px", borderRadius:"var(--r-lg)", fontSize:".85rem", fontWeight:600, zIndex:200, boxShadow:"0 4px 20px rgba(0,0,0,.3)" }}>
+          {snack.msg}
+        </div>
+      )}
     </div>
   );
-
-  function closePrint() { setPrintOpen(false); }
 }
