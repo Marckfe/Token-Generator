@@ -137,8 +137,18 @@ export default function MTGProxyCreator() {
       const results = [];
       for (let i = 0; i < 9; i++) {
         const d = await fetch("https://api.scryfall.com/cards/random").then(r => r.json());
-        const url = d.image_uris?.normal || d.image_uris?.large || d.card_faces?.[0]?.image_uris?.normal;
-        if (url) results.push({ id: d.id + "_" + Math.random(), name: d.name, url, srcType: "scryfall" });
+        const imgUrl = d.image_uris?.normal || d.image_uris?.large || d.card_faces?.[0]?.image_uris?.normal;
+        if (!imgUrl) continue;
+        // Scarica subito come blob — evita problemi CORS in fase di export PDF
+        try {
+          const blob = await fetch(imgUrl).then(r => r.blob());
+          const localUrl = URL.createObjectURL(blob);
+          const file = new File([blob], `${d.name}.jpg`, { type: blob.type });
+          results.push({ id: d.id + "_" + Math.random(), name: d.name, url: localUrl, file, srcType: "scryfall" });
+        } catch {
+          // fallback: salva solo URL (potrebbe fallire in export)
+          results.push({ id: d.id + "_" + Math.random(), name: d.name, url: imgUrl, srcType: "scryfall" });
+        }
       }
       setImages(prev => [...prev, ...results]);
       toast(`${results.length} carte aggiunte!`);
