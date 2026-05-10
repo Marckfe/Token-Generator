@@ -402,54 +402,18 @@ export default function TokenEditor() {
     setDownloading(true);
     try {
       const snap = stateRef.current;
-      const S = 4;
-      const BLEED = 21;
+      const S = 4; // scala UHD 4x
 
+      // Canvas nativo 620x890 con carta completa
       const cardCanvas = document.createElement("canvas");
       await renderCard(cardCanvas, snap);
 
-      const EW = (CW + BLEED * 2) * S;
-      const EH = (CH + BLEED * 2) * S;
+      // Export canvas = carta scalata 4x, niente bleed
       const exportCanvas = document.createElement("canvas");
-      exportCanvas.width = EW;
-      exportCanvas.height = EH;
+      exportCanvas.width  = CW * S;
+      exportCanvas.height = CH * S;
       const ctx = exportCanvas.getContext("2d");
-      ctx.clearRect(0, 0, EW, EH);
-
-      if (snap.artUrl) {
-        try {
-          const img = await loadImg(snap.artUrl);
-          const scale = Math.max(EW / img.width, EH / img.height);
-          const dw = img.width * scale;
-          const dh = img.height * scale;
-          const dx = (EW - dw) / 2;
-          const dy = (EH - dh) / 2;
-          ctx.drawImage(img, dx, dy, dw, dh);
-        } catch {
-          ctx.fillStyle = "#000";
-          ctx.fillRect(0, 0, EW, EH);
-        }
-      } else {
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, EW, EH);
-      }
-
-      ctx.drawImage(cardCanvas, 0, 0, CW, CH, BLEED * S, BLEED * S, CW * S, CH * S);
-
-      const bx = BLEED * S, by = BLEED * S;
-      const cw = CW * S, ch = CH * S;
-      const MARK = 10 * S, GAP = 3 * S;
-      ctx.save();
-      ctx.strokeStyle = "#555555";
-      ctx.lineWidth = S * 0.6;
-      ctx.lineCap = "square";
-      for (const c of [{ x: bx, y: by }, { x: bx + cw, y: by }, { x: bx, y: by + ch }, { x: bx + cw, y: by + ch }]) {
-        const sx = c.x === bx ? -1 : 1;
-        const sy = c.y === by ? -1 : 1;
-        ctx.beginPath(); ctx.moveTo(c.x + sx * GAP, c.y); ctx.lineTo(c.x + sx * (GAP + MARK), c.y); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(c.x, c.y + sy * GAP); ctx.lineTo(c.x, c.y + sy * (GAP + MARK)); ctx.stroke();
-      }
-      ctx.restore();
+      ctx.drawImage(cardCanvas, 0, 0, CW, CH, 0, 0, CW * S, CH * S);
 
       const link = document.createElement("a");
       link.download = `${(snap.name || "token").replace(/[^a-z0-9_]/gi, "_")}_PRINT.png`;
