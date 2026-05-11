@@ -225,6 +225,249 @@ function ScryfallSearchPanel({ onAddCards }) {
   );
 }
 
+
+// ── BULK IMPORT PANEL ─────────────────────────────────────────────────────────
+function BulkImportPanel({ onAddCards, toast }) {
+  const [text, setText]       = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [preview, setPreview] = React.useState([]); // [{qty, name, status, card}]
+  const [resolved, setResolved] = React.useState(false);
+  const G = "#4f98a3", BD = "#393836";
+
+  // Parse testo → array [{qty, name}]
+  const parseList = (raw) => {
+    return raw
+      .split("\n")
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(line => {
+        // Formati supportati: "4 Lightning Bolt", "4x Lightning Bolt", "Lightning Bolt x4", "Lightning Bolt"
+        const m1 = line.match(/^(\d+)[xX]?\s+(.+)$/);
+        const m2 = line.match(/^(.+?)\s+[xX](\d+)$/);
+        const m3 = line.match(/^(.+?)\s+(\d+)$/);
+        if (m1) return { qty: Math.min(20, parseInt(m1[1])), name: m1[2].trim() };
+        if (m2) return { qty: Math.min(20, parseInt(m2[2])), name: m2[1].trim() };
+        if (m3) return { qty: Math.min(20, parseInt(m3[2])), name: m3[1].trim() };
+        return { qty: 1, name: line.trim() };
+      })
+      .filter(e => e.name.length > 0);
+  };
+
+  const resolveCards = async () => {
+    const entries = parseList(text);
+    if (!entries.length) return;
+    setLoading(true);
+    setResolved(false);
+    const results = [];
+    for (const entry of entries) {
+      try {
+        const r = await fetch(
+          `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(entry.name)}`
+        );
+        const card = await r.json();
+        if (card.object === "error") {
+          results.push({ ...entry, status: "not_found", card: null });
+        } else {
+          results.push({ ...entry, status: "found", card });
+        }
+      } catch {
+        results.push({ ...entry, status: "error", card: null });
+      }
+      // piccola pausa per rispettare rate limit Scryfall
+      await new Promise(r => setTimeout(r, 80));
+    }
+    setPreview(results);
+    setResolved(true);
+    setLoading(false);
+  };
+
+  const updateQty = (i, val) => {
+    setPreview(prev => prev.map((e, idx) =>
+      idx === i ? { ...e, qty: Math.max(1, Math.min(20, Number(val))) } : e
+    ));
+  };
+
+  const toggleRemove = (i) => {
+    setPreview(prev => prev.map((e, idx) =>
+      idx === i ? { ...e, excluded: !e.excluded } : e
+    ));
+  };
+
+  const addAll = async () => {
+    const toAdd = preview.filter(e => e.status === "found" && !e.excluded);
+    if (!toAdd.length) return;
+    setLoading(true);
+    const items = [];
+    for (const entry of toAdd) {
+      const card = entry.card;
+      const imgUrl = card.image_uris?.normal
+        || card.image_uris?.large
+        || card.card_faces?.[0]?.image_uris?.normal;
+      if (!imgUrl) continue;
+      try {
+        const blob = await fetch(imgUrl).then(r => r.blob());
+        const localUrl = URL.createObjectURL(blob);
+        const file = new File([blob], `${card.name}.jpg`, { type: blob.type });
+        for (let i = 0; i < entry.qty; i++) {
+          items.push({
+            id: card.id + "_" + i + "_" + Math.random(),
+            name: card.name,
+            url: localUrl,
+            file,
+            srcType: "scryfall",
+            thumb: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small,
+          });
+        }
+      } catch {
+        for (let i = 0; i < entry.qty; i++) {
+          items.push({
+            id: card.id + "_" + i + "_" + Math.random(),
+            name: card.name, url: imgUrl, srcType: "scryfall",
+            thumb: card.image_uris?.small,
+          });
+        }
+      }
+    }
+    onAddCards(items);
+    setText("");
+    setPreview([]);
+    setResolved(false);
+    setLoading(false);
+  };
+
+  const foundCount    = preview.filter(e => e.status === "found" && !e.excluded).length;
+  const notFoundCount = preview.filter(e => e.status === "not_found").length;
+  const totalCopies   = preview
+    .filter(e => e.status === "found" && !e.excluded)
+    .reduce((s, e) => s + e.qty, 0);
+
+  return (
+    <div style={{ background: "#201f1d", border: `1px solid ${BD}`, borderRadius: 10, padding: 16, marginBottom: 0 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+        <span style={{ fontSize:18 }}>📋</span>
+        <span style={{ fontWeight:700, color:G, fontSize:14 }}>Importa lista massiva</span>
+      </div>
+
+      {/* Textarea */}
+      <div style={{ fontSize:11, color:"#797876", marginBottom:6 }}>
+        Un nome per riga. Formati supportati: <code style={{color:G}}>4 Lightning Bolt</code> · <code style={{color:G}}>4x Bolt</code> · <code style={{color:G}}>Bolt x4</code> · solo nome (= 1 copia)
+      </div>
+      <textarea
+        value={text}
+        onChange={e => { setText(e.target.value); setResolved(false); setPreview([]); }}
+        placeholder={"4 Lightning Bolt\n2 Counterspell\n1 Black Lotus\nSol Ring x4\nThoughtseize"}
+        rows={6}
+        style={{ width:"100%", background:"#252420", color:"#cdccca",
+          border:`1px solid ${BD}`, borderRadius:6, padding:"8px 10px",
+          fontSize:13, outline:"none", resize:"vertical", boxSizing:"border-box",
+          fontFamily:"monospace", marginBottom:8 }}
+      />
+
+      <button onClick={resolveCards} disabled={loading || !text.trim()}
+        style={{ width:"100%", padding:"9px", borderRadius:7,
+          background: loading || !text.trim() ? "#333" : "#4f98a3",
+          color: loading || !text.trim() ? "#555" : "#000",
+          border:"none", fontWeight:700, fontSize:13,
+          cursor: loading || !text.trim() ? "not-allowed" : "pointer",
+          marginBottom: preview.length ? 14 : 0 }}>
+        {loading && !resolved ? "⏳ Ricerca in corso…" : "🔎 Verifica carte"}
+      </button>
+
+      {/* Preview risultati */}
+      {resolved && preview.length > 0 && (
+        <>
+          <div style={{ display:"flex", gap:10, marginBottom:10, flexWrap:"wrap", alignItems:"center" }}>
+            <span style={{ fontSize:12, color:"#4ade80" }}>✓ {foundCount} trovate</span>
+            {notFoundCount > 0 && (
+              <span style={{ fontSize:12, color:"#f87171" }}>✗ {notFoundCount} non trovate</span>
+            )}
+            <span style={{ fontSize:12, color:"#797876", marginLeft:"auto" }}>
+              Clicca ✕ per escludere una carta
+            </span>
+          </div>
+
+          <div style={{ maxHeight:300, overflowY:"auto", display:"flex", flexDirection:"column", gap:6 }}>
+            {preview.map((entry, i) => (
+              <div key={i}
+                style={{ display:"flex", alignItems:"center", gap:10,
+                  background: entry.excluded ? "#1a1917"
+                    : entry.status === "found" ? "#1e2b1e"
+                    : "#2b1e1e",
+                  border:`1px solid ${
+                    entry.excluded ? BD
+                    : entry.status === "found" ? "#2d5a2d"
+                    : "#5a2d2d"}`,
+                  borderRadius:8, padding:"6px 10px",
+                  opacity: entry.excluded ? 0.45 : 1, transition:"opacity .2s" }}>
+
+                {/* Thumb */}
+                {entry.card?.image_uris?.small || entry.card?.card_faces?.[0]?.image_uris?.small ? (
+                  <img
+                    src={entry.card.image_uris?.small || entry.card.card_faces?.[0]?.image_uris?.small}
+                    alt={entry.card.name}
+                    style={{ width:32, height:44, objectFit:"cover", borderRadius:3, flexShrink:0 }} />
+                ) : (
+                  <div style={{ width:32, height:44, background:"#333", borderRadius:3,
+                    flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
+                    fontSize:16 }}>{entry.status==="not_found"?"❓":"⚠️"}</div>
+                )}
+
+                {/* Info */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontSize:13, color:"#cdccca",
+                    overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    {entry.card?.name || entry.name}
+                  </div>
+                  {entry.card?.set_name && (
+                    <div style={{ fontSize:10, color:"#797876" }}>{entry.card.set_name}</div>
+                  )}
+                  {entry.status === "not_found" && (
+                    <div style={{ fontSize:10, color:"#f87171" }}>Carta non trovata</div>
+                  )}
+                </div>
+
+                {/* Qty */}
+                {entry.status === "found" && (
+                  <input type="number" min={1} max={20} value={entry.qty}
+                    onChange={e => updateQty(i, e.target.value)}
+                    style={{ width:46, background:"#252420", color:G,
+                      border:`1px solid ${BD}`, borderRadius:5,
+                      padding:"4px 6px", fontSize:13, fontWeight:700,
+                      textAlign:"center", outline:"none" }} />
+                )}
+
+                {/* Escludi */}
+                {entry.status === "found" && (
+                  <button onClick={() => toggleRemove(i)}
+                    title={entry.excluded ? "Includi" : "Escludi"}
+                    style={{ background:"transparent", border:"none", cursor:"pointer",
+                      color: entry.excluded ? G : "#f87171", fontSize:16, lineHeight:1, padding:2 }}>
+                    {entry.excluded ? "↩" : "✕"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Aggiungi tutto */}
+          {foundCount > 0 && (
+            <button onClick={addAll} disabled={loading}
+              style={{ width:"100%", marginTop:12, padding:"10px", borderRadius:7,
+                background: loading ? "#333" : G,
+                color: loading ? "#555" : "#000",
+                border:"none", fontWeight:700, fontSize:13,
+                cursor: loading ? "not-allowed" : "pointer" }}>
+              {loading
+                ? "⏳ Scarico immagini…"
+                : `➕ Aggiungi ${totalCopies} cop${totalCopies===1?"ia":"ie"} alla coda (${foundCount} carte)`}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 export default function MTGProxyCreator() {
   const [tab, setTab]           = useState("proxy");
@@ -541,18 +784,25 @@ function ProxyTab({ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, i
             transition:"all .2s" }}>
           <svg width={16} height={16} viewBox="0 0 24 24" fill="none"
             stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          🔍 Cerca e aggiungi carte da Scryfall
+          🔍 Cerca carte · Importa lista
           <span style={{ marginLeft:"auto", fontSize:11, opacity:.7 }}>
             {showScryfall ? "▲ chiudi" : "▼ apri"}
           </span>
         </button>
 
         {showScryfall && (
-          <div style={{ marginTop:8 }}>
+          <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:8 }}>
             <ScryfallSearchPanel onAddCards={cards => {
               setImages(prev => [...prev, ...cards]);
               toast(`✅ ${cards.length} cop${cards.length===1?"ia":"ie"} aggiunte alla coda!`);
             }} />
+            <BulkImportPanel
+              onAddCards={cards => {
+                setImages(prev => [...prev, ...cards]);
+                toast(`✅ ${cards.length} cop${cards.length===1?"ia":"ie"} aggiunte alla coda!`);
+              }}
+              toast={toast}
+            />
           </div>
         )}
       </div>
