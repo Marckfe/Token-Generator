@@ -269,7 +269,7 @@ function Input(props) {
 }
 
 function Textarea(props) {
-  return <textarea {...props} style={{ width:"100%", background:"#11100f", color:"#ece9e4", border:"1px solid #393836", borderRadius:8, padding:"9px 10px", fontSize:13, outline:"none", resize:"vertical", ...(props.style||{}) }} />;
+  return <textarea {...props} style={{ width:"100%", background:"#11100f", color:"#ece9e4", border:"1px solid #393836", borderRadius:8, padding:"9px 10px", fontSize:13, outline:"none", resize:"both", ...(props.style||{}) }} />;
 }
 
 function Select(props) {
@@ -508,6 +508,7 @@ export default function TokenPreviewSinglePtFrame() {
             <Row>
               <Field label='Name size'><Input type='number' value={state.nameStyle.fontSize} onChange={e => update('nameStyle', { fontSize:Number(e.target.value) })} /></Field>
               <Field label='Name Y'><Input type='number' value={state.nameStyle.y} onChange={e => update('nameStyle', { y:Number(e.target.value) })} /></Field>
+              <Field label='Name color'><Input type='color' value={state.nameStyle.color} onChange={e => update('nameStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
               <Field label='Align'>
                 <Select value={state.nameStyle.align} onChange={e => update('nameStyle', { align:e.target.value })}>
                   <option value='left'>left</option>
@@ -523,6 +524,7 @@ export default function TokenPreviewSinglePtFrame() {
               <Field label='Type size'><Input type='number' value={state.typeStyle.fontSize} onChange={e => update('typeStyle', { fontSize:Number(e.target.value) })} /></Field>
               <Field label='Type X'><Input type='number' value={state.typeStyle.x} onChange={e => update('typeStyle', { x:Number(e.target.value) })} /></Field>
               <Field label='Type Y'><Input type='number' value={state.typeStyle.y} onChange={e => update('typeStyle', { y:Number(e.target.value) })} /></Field>
+              <Field label='Type color'><Input type='color' value={state.typeStyle.color} onChange={e => update('typeStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
             </Row>
             <Field label='Rules text'>
               <Textarea rows={5} value={state.ability} onChange={e => setState(prev => ({ ...prev, ability:e.target.value }))} />
@@ -533,6 +535,7 @@ export default function TokenPreviewSinglePtFrame() {
               <Field label='Text width'><Input type='number' value={state.abilityStyle.width} onChange={e => update('abilityStyle', { width:Number(e.target.value) })} /></Field>
               <Field label='Text X'><Input type='number' value={state.abilityStyle.x} onChange={e => update('abilityStyle', { x:Number(e.target.value) })} /></Field>
               <Field label='Text Y'><Input type='number' value={state.abilityStyle.y} onChange={e => update('abilityStyle', { y:Number(e.target.value) })} /></Field>
+              <Field label='Text color'><Input type='color' value={state.abilityStyle.color} onChange={e => update('abilityStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
             </Row>
           </Section>
 
@@ -548,11 +551,13 @@ export default function TokenPreviewSinglePtFrame() {
               <Field label='PT W'><Input type='number' value={state.ptStyle.width} onChange={e => update('ptStyle', { width:Number(e.target.value) })} /></Field>
               <Field label='PT H'><Input type='number' value={state.ptStyle.height} onChange={e => update('ptStyle', { height:Number(e.target.value) })} /></Field>
               <Field label='PT size'><Input type='number' value={state.ptStyle.fontSize} onChange={e => update('ptStyle', { fontSize:Number(e.target.value) })} /></Field>
+              <Field label='PT color'><Input type='color' value={state.ptStyle.color} onChange={e => update('ptStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
             </Row>
             <Row>
               <Field label='Info left'><Input value={state.infoLeft.text} onChange={e => setState(prev => ({ ...prev, infoLeft:{ ...prev.infoLeft, text:e.target.value } }))} /></Field>
               <Field label='Artist'><Input value={state.infoLeft.artist} onChange={e => setState(prev => ({ ...prev, infoLeft:{ ...prev.infoLeft, artist:e.target.value } }))} /></Field>
               <Field label='Year'><Input value={state.copyright.year} onChange={e => setState(prev => ({ ...prev, copyright:{ ...prev.copyright, year:e.target.value } }))} /></Field>
+              <Field label='Footer color'><Input type='color' value={state.infoLeft.color} onChange={e => setState(prev => ({ ...prev, infoLeft:{ ...prev.infoLeft, color:e.target.value }, copyright:{ ...prev.copyright, color:e.target.value } }))} style={{ padding:4, height:42 }} /></Field>
             </Row>
           </Section>
 
@@ -575,7 +580,7 @@ export default function TokenPreviewSinglePtFrame() {
               <button onClick={() => nudge(activeLayer, -1, 0)} style={btnSecondary}>←</button>
               <button onClick={() => nudge(activeLayer, 1, 0)} style={btnSecondary}>→</button>
               <button onClick={() => nudge(activeLayer, 0, 1)} style={btnSecondary}>↓</button>
-              <button onClick={() => setState(DEFAULT_STATE)} style={btnDanger}>Reset</button>
+              <button onClick={() => setState({ ...DEFAULT_STATE, artUrl:'', artTransform:{ zoom:1, x:0, y:0 }, copyright:{ ...DEFAULT_STATE.copyright, year:new Date().getFullYear() } })} style={btnDanger}>Reset</button>
               <button onClick={exportPNG} style={btnPrimary}>Esporta PNG</button>
             </div>
             <div style={{ fontSize:12, color:'#9d9891' }}>Suggerimento: trascina direttamente i box in preview; con Shift + frecce sposti di 10px.</div>
