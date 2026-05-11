@@ -62,27 +62,48 @@ const Icon = ({ d, size = 16 }) => (
 // ── SCRYFALL SEARCH PANEL ─────────────────────────────────────────────────────
 // Recupera TUTTE le stampe (segue next_page fino a esaurimento)
 async function fetchAllPrints(name) {
-  // Step 1: risolvi nome canonico via fuzzy
-  let canonicalName = name;
-  try {
-    const nr = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
-    if (nr.ok) {
-      const nj = await nr.json();
-      if (nj.object !== "error" && nj.name) canonicalName = nj.name;
-    }
-  } catch { /* usa il nome originale */ }
+  // Cerca carte che contengono il testo nel nome, poi recupera tutte le stampe per ogni nome unico
+  const term = name.trim();
+  const names = [];
+  const seen = new Set();
+  const pushName = (n) => { if (n && !seen.has(n)) { seen.add(n); names.push(n); } };
 
-  // Step 2: tutte le stampe con nome canonico esatto, paginazione completa
-  let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(canonicalName)}"&unique=prints&order=released&dir=desc`;
+  try {
+    let url = `https://api.scryfall.com/cards/search?q=name:${encodeURIComponent(term)}&unique=cards&order=released&dir=desc`;
+    while (url) {
+      const r = await fetch(url);
+      if (!r.ok) break;
+      const j = await r.json();
+      if (j.object === "error") break;
+      (j.data || []).forEach(c => pushName(c.name));
+      url = j.has_more ? j.next_page : null;
+      if (url) await new Promise(r => setTimeout(r, 80));
+    }
+  } catch {}
+
+  // fallback fuzzy se la ricerca per nome contiene non restituisce nulla
+  if (!names.length) {
+    try {
+      const nr = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(term)}`);
+      if (nr.ok) {
+        const nj = await nr.json();
+        if (nj.object !== "error" && nj.name) pushName(nj.name);
+      }
+    } catch {}
+  }
+
   const all = [];
-  while (url) {
-    const r = await fetch(url);
-    if (!r.ok) break;
-    const j = await r.json();
-    if (j.object === "error") break;
-    all.push(...(j.data || []));
-    url = j.has_more ? j.next_page : null;
-    if (url) await new Promise(r => setTimeout(r, 80));
+  for (const cardName of names) {
+    let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(cardName)}"&unique=prints&order=released&dir=desc`;
+    while (url) {
+      const r = await fetch(url);
+      if (!r.ok) break;
+      const j = await r.json();
+      if (j.object === "error") break;
+      all.push(...(j.data || []));
+      url = j.has_more ? j.next_page : null;
+      if (url) await new Promise(r => setTimeout(r, 80));
+    }
   }
   return all;
 }
@@ -180,33 +201,57 @@ function ScryfallSearchPanel({ onAddCards }) {
     setLoading(true); setLoadMsg("Cerco nome canonico…"); setPrints([]);
     setError(""); setSelected({}); setExpandedName(null);
     try {
-      // Step 1: risolvi nome canonico via fuzzy (bolt → Lightning Bolt, ecc.)
-      let canonicalName = name;
-      try {
-        const nr = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
-        if (nr.ok) {
-          const nj = await nr.json();
-          if (nj.object !== "error" && nj.name) {
-            canonicalName = nj.name;
-            setQuery(canonicalName); // mostra il nome corretto nell'input
-          }
-        }
-      } catch { /* usa nome originale */ }
+      // Step 1: cerca carte che contengono il termine nel nome
+      const term = name.trim();
+      const names = [];
+      const seen = new Set();
+      const pushName = (n) => { if (n && !seen.has(n)) { seen.add(n); names.push(n); } };
 
-      // Step 2: tutte le stampe con paginazione progressiva
-      let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(canonicalName)}"&unique=prints&order=released&dir=desc`;
+      try {
+        let url = `https://api.scryfall.com/cards/search?q=name:${encodeURIComponent(term)}&unique=cards&order=released&dir=desc`;
+        while (url) {
+          const r = await fetch(url);
+          if (!r.ok) break;
+          const j = await r.json();
+          if (j.object === "error") break;
+          (j.data || []).forEach(c => pushName(c.name));
+          url = j.has_more ? j.next_page : null;
+          if (url) await new Promise(r => setTimeout(r, 100));
+        }
+      } catch {}
+
+      // fallback fuzzy se il contains non trova nulla
+      if (!names.length) {
+        try {
+          const nr = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(term)}`);
+          if (nr.ok) {
+            const nj = await nr.json();
+            if (nj.object !== "error" && nj.name) {
+              pushName(nj.name);
+              setQuery(nj.name);
+            }
+          }
+        } catch {}
+      }
+
+      // Step 2: recupera tutte le stampe per tutti i nomi trovati
       const all = [];
       setLoadMsg("Caricamento stampe…");
-      while (url) {
-        const r = await fetch(url);
-        const j = await r.json();
-        if (j.object === "error") { url = null; break; }
-        all.push(...(j.data || []));
-        setPrints([...all]);
-        setLoadMsg(`Caricamento… ${all.length} stampe`);
-        url = j.has_more ? j.next_page : null;
-        if (url) await new Promise(r => setTimeout(r, 100));
+      for (const cardName of names) {
+        let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(cardName)}"&unique=prints&order=released&dir=desc`;
+        while (url) {
+          const r = await fetch(url);
+          if (!r.ok) break;
+          const j = await r.json();
+          if (j.object === "error") { url = null; break; }
+          all.push(...(j.data || []));
+          setPrints([...all]);
+          setLoadMsg(`Caricamento… ${all.length} stampe`);
+          url = j.has_more ? j.next_page : null;
+          if (url) await new Promise(r => setTimeout(r, 100));
+        }
       }
+
       if (!all.length) setError(`Nessun risultato per "${name}"`);
       else setLoadMsg(`${all.length} stampe totali`);
     } catch (e) { setError("Errore di rete: " + e.message); }
