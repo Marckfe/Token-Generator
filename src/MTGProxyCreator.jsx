@@ -60,187 +60,230 @@ const Icon = ({ d, size = 16 }) => (
 );
 
 // ── SCRYFALL SEARCH PANEL ─────────────────────────────────────────────────────
+// Recupera TUTTE le stampe (segue next_page fino a esaurimento)
+async function fetchAllPrints(name) {
+  let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(name)}"&unique=prints&order=released&dir=desc`;
+  const all = [];
+  while (url) {
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.object === "error") break;
+    all.push(...(j.data || []));
+    url = j.has_more ? j.next_page : null;
+    if (url) await new Promise(r => setTimeout(r, 80)); // rispetta rate-limit
+  }
+  // fallback fuzzy se esatto non trova nulla
+  if (!all.length) {
+    let url2 = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(name)}&unique=prints&order=released&dir=desc`;
+    while (url2) {
+      const r = await fetch(url2);
+      const j = await r.json();
+      if (j.object === "error") break;
+      all.push(...(j.data || []));
+      url2 = j.has_more ? j.next_page : null;
+      if (url2) await new Promise(r => setTimeout(r, 80));
+    }
+  }
+  return all;
+}
+
+// ── Griglia stampe condivisa (usata sia da Search che da Bulk) ────────────────
+function PrintGrid({ prints, selected, onToggle, onQty }) {
+  const G = "#4f98a3", BD = "#393836";
+  if (!prints.length) return null;
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(88px, 1fr))", gap:8 }}>
+      {prints.map(card => {
+        const thumb  = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small;
+        const isOn   = !!selected[card.id];
+        const artist = card.artist || "";
+        const yr     = card.released_at?.slice(0,4) || "";
+        const border = card.border_color === "borderless" ? "🔲" : card.frame_effects?.includes("extendedart") ? "🖼" : "";
+        return (
+          <div key={card.id} onClick={() => onToggle(card)}
+            style={{ cursor:"pointer", borderRadius:6, overflow:"visible", position:"relative",
+              border:`2px solid ${isOn ? G : BD}`,
+              boxShadow: isOn ? `0 0 0 2px ${G}44` : "none",
+              background:"#1a1917", transition:"border-color .15s" }}>
+            <img src={thumb} alt={card.name}
+              style={{ width:"100%", display:"block", borderRadius:4 }} />
+            <div style={{ padding:"3px 5px 4px" }}>
+              <div style={{ fontSize:9, color:"#cdccca", fontWeight:600,
+                whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                {border}{card.set_name} {yr && `'${yr.slice(2)}`}
+              </div>
+              <div style={{ fontSize:8, color:"#797876",
+                whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                {artist}
+              </div>
+            </div>
+            {isOn && (
+              <>
+                <div style={{ position:"absolute", top:4, left:4, background:G, borderRadius:"50%",
+                  width:18, height:18, display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:11, color:"#000", fontWeight:800, pointerEvents:"none" }}>✓</div>
+                <div onClick={e => e.stopPropagation()}
+                  style={{ position:"absolute", top:4, right:4 }}>
+                  <input type="number" min={1} max={20} value={selected[card.id].qty}
+                    onChange={e => onQty(card.id, e.target.value)}
+                    style={{ width:38, background:"#000", color:G, border:`1px solid ${G}`,
+                      borderRadius:4, padding:"2px 4px", fontSize:12, fontWeight:700,
+                      textAlign:"center", outline:"none" }} />
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ScryfallSearchPanel({ onAddCards }) {
   const [query, setQuery]         = React.useState("");
-  const [suggestions, setSuggestions] = React.useState([]);
+  const [suggestions, setSuggs]   = React.useState([]);
   const [showSugg, setShowSugg]   = React.useState(false);
-  const [results, setResults]     = React.useState([]);   // stampe della carta selezionata
+  const [loadingSugg, setLdSugg]  = React.useState(false);
+  const [prints, setPrints]       = React.useState([]);   // tutte le stampe
   const [loading, setLoading]     = React.useState(false);
-  const [loadingSugg, setLoadingSugg] = React.useState(false);
+  const [loadMsg, setLoadMsg]     = React.useState("");
   const [error, setError]         = React.useState("");
-  const [selected, setSelected]   = React.useState({});   // printId → qty
-  const [expandedCard, setExpandedCard] = React.useState(null); // nome carta → mostra tutte le stampe
-  const [artMap, setArtMap]       = React.useState({});   // nome → [stampe]
-  const [loadingArts, setLoadingArts] = React.useState(null); // nome carta in caricamento
-  const suggTimer   = React.useRef(null);
-  const inputRef    = React.useRef(null);
-  const G = "#4f98a3", BD = "#393836", SURFACE = "#252420";
+  const [selected, setSelected]   = React.useState({});   // id → {qty, card}
+  const [expandedName, setExpandedName] = React.useState(null);
+  const suggTimer = React.useRef(null);
+  const G = "#4f98a3", BD = "#393836", SURF = "#252420";
 
-  // ── Autocomplete (catalog/card-names) ───────────────────────────────────────
+  // ── Autocomplete ────────────────────────────────────────────────────────────
   const fetchSuggestions = (val) => {
     clearTimeout(suggTimer.current);
-    if (val.length < 2) { setSuggestions([]); return; }
-    setLoadingSugg(true);
+    if (val.length < 2) { setSuggs([]); return; }
+    setLdSugg(true);
     suggTimer.current = setTimeout(async () => {
       try {
         const r = await fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(val)}`);
         const j = await r.json();
-        setSuggestions((j.data || []).slice(0, 10));
-      } catch { setSuggestions([]); }
-      setLoadingSugg(false);
+        setSuggs((j.data || []).slice(0, 10));
+      } catch { setSuggs([]); }
+      setLdSugg(false);
     }, 220);
   };
 
   const handleInput = (val) => {
-    setQuery(val);
-    setShowSugg(true);
-    setResults([]);
-    setError("");
-    setSelected({});
-    setExpandedCard(null);
+    setQuery(val); setShowSugg(true);
+    setPrints([]); setError(""); setSelected({}); setExpandedName(null);
     fetchSuggestions(val);
   };
 
-  // ── Cerca tutte le stampe di una carta (unique=prints) ───────────────────────
+  // ── Ricerca: recupera TUTTE le stampe con paginazione ───────────────────────
   const searchCard = async (name) => {
-    setQuery(name);
-    setShowSugg(false);
-    setSuggestions([]);
-    setLoading(true);
-    setError("");
-    setResults([]);
-    setSelected({});
-    setExpandedCard(null);
+    setQuery(name); setShowSugg(false); setSuggs([]);
+    setLoading(true); setLoadMsg("Cerco stampe…"); setPrints([]);
+    setError(""); setSelected({}); setExpandedName(null);
     try {
-      // Prima ricerca: unique=prints per avere TUTTE le edizioni/art
-      const r = await fetch(
-        `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(name)}"&unique=prints&order=released&dir=desc`
-      );
-      const j = await r.json();
-      if (j.object === "error") {
-        // fallback fuzzy
-        const r2 = await fetch(
-          `https://api.scryfall.com/cards/search?q=${encodeURIComponent(name)}&unique=prints&order=released&dir=desc`
-        );
-        const j2 = await r2.json();
-        if (j2.object === "error") { setError("Nessun risultato per \"" + name + "\""); }
-        else setResults(j2.data || []);
-      } else {
-        setResults(j.data || []);
+      // Prima pagina per mostrare subito qualcosa
+      let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(name)}"&unique=prints&order=released&dir=desc`;
+      const all = [];
+      while (url) {
+        const r = await fetch(url);
+        const j = await r.json();
+        if (j.object === "error") { url = null; break; }
+        all.push(...(j.data || []));
+        setPrints([...all]); // aggiorna in tempo reale
+        setLoadMsg(`Caricamento… ${all.length} stampe`);
+        url = j.has_more ? j.next_page : null;
+        if (url) await new Promise(r => setTimeout(r, 100));
       }
-    } catch { setError("Errore di rete."); }
+      // fallback fuzzy
+      if (!all.length) {
+        let url2 = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(name)}&unique=prints&order=released&dir=desc`;
+        while (url2) {
+          const r = await fetch(url2);
+          const j = await r.json();
+          if (j.object === "error") { url2 = null; break; }
+          all.push(...(j.data || []));
+          setPrints([...all]);
+          url2 = j.has_more ? j.next_page : null;
+          if (url2) await new Promise(r => setTimeout(r, 100));
+        }
+      }
+      if (!all.length) setError(`Nessun risultato per "${name}"`);
+      else setLoadMsg(`${all.length} stampe totali`);
+    } catch (e) { setError("Errore di rete: " + e.message); }
     setLoading(false);
   };
 
   const handleKey = (e) => {
-    if (e.key === "Enter") { if (query.trim()) searchCard(query.trim()); }
-    if (e.key === "Escape") { setShowSugg(false); }
+    if (e.key === "Enter" && query.trim()) searchCard(query.trim());
+    if (e.key === "Escape") setShowSugg(false);
   };
 
-  // ── Raggruppa risultati per nome carta ───────────────────────────────────────
-  // Se una carta ha più stampe mostriamo il gruppo espandibile
+  // ── Raggruppamento per nome carta ────────────────────────────────────────────
   const grouped = React.useMemo(() => {
     const map = {};
-    for (const card of results) {
-      const key = card.name;
-      if (!map[key]) map[key] = [];
-      map[key].push(card);
+    for (const c of prints) {
+      if (!map[c.name]) map[c.name] = [];
+      map[c.name].push(c);
     }
     return map;
-  }, [results]);
-
+  }, [prints]);
   const cardNames = Object.keys(grouped);
 
-  // ── Selezione stampa ─────────────────────────────────────────────────────────
-  const selectPrint = (card) => {
-    setSelected(prev => {
-      if (prev[card.id]) {
-        const n = { ...prev }; delete n[card.id]; return n;
-      }
-      return { ...prev, [card.id]: { qty: 1, card } };
-    });
-  };
+  const togglePrint = (card) =>
+    setSelected(prev => prev[card.id]
+      ? (() => { const n={...prev}; delete n[card.id]; return n; })()
+      : { ...prev, [card.id]: { qty:1, card } }
+    );
+  const setQty = (id, v) =>
+    setSelected(prev => ({ ...prev, [id]: { ...prev[id], qty: Math.max(1, Math.min(20, Number(v))) } }));
 
-  const setQty = (id, qty) =>
-    setSelected(prev => ({
-      ...prev,
-      [id]: { ...prev[id], qty: Math.max(1, Math.min(20, Number(qty))) }
-    }));
-
-  // ── Aggiungi selezionate ─────────────────────────────────────────────────────
   const addSelected = async () => {
     const entries = Object.values(selected);
     if (!entries.length) return;
     const items = [];
     for (const { card, qty } of entries) {
-      const imgUrl = card.image_uris?.normal
-        || card.image_uris?.large
-        || card.card_faces?.[0]?.image_uris?.normal;
+      const imgUrl = card.image_uris?.normal || card.image_uris?.large || card.card_faces?.[0]?.image_uris?.normal;
       if (!imgUrl) continue;
       try {
         const blob = await fetch(imgUrl).then(r => r.blob());
-        const localUrl = URL.createObjectURL(blob);
+        const lu = URL.createObjectURL(blob);
         const file = new File([blob], `${card.name}.jpg`, { type: blob.type });
-        for (let i = 0; i < qty; i++) {
-          items.push({
-            id: card.id + "_" + i + "_" + Math.random(),
-            name: card.name,
-            url: localUrl,
-            file,
-            srcType: "scryfall",
-            thumb: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small,
-            set: card.set_name,
-          });
-        }
+        for (let i = 0; i < qty; i++)
+          items.push({ id: card.id+"_"+i+"_"+Math.random(), name:card.name, url:lu, file, srcType:"scryfall",
+            thumb: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small, set:card.set_name });
       } catch {
-        for (let i = 0; i < qty; i++) {
-          items.push({
-            id: card.id + "_" + i + "_" + Math.random(),
-            name: card.name, url: imgUrl, srcType: "scryfall",
-            thumb: card.image_uris?.small,
-          });
-        }
+        for (let i = 0; i < qty; i++)
+          items.push({ id: card.id+"_"+i+"_"+Math.random(), name:card.name, url:imgUrl, srcType:"scryfall",
+            thumb: card.image_uris?.small });
       }
     }
     onAddCards(items);
-    setSelected({});
-    setResults([]);
-    setQuery("");
-    setSuggestions([]);
+    setSelected({}); setPrints([]); setQuery(""); setSuggs([]);
   };
 
-  const selectedCount = Object.values(selected).reduce((a, { qty }) => a + qty, 0);
-  const selectedPrints = Object.keys(selected).length;
+  const selCount  = Object.values(selected).reduce((a, {qty}) => a + qty, 0);
+  const selPrints = Object.keys(selected).length;
 
   return (
-    <div style={{ background: "#201f1d", border: `1px solid ${BD}`, borderRadius: 10, padding: 16, marginBottom: 0 }}>
+    <div style={{ background:"#201f1d", border:`1px solid ${BD}`, borderRadius:10, padding:16 }}>
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth={2}>
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
         </svg>
         <span style={{ fontWeight:700, color:G, fontSize:14 }}>Cerca carta su Scryfall</span>
-        <span style={{ fontSize:11, color:"#4a4948", marginLeft:4 }}>
-          — suggerimenti automatici + scelta stampa
-        </span>
+        <span style={{ fontSize:11, color:"#4a4948" }}>— tutte le stampe + scelta art</span>
       </div>
 
-      {/* Search input con autocomplete */}
+      {/* Input + autocomplete */}
       <div style={{ position:"relative", marginBottom:10 }}>
         <div style={{ display:"flex", gap:8 }}>
           <div style={{ position:"relative", flex:1 }}>
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={e => handleInput(e.target.value)}
+            <input value={query} onChange={e => handleInput(e.target.value)}
               onKeyDown={handleKey}
               onFocus={() => query.length >= 2 && setShowSugg(true)}
               onBlur={() => setTimeout(() => setShowSugg(false), 180)}
               placeholder="Es. Lightning Bolt, Llanowar Elves…"
-              style={{ width:"100%", background:SURFACE, color:"#cdccca",
-                border:`1px solid ${BD}`, borderRadius:6, padding:"8px 36px 8px 10px",
-                fontSize:13, outline:"none", boxSizing:"border-box" }}
-            />
-            {/* Indicatore loading suggerimenti */}
+              style={{ width:"100%", background:SURF, color:"#cdccca", border:`1px solid ${BD}`,
+                borderRadius:6, padding:"8px 36px 8px 10px", fontSize:13, outline:"none", boxSizing:"border-box" }} />
             {loadingSugg && (
               <div style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)",
                 width:14, height:14, border:`2px solid ${BD}`, borderTopColor:G,
@@ -258,149 +301,366 @@ function ScryfallSearchPanel({ onAddCards }) {
 
         {/* Dropdown suggerimenti */}
         {showSugg && suggestions.length > 0 && (
-          <div style={{ position:"absolute", top:"100%", left:0, right:60,
-            background:"#1c1b19", border:`1px solid ${BD}`, borderRadius:8,
-            zIndex:200, boxShadow:"0 8px 24px rgba(0,0,0,.5)", overflow:"hidden", marginTop:2 }}>
+          <div style={{ position:"absolute", top:"100%", left:0, right:60, background:"#1c1b19",
+            border:`1px solid ${BD}`, borderRadius:8, zIndex:200,
+            boxShadow:"0 8px 24px rgba(0,0,0,.5)", overflow:"hidden", marginTop:2 }}>
             {suggestions.map((s, i) => (
-              <div key={i}
-                onMouseDown={() => searchCard(s)}
+              <div key={i} onMouseDown={() => searchCard(s)}
                 style={{ padding:"9px 14px", cursor:"pointer", fontSize:13, color:"#cdccca",
-                  borderBottom: i < suggestions.length-1 ? `1px solid ${BD}` : "none",
-                  transition:"background .1s" }}
+                  borderBottom: i < suggestions.length-1 ? `1px solid ${BD}` : "none" }}
                 onMouseEnter={e => e.currentTarget.style.background="#252420"}
                 onMouseLeave={e => e.currentTarget.style.background="transparent"}>
-                <span style={{ color:G, marginRight:6, fontSize:11 }}>🃏</span>
-                {s}
+                <span style={{ color:G, marginRight:6, fontSize:11 }}>🃏</span>{s}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Errore */}
       {error && <div style={{ fontSize:12, color:"#f87171", marginBottom:8 }}>{error}</div>}
 
-      {/* Risultati raggruppati per carta */}
+      {/* Stato caricamento progressivo */}
+      {loading && (
+        <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:"#797876", marginBottom:10 }}>
+          <div style={{ width:14, height:14, border:`2px solid ${BD}`, borderTopColor:G,
+            borderRadius:"50%", animation:"spin .7s linear infinite", flexShrink:0 }} />
+          {loadMsg}
+        </div>
+      )}
+      {!loading && prints.length > 0 && (
+        <div style={{ fontSize:11, color:"#797876", marginBottom:10 }}>
+          <strong style={{ color:G }}>{prints.length}</strong> stampe trovate per{" "}
+          <strong style={{ color:"#cdccca" }}>{cardNames.length}</strong> carta{cardNames.length>1?"e":""}
+          {" — "}espandi per scegliere l'art
+        </div>
+      )}
+
+      {/* Gruppi per nome carta */}
       {cardNames.length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:500, overflowY:"auto" }}>
+          {cardNames.map(cardName => {
+            const cardPrints = grouped[cardName];
+            const isExp = expandedName === cardName;
+            const rep   = cardPrints[0];
+            const repThumb = rep.image_uris?.small || rep.card_faces?.[0]?.image_uris?.small;
+            const selForCard = cardPrints.filter(p => selected[p.id]);
+            const totalQtyForCard = selForCard.reduce((s,p) => s + (selected[p.id]?.qty||0), 0);
+
+            return (
+              <div key={cardName} style={{ border:`1px solid ${BD}`, borderRadius:8, overflow:"hidden" }}>
+                {/* Header gruppo */}
+                <div onClick={() => setExpandedName(isExp ? null : cardName)}
+                  style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px",
+                    background: isExp ? "#252420" : "#1c1b19", cursor:"pointer" }}>
+                  <img src={repThumb} alt={cardName}
+                    style={{ width:32, height:44, objectFit:"cover", borderRadius:3, flexShrink:0 }} />
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:13, color:"#cdccca" }}>{cardName}</div>
+                    <div style={{ fontSize:11, color:"#797876" }}>
+                      {cardPrints.length} stampa{cardPrints.length>1?"e":""} disponibili
+                      {selForCard.length > 0 && (
+                        <span style={{ marginLeft:8, color:"#4ade80", fontWeight:600 }}>
+                          · {totalQtyForCard} cop{totalQtyForCard===1?"ia":"ie"} selezionate
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {/* Quick-add se 1 sola stampa */}
+                  {cardPrints.length === 1 && (
+                    <div onClick={e => e.stopPropagation()} style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <input type="number" min={1} max={20} value={selected[rep.id]?.qty || 1}
+                        onChange={e => { if(selected[rep.id]) setQty(rep.id, e.target.value); }}
+                        onClick={() => { if(!selected[rep.id]) togglePrint(rep); }}
+                        style={{ width:44, background:"#252420", color:G, border:`1px solid ${BD}`,
+                          borderRadius:5, padding:"4px 6px", fontSize:13, fontWeight:700,
+                          textAlign:"center", outline:"none" }} />
+                      <button onClick={() => togglePrint(rep)}
+                        style={{ padding:"5px 12px", borderRadius:6, border:"none", fontWeight:700,
+                          fontSize:12, cursor:"pointer",
+                          background: selected[rep.id] ? "#4ade8033" : G,
+                          color: selected[rep.id] ? "#4ade80" : "#000" }}>
+                        {selected[rep.id] ? "✓" : "+"}
+                      </button>
+                    </div>
+                  )}
+                  <span style={{ color:"#4a4948", fontSize:13, flexShrink:0 }}>{isExp?"▲":"▼"}</span>
+                </div>
+
+                {/* Griglia stampe */}
+                {isExp && (
+                  <div style={{ padding:"10px 12px", background:"#181716" }}>
+                    <div style={{ fontSize:11, color:"#797876", marginBottom:8 }}>
+                      {cardPrints.length} stampe — clicca per selezionare, modifica la quantità
+                    </div>
+                    <PrintGrid
+                      prints={cardPrints}
+                      selected={selected}
+                      onToggle={togglePrint}
+                      onQty={setQty}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {selPrints > 0 && (
+        <button onClick={addSelected}
+          style={{ width:"100%", marginTop:12, padding:"10px", borderRadius:7,
+            background:G, color:"#000", border:"none", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+          ➕ Aggiungi {selCount} cop{selCount===1?"ia":"ie"} alla coda ({selPrints} stampa{selPrints===1?"":"e"})
+        </button>
+      )}
+
+      <style>{`@keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+// ── BULK IMPORT PANEL ─────────────────────────────────────────────────────────
+function BulkImportPanel({ onAddCards, toast }) {
+  const [text, setText]             = React.useState("");
+  const [loading, setLoading]       = React.useState(false);
+  const [loadMsg, setLoadMsg]       = React.useState("");
+  const [entries, setEntries]       = React.useState([]);   // [{qty,name,status,card,prints[],selectedPrint}]
+  const [resolved, setResolved]     = React.useState(false);
+  const [expandedArt, setExpandedArt] = React.useState(null); // indice entry con art aperta
+  const G = "#4f98a3", BD = "#393836";
+
+  const parseList = (raw) =>
+    raw.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
+      const m1 = line.match(/^(\d+)[xX]?\s+(.+)$/);
+      const m2 = line.match(/^(.+?)\s+[xX](\d+)$/);
+      const m3 = line.match(/^(.+?)\s+(\d+)$/);
+      if (m1) return { qty: Math.min(20, parseInt(m1[1])), name: m1[2].trim() };
+      if (m2) return { qty: Math.min(20, parseInt(m2[2])), name: m2[1].trim() };
+      if (m3) return { qty: Math.min(20, parseInt(m3[2])), name: m3[1].trim() };
+      return { qty:1, name: line.trim() };
+    }).filter(e => e.name);
+
+  const resolveCards = async () => {
+    const parsed = parseList(text);
+    if (!parsed.length) return;
+    setLoading(true); setResolved(false); setEntries([]);
+    const results = [];
+    for (let i = 0; i < parsed.length; i++) {
+      const entry = parsed[i];
+      setLoadMsg(`Verifico ${i+1}/${parsed.length}: ${entry.name}`);
+      try {
+        // Recupera tutte le stampe con paginazione
+        const allPrints = await fetchAllPrints(entry.name);
+        if (!allPrints.length) {
+          results.push({ ...entry, status:"not_found", card:null, prints:[], selectedPrint:null });
+        } else {
+          results.push({ ...entry, status:"found", card:allPrints[0],
+            prints:allPrints, selectedPrint:allPrints[0] });
+        }
+      } catch {
+        results.push({ ...entry, status:"error", card:null, prints:[], selectedPrint:null });
+      }
+      await new Promise(r => setTimeout(r, 80));
+    }
+    setEntries(results);
+    setResolved(true);
+    setLoading(false);
+    setLoadMsg("");
+  };
+
+  const updateQty = (i, val) =>
+    setEntries(prev => prev.map((e, idx) =>
+      idx===i ? {...e, qty: Math.max(1, Math.min(20, Number(val)))} : e
+    ));
+
+  const toggleExclude = (i) =>
+    setEntries(prev => prev.map((e, idx) =>
+      idx===i ? {...e, excluded:!e.excluded} : e
+    ));
+
+  const selectPrint = (entryIdx, card) =>
+    setEntries(prev => prev.map((e, i) =>
+      i===entryIdx ? {...e, selectedPrint:card, card} : e
+    ));
+
+  const addAll = async () => {
+    const toAdd = entries.filter(e => e.status==="found" && !e.excluded);
+    if (!toAdd.length) return;
+    setLoading(true); setLoadMsg("Scarico immagini…");
+    const items = [];
+    for (const entry of toAdd) {
+      const card = entry.selectedPrint || entry.card;
+      const imgUrl = card.image_uris?.normal || card.image_uris?.large
+        || card.card_faces?.[0]?.image_uris?.normal;
+      if (!imgUrl) continue;
+      try {
+        const blob = await fetch(imgUrl).then(r => r.blob());
+        const lu = URL.createObjectURL(blob);
+        const file = new File([blob], `${card.name}.jpg`, { type: blob.type });
+        for (let i = 0; i < entry.qty; i++)
+          items.push({ id:card.id+"_"+i+"_"+Math.random(), name:card.name, url:lu, file,
+            srcType:"scryfall", thumb:card.image_uris?.small||card.card_faces?.[0]?.image_uris?.small });
+      } catch {
+        for (let i = 0; i < entry.qty; i++)
+          items.push({ id:card.id+"_"+i+"_"+Math.random(), name:card.name, url:imgUrl,
+            srcType:"scryfall", thumb:card.image_uris?.small });
+      }
+    }
+    onAddCards(items);
+    setText(""); setEntries([]); setResolved(false);
+    setLoading(false); setLoadMsg("");
+  };
+
+  const foundCount  = entries.filter(e => e.status==="found" && !e.excluded).length;
+  const nfCount     = entries.filter(e => e.status==="not_found").length;
+  const totalCopies = entries.filter(e=>e.status==="found"&&!e.excluded).reduce((s,e)=>s+e.qty,0);
+
+  return (
+    <div style={{ background:"#201f1d", border:`1px solid ${BD}`, borderRadius:10, padding:16 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+        <span style={{ fontSize:18 }}>📋</span>
+        <span style={{ fontWeight:700, color:G, fontSize:14 }}>Importa lista massiva</span>
+      </div>
+
+      <div style={{ fontSize:11, color:"#797876", marginBottom:6 }}>
+        Formati: <code style={{color:G}}>4 Lightning Bolt</code> · <code style={{color:G}}>4x Bolt</code> · <code style={{color:G}}>Bolt x4</code> · solo nome
+      </div>
+      <textarea value={text} onChange={e => { setText(e.target.value); setResolved(false); setEntries([]); }}
+        placeholder={"4 Lightning Bolt\n2 Counterspell\n1 Black Lotus\nSol Ring x4"}
+        rows={6}
+        style={{ width:"100%", background:"#252420", color:"#cdccca", border:`1px solid ${BD}`,
+          borderRadius:6, padding:"8px 10px", fontSize:13, outline:"none", resize:"vertical",
+          boxSizing:"border-box", fontFamily:"monospace", marginBottom:8 }} />
+
+      <button onClick={resolveCards} disabled={loading || !text.trim()}
+        style={{ width:"100%", padding:"9px", borderRadius:7,
+          background: loading||!text.trim() ? "#333" : G,
+          color: loading||!text.trim() ? "#555" : "#000",
+          border:"none", fontWeight:700, fontSize:13,
+          cursor: loading||!text.trim() ? "not-allowed" : "pointer",
+          marginBottom: entries.length ? 14 : 0 }}>
+        {loading && !resolved ? `⏳ ${loadMsg||"Verifica in corso…"}` : "🔎 Verifica carte"}
+      </button>
+
+      {/* Preview con selezione art ──────────────────────────────────────────── */}
+      {resolved && entries.length > 0 && (
         <>
-          <div style={{ fontSize:11, color:"#797876", marginBottom:10 }}>
-            {results.length} stampe trovate per{" "}
-            <strong style={{ color:"#cdccca" }}>{cardNames.length}</strong> car{cardNames.length===1?"ta":"te"}
-            {" — "}seleziona la stampa che preferisci, poi imposta la quantità
+          <div style={{ display:"flex", gap:10, marginBottom:10, flexWrap:"wrap", alignItems:"center" }}>
+            <span style={{ fontSize:12, color:"#4ade80" }}>✓ {foundCount} trovate</span>
+            {nfCount > 0 && <span style={{ fontSize:12, color:"#f87171" }}>✗ {nfCount} non trovate</span>}
+            <span style={{ fontSize:11, color:"#4a4948", marginLeft:"auto" }}>
+              Clicca "Scegli art" per selezionare la stampa preferita
+            </span>
           </div>
 
-          <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:420, overflowY:"auto" }}>
-            {cardNames.map(cardName => {
-              const prints = grouped[cardName];
-              const isExpanded = expandedCard === cardName;
-              // stampa "rappresentante" per il riassunto collassato
-              const rep = prints[0];
-              const repThumb = rep.image_uris?.small || rep.card_faces?.[0]?.image_uris?.small;
-
-              // quante stampe di questa carta sono selezionate
-              const selForCard = prints.filter(p => selected[p.id]);
+          <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:480, overflowY:"auto" }}>
+            {entries.map((entry, i) => {
+              const thumb = (entry.selectedPrint || entry.card)?.image_uris?.small
+                || (entry.selectedPrint || entry.card)?.card_faces?.[0]?.image_uris?.small;
+              const isArtOpen = expandedArt === i;
 
               return (
-                <div key={cardName} style={{ border:`1px solid ${BD}`, borderRadius:8, overflow:"hidden" }}>
-                  {/* Header gruppo */}
-                  <div
-                    onClick={() => setExpandedCard(isExpanded ? null : cardName)}
-                    style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px",
-                      background: isExpanded ? "#252420" : "#1c1b19", cursor:"pointer",
-                      transition:"background .15s" }}>
-                    <img src={repThumb} alt={cardName}
-                      style={{ width:32, height:44, objectFit:"cover", borderRadius:3, flexShrink:0 }} />
+                <div key={i} style={{ borderRadius:8, overflow:"hidden",
+                  border:`1px solid ${entry.excluded ? BD : entry.status==="found" ? "#2d5a2d" : "#5a2d2d"}`,
+                  opacity: entry.excluded ? 0.45 : 1, transition:"opacity .2s" }}>
+
+                  {/* Riga riassunto */}
+                  <div style={{ display:"flex", alignItems:"center", gap:10, padding:"6px 10px",
+                    background: entry.excluded ? "#1a1917" : entry.status==="found" ? "#1e2b1e" : "#2b1e1e" }}>
+                    {thumb
+                      ? <img src={thumb} alt={entry.name}
+                          style={{ width:32, height:44, objectFit:"cover", borderRadius:3, flexShrink:0 }} />
+                      : <div style={{ width:32, height:44, background:"#333", borderRadius:3, flexShrink:0,
+                          display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>
+                          {entry.status==="not_found"?"❓":"⚠️"}
+                        </div>
+                    }
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontWeight:700, fontSize:13, color:"#cdccca" }}>{cardName}</div>
-                      <div style={{ fontSize:11, color:"#797876" }}>
-                        {prints.length} stampa{prints.length>1?"e disponibili":""} disponibile
-                        {selForCard.length > 0 && (
-                          <span style={{ marginLeft:8, color:"#4ade80", fontWeight:600 }}>
-                            · {selForCard.length} selezionat{selForCard.length===1?"a":"e"}
-                          </span>
-                        )}
+                      <div style={{ fontWeight:600, fontSize:13, color:"#cdccca",
+                        overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                        {(entry.selectedPrint||entry.card)?.name || entry.name}
                       </div>
+                      {entry.status==="found" && (
+                        <div style={{ fontSize:10, color:"#797876" }}>
+                          {(entry.selectedPrint||entry.card)?.set_name}
+                          {" · "}
+                          {(entry.selectedPrint||entry.card)?.artist}
+                          {" · "}
+                          <span style={{ color:G }}>{entry.prints.length} stampe</span>
+                        </div>
+                      )}
+                      {entry.status==="not_found" && (
+                        <div style={{ fontSize:10, color:"#f87171" }}>Carta non trovata</div>
+                      )}
                     </div>
-                    {/* Quick-add se c'è solo 1 stampa */}
-                    {prints.length === 1 && (
-                      <div onClick={e => e.stopPropagation()}
-                        style={{ display:"flex", alignItems:"center", gap:6 }}>
-                        <input type="number" min={1} max={20}
-                          value={selected[rep.id]?.qty || 1}
-                          onChange={e => {
-                            if (selected[rep.id]) setQty(rep.id, e.target.value);
-                          }}
-                          onClick={() => { if (!selected[rep.id]) selectPrint(rep); }}
-                          style={{ width:44, background:"#252420", color:G, border:`1px solid ${BD}`,
-                            borderRadius:5, padding:"4px 6px", fontSize:13, fontWeight:700,
-                            textAlign:"center", outline:"none" }} />
-                        <button onClick={() => selectPrint(rep)}
-                          style={{ padding:"5px 12px", borderRadius:6, border:"none", fontWeight:700,
-                            fontSize:12, cursor:"pointer",
-                            background: selected[rep.id] ? "#4ade8033" : G,
-                            color: selected[rep.id] ? "#4ade80" : "#000" }}>
-                          {selected[rep.id] ? "✓" : "+"}
-                        </button>
-                      </div>
+
+                    {/* Bottone scegli art */}
+                    {entry.status==="found" && entry.prints.length > 1 && (
+                      <button onClick={() => setExpandedArt(isArtOpen ? null : i)}
+                        style={{ padding:"4px 10px", borderRadius:5, border:`1px solid ${G}`,
+                          background: isArtOpen ? G : "transparent", color: isArtOpen ? "#000" : G,
+                          fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+                        🎨 {isArtOpen ? "Chiudi" : "Scegli art"}
+                      </button>
                     )}
-                    {/* Toggle expand */}
-                    <span style={{ color:"#4a4948", fontSize:14, marginLeft:4, flexShrink:0 }}>
-                      {isExpanded ? "▲" : "▼"}
-                    </span>
+
+                    {/* Qty */}
+                    {entry.status==="found" && (
+                      <input type="number" min={1} max={20} value={entry.qty}
+                        onChange={e => updateQty(i, e.target.value)}
+                        style={{ width:46, background:"#252420", color:G, border:`1px solid ${BD}`,
+                          borderRadius:5, padding:"4px 6px", fontSize:13, fontWeight:700,
+                          textAlign:"center", outline:"none", flexShrink:0 }} />
+                    )}
+
+                    {/* Escludi */}
+                    {entry.status==="found" && (
+                      <button onClick={() => toggleExclude(i)}
+                        style={{ background:"transparent", border:"none", cursor:"pointer",
+                          color: entry.excluded ? G : "#f87171", fontSize:16, lineHeight:1,
+                          padding:2, flexShrink:0 }}>
+                        {entry.excluded ? "↩" : "✕"}
+                      </button>
+                    )}
                   </div>
 
-                  {/* Griglia stampe espansa */}
-                  {isExpanded && (
-                    <div style={{ padding:"10px 12px", background:"#181716",
-                      display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(90px, 1fr))", gap:8 }}>
-                      {prints.map(card => {
-                        const thumb = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small;
-                        const isOn  = !!selected[card.id];
-                        const artist = card.artist || "";
-                        const setName = card.set_name || "";
-                        const yr   = card.released_at?.slice(0,4) || "";
-                        return (
-                          <div key={card.id}
-                            onClick={() => selectPrint(card)}
-                            style={{ cursor:"pointer", borderRadius:6, overflow:"visible",
-                              border:`2px solid ${isOn ? G : BD}`,
-                              boxShadow: isOn ? `0 0 0 2px ${G}44` : "none",
-                              background:"#1a1917", transition:"border-color .15s",
-                              position:"relative" }}>
-                            <img src={thumb} alt={card.name}
-                              style={{ width:"100%", display:"block", borderRadius:4 }} />
-                            <div style={{ padding:"3px 5px" }}>
-                              <div style={{ fontSize:9, color:"#cdccca", fontWeight:600,
-                                whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                                {setName} {yr && `'${yr.slice(2)}`}
-                              </div>
-                              <div style={{ fontSize:8, color:"#797876",
-                                whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                                {artist}
-                              </div>
-                            </div>
-                            {/* Checkmark + qty */}
-                            {isOn && (
-                              <>
-                                <div style={{ position:"absolute", top:4, left:4,
-                                  background:G, borderRadius:"50%", width:18, height:18,
-                                  display:"flex", alignItems:"center", justifyContent:"center",
-                                  fontSize:11, color:"#000", fontWeight:800, pointerEvents:"none" }}>✓</div>
-                                <div onClick={e => e.stopPropagation()}
-                                  style={{ position:"absolute", top:4, right:4 }}>
-                                  <input type="number" min={1} max={20}
-                                    value={selected[card.id].qty}
-                                    onChange={e => setQty(card.id, e.target.value)}
-                                    style={{ width:38, background:"#000", color:G,
-                                      border:`1px solid ${G}`, borderRadius:4,
-                                      padding:"2px 4px", fontSize:12, fontWeight:700,
-                                      textAlign:"center", outline:"none" }} />
+                  {/* Griglia selezione art ────────────────────────────────── */}
+                  {isArtOpen && entry.prints.length > 0 && (
+                    <div style={{ padding:"10px 12px", background:"#181716" }}>
+                      <div style={{ fontSize:11, color:"#797876", marginBottom:8 }}>
+                        {entry.prints.length} stampe disponibili — clicca per scegliere
+                      </div>
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(88px,1fr))", gap:8 }}>
+                        {entry.prints.map(card => {
+                          const t = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small;
+                          const isCurrent = (entry.selectedPrint||entry.card)?.id === card.id;
+                          return (
+                            <div key={card.id} onClick={() => { selectPrint(i, card); setExpandedArt(null); }}
+                              style={{ cursor:"pointer", borderRadius:6, overflow:"hidden", position:"relative",
+                                border:`2px solid ${isCurrent ? G : BD}`,
+                                boxShadow: isCurrent ? `0 0 0 2px ${G}44` : "none",
+                                background:"#1a1917", transition:"border-color .15s" }}>
+                              <img src={t} alt={card.name} style={{ width:"100%", display:"block" }} />
+                              <div style={{ padding:"3px 5px 4px" }}>
+                                <div style={{ fontSize:9, color:"#cdccca", fontWeight:600,
+                                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                                  {card.set_name} {card.released_at?.slice(0,4) && `'${card.released_at.slice(2,4)}`}
                                 </div>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
+                                <div style={{ fontSize:8, color:"#797876",
+                                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                                  {card.artist}
+                                </div>
+                              </div>
+                              {isCurrent && (
+                                <div style={{ position:"absolute", top:4, left:4, background:G,
+                                  borderRadius:"50%", width:18, height:18, display:"flex",
+                                  alignItems:"center", justifyContent:"center",
+                                  fontSize:11, color:"#000", fontWeight:800, pointerEvents:"none" }}>✓</div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -408,249 +668,6 @@ function ScryfallSearchPanel({ onAddCards }) {
             })}
           </div>
 
-          {/* Footer aggiungi */}
-          {selectedPrints > 0 && (
-            <button onClick={addSelected}
-              style={{ width:"100%", marginTop:12, padding:"10px", borderRadius:7,
-                background:G, color:"#000", border:"none", fontWeight:700, fontSize:13, cursor:"pointer" }}>
-              ➕ Aggiungi {selectedCount} cop{selectedCount===1?"ia":"ie"} alla coda
-              ({selectedPrints} stampa{selectedPrints===1?"":"e"})
-            </button>
-          )}
-        </>
-      )}
-
-      <style>{`
-        @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
-      `}</style>
-    </div>
-  );
-}
-
-// ── BULK IMPORT PANEL ─────────────────────────────────────────────────────────
-function BulkImportPanel({ onAddCards, toast }) {
-  const [text, setText]       = React.useState("");
-  const [loading, setLoading] = React.useState(false);
-  const [preview, setPreview] = React.useState([]); // [{qty, name, status, card}]
-  const [resolved, setResolved] = React.useState(false);
-  const G = "#4f98a3", BD = "#393836";
-
-  // Parse testo → array [{qty, name}]
-  const parseList = (raw) => {
-    return raw
-      .split("\n")
-      .map(l => l.trim())
-      .filter(Boolean)
-      .map(line => {
-        // Formati supportati: "4 Lightning Bolt", "4x Lightning Bolt", "Lightning Bolt x4", "Lightning Bolt"
-        const m1 = line.match(/^(\d+)[xX]?\s+(.+)$/);
-        const m2 = line.match(/^(.+?)\s+[xX](\d+)$/);
-        const m3 = line.match(/^(.+?)\s+(\d+)$/);
-        if (m1) return { qty: Math.min(20, parseInt(m1[1])), name: m1[2].trim() };
-        if (m2) return { qty: Math.min(20, parseInt(m2[2])), name: m2[1].trim() };
-        if (m3) return { qty: Math.min(20, parseInt(m3[2])), name: m3[1].trim() };
-        return { qty: 1, name: line.trim() };
-      })
-      .filter(e => e.name.length > 0);
-  };
-
-  const resolveCards = async () => {
-    const entries = parseList(text);
-    if (!entries.length) return;
-    setLoading(true);
-    setResolved(false);
-    const results = [];
-    for (const entry of entries) {
-      try {
-        const r = await fetch(
-          `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(entry.name)}`
-        );
-        const card = await r.json();
-        if (card.object === "error") {
-          results.push({ ...entry, status: "not_found", card: null });
-        } else {
-          results.push({ ...entry, status: "found", card });
-        }
-      } catch {
-        results.push({ ...entry, status: "error", card: null });
-      }
-      // piccola pausa per rispettare rate limit Scryfall
-      await new Promise(r => setTimeout(r, 80));
-    }
-    setPreview(results);
-    setResolved(true);
-    setLoading(false);
-  };
-
-  const updateQty = (i, val) => {
-    setPreview(prev => prev.map((e, idx) =>
-      idx === i ? { ...e, qty: Math.max(1, Math.min(20, Number(val))) } : e
-    ));
-  };
-
-  const toggleRemove = (i) => {
-    setPreview(prev => prev.map((e, idx) =>
-      idx === i ? { ...e, excluded: !e.excluded } : e
-    ));
-  };
-
-  const addAll = async () => {
-    const toAdd = preview.filter(e => e.status === "found" && !e.excluded);
-    if (!toAdd.length) return;
-    setLoading(true);
-    const items = [];
-    for (const entry of toAdd) {
-      const card = entry.card;
-      const imgUrl = card.image_uris?.normal
-        || card.image_uris?.large
-        || card.card_faces?.[0]?.image_uris?.normal;
-      if (!imgUrl) continue;
-      try {
-        const blob = await fetch(imgUrl).then(r => r.blob());
-        const localUrl = URL.createObjectURL(blob);
-        const file = new File([blob], `${card.name}.jpg`, { type: blob.type });
-        for (let i = 0; i < entry.qty; i++) {
-          items.push({
-            id: card.id + "_" + i + "_" + Math.random(),
-            name: card.name,
-            url: localUrl,
-            file,
-            srcType: "scryfall",
-            thumb: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small,
-          });
-        }
-      } catch {
-        for (let i = 0; i < entry.qty; i++) {
-          items.push({
-            id: card.id + "_" + i + "_" + Math.random(),
-            name: card.name, url: imgUrl, srcType: "scryfall",
-            thumb: card.image_uris?.small,
-          });
-        }
-      }
-    }
-    onAddCards(items);
-    setText("");
-    setPreview([]);
-    setResolved(false);
-    setLoading(false);
-  };
-
-  const foundCount    = preview.filter(e => e.status === "found" && !e.excluded).length;
-  const notFoundCount = preview.filter(e => e.status === "not_found").length;
-  const totalCopies   = preview
-    .filter(e => e.status === "found" && !e.excluded)
-    .reduce((s, e) => s + e.qty, 0);
-
-  return (
-    <div style={{ background: "#201f1d", border: `1px solid ${BD}`, borderRadius: 10, padding: 16, marginBottom: 0 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-        <span style={{ fontSize:18 }}>📋</span>
-        <span style={{ fontWeight:700, color:G, fontSize:14 }}>Importa lista massiva</span>
-      </div>
-
-      {/* Textarea */}
-      <div style={{ fontSize:11, color:"#797876", marginBottom:6 }}>
-        Un nome per riga. Formati supportati: <code style={{color:G}}>4 Lightning Bolt</code> · <code style={{color:G}}>4x Bolt</code> · <code style={{color:G}}>Bolt x4</code> · solo nome (= 1 copia)
-      </div>
-      <textarea
-        value={text}
-        onChange={e => { setText(e.target.value); setResolved(false); setPreview([]); }}
-        placeholder={"4 Lightning Bolt\n2 Counterspell\n1 Black Lotus\nSol Ring x4\nThoughtseize"}
-        rows={6}
-        style={{ width:"100%", background:"#252420", color:"#cdccca",
-          border:`1px solid ${BD}`, borderRadius:6, padding:"8px 10px",
-          fontSize:13, outline:"none", resize:"vertical", boxSizing:"border-box",
-          fontFamily:"monospace", marginBottom:8 }}
-      />
-
-      <button onClick={resolveCards} disabled={loading || !text.trim()}
-        style={{ width:"100%", padding:"9px", borderRadius:7,
-          background: loading || !text.trim() ? "#333" : "#4f98a3",
-          color: loading || !text.trim() ? "#555" : "#000",
-          border:"none", fontWeight:700, fontSize:13,
-          cursor: loading || !text.trim() ? "not-allowed" : "pointer",
-          marginBottom: preview.length ? 14 : 0 }}>
-        {loading && !resolved ? "⏳ Ricerca in corso…" : "🔎 Verifica carte"}
-      </button>
-
-      {/* Preview risultati */}
-      {resolved && preview.length > 0 && (
-        <>
-          <div style={{ display:"flex", gap:10, marginBottom:10, flexWrap:"wrap", alignItems:"center" }}>
-            <span style={{ fontSize:12, color:"#4ade80" }}>✓ {foundCount} trovate</span>
-            {notFoundCount > 0 && (
-              <span style={{ fontSize:12, color:"#f87171" }}>✗ {notFoundCount} non trovate</span>
-            )}
-            <span style={{ fontSize:12, color:"#797876", marginLeft:"auto" }}>
-              Clicca ✕ per escludere una carta
-            </span>
-          </div>
-
-          <div style={{ maxHeight:300, overflowY:"auto", display:"flex", flexDirection:"column", gap:6 }}>
-            {preview.map((entry, i) => (
-              <div key={i}
-                style={{ display:"flex", alignItems:"center", gap:10,
-                  background: entry.excluded ? "#1a1917"
-                    : entry.status === "found" ? "#1e2b1e"
-                    : "#2b1e1e",
-                  border:`1px solid ${
-                    entry.excluded ? BD
-                    : entry.status === "found" ? "#2d5a2d"
-                    : "#5a2d2d"}`,
-                  borderRadius:8, padding:"6px 10px",
-                  opacity: entry.excluded ? 0.45 : 1, transition:"opacity .2s" }}>
-
-                {/* Thumb */}
-                {entry.card?.image_uris?.small || entry.card?.card_faces?.[0]?.image_uris?.small ? (
-                  <img
-                    src={entry.card.image_uris?.small || entry.card.card_faces?.[0]?.image_uris?.small}
-                    alt={entry.card.name}
-                    style={{ width:32, height:44, objectFit:"cover", borderRadius:3, flexShrink:0 }} />
-                ) : (
-                  <div style={{ width:32, height:44, background:"#333", borderRadius:3,
-                    flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
-                    fontSize:16 }}>{entry.status==="not_found"?"❓":"⚠️"}</div>
-                )}
-
-                {/* Info */}
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:600, fontSize:13, color:"#cdccca",
-                    overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                    {entry.card?.name || entry.name}
-                  </div>
-                  {entry.card?.set_name && (
-                    <div style={{ fontSize:10, color:"#797876" }}>{entry.card.set_name}</div>
-                  )}
-                  {entry.status === "not_found" && (
-                    <div style={{ fontSize:10, color:"#f87171" }}>Carta non trovata</div>
-                  )}
-                </div>
-
-                {/* Qty */}
-                {entry.status === "found" && (
-                  <input type="number" min={1} max={20} value={entry.qty}
-                    onChange={e => updateQty(i, e.target.value)}
-                    style={{ width:46, background:"#252420", color:G,
-                      border:`1px solid ${BD}`, borderRadius:5,
-                      padding:"4px 6px", fontSize:13, fontWeight:700,
-                      textAlign:"center", outline:"none" }} />
-                )}
-
-                {/* Escludi */}
-                {entry.status === "found" && (
-                  <button onClick={() => toggleRemove(i)}
-                    title={entry.excluded ? "Includi" : "Escludi"}
-                    style={{ background:"transparent", border:"none", cursor:"pointer",
-                      color: entry.excluded ? G : "#f87171", fontSize:16, lineHeight:1, padding:2 }}>
-                    {entry.excluded ? "↩" : "✕"}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Aggiungi tutto */}
           {foundCount > 0 && (
             <button onClick={addAll} disabled={loading}
               style={{ width:"100%", marginTop:12, padding:"10px", borderRadius:7,
@@ -658,9 +675,7 @@ function BulkImportPanel({ onAddCards, toast }) {
                 color: loading ? "#555" : "#000",
                 border:"none", fontWeight:700, fontSize:13,
                 cursor: loading ? "not-allowed" : "pointer" }}>
-              {loading
-                ? "⏳ Scarico immagini…"
-                : `➕ Aggiungi ${totalCopies} cop${totalCopies===1?"ia":"ie"} alla coda (${foundCount} carte)`}
+              {loading ? `⏳ ${loadMsg}` : `➕ Aggiungi ${totalCopies} cop${totalCopies===1?"ia":"ie"} alla coda (${foundCount} carte)`}
             </button>
           )}
         </>
