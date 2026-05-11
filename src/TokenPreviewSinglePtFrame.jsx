@@ -229,7 +229,7 @@ async function renderCard(canvas, state, withBleed = false) {
 
 
 // ─── DRAG BOX ─────────────────────────────────────────────────────────────────
-function DragBox({ label, style, onUpdate, color, children }) {
+function DragBox({ label, style, onUpdate, color, children, scaleFactor }) {
   const drag      = useRef(false);
   const start     = useRef({});
   const onUpdateR = useRef(onUpdate);
@@ -239,8 +239,13 @@ function DragBox({ label, style, onUpdate, color, children }) {
   // Mantieni sempre il ref aggiornato all'ultima versione di onUpdate
   useEffect(() => { onUpdateR.current = onUpdate; }, [onUpdate]);
 
-  const dispX = style.x / SCALE;
-  const dispY = style.y / SCALE;
+  // scaleFactor: quanto 1px display vale in coordinate logiche
+  // Su desktop = 1 (i DragBox sono già in display-px, onUpdate converte)
+  // Su mobile viene passato esplicitamente
+  const SF = scaleFactor ?? 1;
+
+  const dispX = style.x;
+  const dispY = style.y;
 
   const getXY = (e) => {
     const t = e.touches?.[0] ?? e.changedTouches?.[0];
@@ -259,8 +264,8 @@ function DragBox({ label, style, onUpdate, color, children }) {
       if (!drag.current) return;
       ev.preventDefault();
       const { clientX: cx, clientY: cy } = getXY(ev);
-      const dx = (cx - start.current.mx) * SCALE;
-      const dy = (cy - start.current.my) * SCALE;
+      const dx = cx - start.current.mx;
+      const dy = cy - start.current.my;
       onUpdateR.current({
         x: Math.round(start.current.sx + dx),
         y: Math.round(start.current.sy + dy),
@@ -888,23 +893,29 @@ export default function TokenEditor() {
               <canvas ref={canvasRef} style={{ display: "block", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14 }} />
               {showGrid && (
                 <>
-                  <DragBox label="NOME" style={nameStyle} color="#c9a227"
-                    onUpdate={d => setNameStyle(s => ({ ...s, x: d.x, y: d.y }))}>
+                  <DragBox label="NOME"
+                    style={{ x: nameStyle.x / SCALE, y: nameStyle.y / SCALE }} color="#c9a227"
+                    onUpdate={d => setNameStyle(s => ({ ...s, x: Math.round(d.x * SCALE), y: Math.round(d.y * SCALE) }))}>
                     <span style={{ fontSize: 9, color: "#c9a227", whiteSpace: "nowrap" }}>{name.toUpperCase()}</span>
                   </DragBox>
-                  <DragBox label="TIPO" style={typeStyle} color="#60a5fa"
-                    onUpdate={d => setTypeStyle(s => ({ ...s, x: d.x, y: d.y }))}>
+                  <DragBox label="TIPO"
+                    style={{ x: typeStyle.x / SCALE, y: typeStyle.y / SCALE }} color="#60a5fa"
+                    onUpdate={d => setTypeStyle(s => ({ ...s, x: Math.round(d.x * SCALE), y: Math.round(d.y * SCALE) }))}>
                     <span style={{ fontSize: 9, color: "#60a5fa", whiteSpace: "nowrap" }}>{type.slice(0, 28)}</span>
                   </DragBox>
                   {showAbility && (
-                    <DragBox label="ABILITÀ" style={abilityStyle} color="#4ade80"
-                      onUpdate={d => setAbilityStyle(s => ({ ...s, x: d.x, y: d.y }))}>
+                    <DragBox label="ABILITÀ"
+                      style={{ x: abilityStyle.x / SCALE, y: abilityStyle.y / SCALE }} color="#4ade80"
+                      onUpdate={d => setAbilityStyle(s => ({ ...s, x: Math.round(d.x * SCALE), y: Math.round(d.y * SCALE) }))}>
                       <span style={{ fontSize: 9, color: "#4ade80", whiteSpace: "nowrap" }}>Abilità…</span>
                     </DragBox>
                   )}
                   {showPT && (
-                    <DragBox label="P/T" style={{ x: ptStyle.frameX, y: ptStyle.frameY }} color="#f87171"
-                      onUpdate={d => setPtStyle(s => ({ ...s, frameX: d.x, frameY: d.y, x: d.x, y: d.y }))}>
+                    <DragBox label="P/T"
+                      style={{ x: ptStyle.frameX / SCALE, y: ptStyle.frameY / SCALE }} color="#f87171"
+                      onUpdate={d => setPtStyle(s => ({ ...s,
+                        frameX: Math.round(d.x * SCALE), frameY: Math.round(d.y * SCALE),
+                        x: Math.round(d.x * SCALE), y: Math.round(d.y * SCALE) }))}>
                       <span style={{ fontSize: 9, color: "#f87171" }}>{pt.power}/{pt.toughness}</span>
                     </DragBox>
                   )}
@@ -934,12 +945,48 @@ export default function TokenEditor() {
               return (
                 <div style={{ position: "relative",
                   width: vw, height: scaledH,
-                  borderRadius: 14, overflow: "hidden",
+                  borderRadius: 14, overflow: "visible",
                   boxShadow: "0 8px 40px rgba(0,0,0,.8)", flexShrink: 0 }}>
-                  <div style={{ transform: `scale(${scale})`, transformOrigin: "top left",
-                    width: DISPLAY_W, height: DISPLAY_H }}>
-                    <canvas ref={canvasRef} style={{ display: "block", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14 }} />
+                  {/* canvas scalato con clip */}
+                  <div style={{ position: "absolute", top: 0, left: 0,
+                    width: vw, height: scaledH,
+                    borderRadius: 14, overflow: "hidden", zIndex: 1 }}>
+                    <div style={{ transform: `scale(${scale})`, transformOrigin: "top left",
+                      width: DISPLAY_W, height: DISPLAY_H }}>
+                      <canvas ref={canvasRef} style={{ display: "block", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14 }} />
+                    </div>
                   </div>
+                  {/* DragBox overlay in coordinate già scalate */}
+                  {showGrid && (
+                    <div style={{ position: "absolute", top: 0, left: 0, width: vw, height: scaledH, zIndex: 20 }}>
+                      <DragBox label="NOME"
+                        style={{ x: nameStyle.x * scale / SCALE, y: nameStyle.y * scale / SCALE }} color="#c9a227"
+                        onUpdate={d => setNameStyle(s => ({ ...s, x: Math.round(d.x * SCALE / scale), y: Math.round(d.y * SCALE / scale) }))}>
+                        <span style={{ fontSize: 9, color: "#c9a227", whiteSpace: "nowrap" }}>{name.toUpperCase()}</span>
+                      </DragBox>
+                      <DragBox label="TIPO"
+                        style={{ x: typeStyle.x * scale / SCALE, y: typeStyle.y * scale / SCALE }} color="#60a5fa"
+                        onUpdate={d => setTypeStyle(s => ({ ...s, x: Math.round(d.x * SCALE / scale), y: Math.round(d.y * SCALE / scale) }))}>
+                        <span style={{ fontSize: 9, color: "#60a5fa", whiteSpace: "nowrap" }}>{type.slice(0, 28)}</span>
+                      </DragBox>
+                      {showAbility && (
+                        <DragBox label="ABILITÀ"
+                          style={{ x: abilityStyle.x * scale / SCALE, y: abilityStyle.y * scale / SCALE }} color="#4ade80"
+                          onUpdate={d => setAbilityStyle(s => ({ ...s, x: Math.round(d.x * SCALE / scale), y: Math.round(d.y * SCALE / scale) }))}>
+                          <span style={{ fontSize: 9, color: "#4ade80", whiteSpace: "nowrap" }}>Abilità…</span>
+                        </DragBox>
+                      )}
+                      {showPT && (
+                        <DragBox label="P/T"
+                          style={{ x: ptStyle.frameX * scale / SCALE, y: ptStyle.frameY * scale / SCALE }} color="#f87171"
+                          onUpdate={d => setPtStyle(s => ({ ...s,
+                            frameX: Math.round(d.x * SCALE / scale), frameY: Math.round(d.y * SCALE / scale),
+                            x: Math.round(d.x * SCALE / scale), y: Math.round(d.y * SCALE / scale) }))}>
+                          <span style={{ fontSize: 9, color: "#f87171" }}>{pt.power}/{pt.toughness}</span>
+                        </DragBox>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })()}
