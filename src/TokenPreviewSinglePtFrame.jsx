@@ -164,8 +164,7 @@ async function renderCard(canvas, state, withBleed = false) {
   ctx.restore();
 
   if (showAbility && ability) {
-    const lines = String(ability).split("
-");
+    const lines = String(ability).split("\n");
     let curY = abilityStyle.y;
     for (const line of lines) {
       curY = await drawManaText(ctx, line, abilityStyle.x, curY, abilityStyle.fontSize, abilityStyle.color, FB, abilityStyle.width || (CW - abilityStyle.x * 2));
