@@ -338,14 +338,67 @@ function TFArea({ value, onChange, placeholder, disabled, rows = 3 }) {
   );
 }
 function Sld({ label, value, onChange, min, max, step = 0.5 }) {
+  const trackRef = useRef(null);
+  const dragging = useRef(false);
+
+  const calcValue = (clientX) => {
+    const rect = trackRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const raw = min + ratio * (max - min);
+    // Arrotonda allo step
+    const stepped = Math.round(raw / step) * step;
+    return Math.max(min, Math.min(max, parseFloat(stepped.toFixed(6))));
+  };
+
+  const onTouchStart = (e) => {
+    e.stopPropagation();
+    dragging.current = true;
+    onChange(calcValue(e.touches[0].clientX));
+
+    const onMove = (ev) => {
+      ev.preventDefault();
+      if (!dragging.current) return;
+      onChange(calcValue(ev.touches[0].clientX));
+    };
+    const onEnd = () => {
+      dragging.current = false;
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+    };
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onEnd);
+  };
+
+  const pct = ((Number(value) - min) / (max - min)) * 100;
+
   return (
-    <div style={{ marginBottom: 6 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#797876", marginBottom: 2 }}>
-        <span>{label}</span><span style={{ color: G }}>{Number(value).toFixed(1)}</span>
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#797876", marginBottom: 4 }}>
+        <span>{label}</span>
+        <span style={{ color: G, fontWeight: 700 }}>{Number(value).toFixed(1)}</span>
       </div>
-      <input type="range" min={min} max={max} step={step} value={Number(value)}
-        onChange={e => onChange(Number(e.target.value))}
-        style={{ width: "100%", accentColor: G }} />
+      {/* Track custom touch-friendly */}
+      <div ref={trackRef} onTouchStart={onTouchStart}
+        style={{ position: "relative", height: 28, display: "flex", alignItems: "center",
+          cursor: "pointer", touchAction: "none" }}>
+        {/* Binario */}
+        <div style={{ position: "absolute", left: 0, right: 0, height: 4,
+          background: "#393836", borderRadius: 999 }} />
+        {/* Fill */}
+        <div style={{ position: "absolute", left: 0, width: `${pct}%`, height: 4,
+          background: G, borderRadius: 999 }} />
+        {/* Thumb */}
+        <div style={{ position: "absolute", left: `${pct}%`, transform: "translateX(-50%)",
+          width: 20, height: 20, borderRadius: "50%",
+          background: G, boxShadow: "0 0 0 3px rgba(79,152,163,.35)",
+          zIndex: 2, pointerEvents: "none" }} />
+        {/* Input range nativo per mouse/keyboard — invisibile ma funzionale */}
+        <input type="range" min={min} max={max} step={step} value={Number(value)}
+          onChange={e => onChange(Number(e.target.value))}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%",
+            opacity: 0, cursor: "pointer", margin: 0,
+            WebkitAppearance: "none" }} />
+      </div>
     </div>
   );
 }
@@ -665,7 +718,8 @@ export default function TokenEditor() {
   const PanelContent = () => (
     <div style={{ padding: 12, flex: 1, overflowY: "auto", maxHeight: isMobile ? "60vh" : undefined }}>
 
-      {activeTab === "frame" && (
+      <div style={{ display: activeTab === "frame" ? "block" : "none" }}>
+
         <div>
           <Lbl>Set Frame</Lbl>
           <select value={frameSet} onChange={e => { setFrameSet(e.target.value); setFrameIdx(0); }}
@@ -707,9 +761,11 @@ export default function TokenEditor() {
             </div>
           )}
         </div>
-      )}
+      
+        </div>
 
-      {activeTab === "testo" && (
+      <div style={{ display: activeTab === "testo" ? "block" : "none" }}>
+
         <div>
           <Lbl>Nome carta</Lbl>
           <TF value={name} onChange={setName} placeholder="Es. CONSTRUCT" />
@@ -723,9 +779,11 @@ export default function TokenEditor() {
           <Sld label="Font size tipo" value={typeStyle.fontSize} onChange={v => setTypeStyle(s => ({ ...s, fontSize: v }))} min={10} max={40} />
           <CP label="Colore tipo" value={typeStyle.color} onChange={v => setTypeStyle(s => ({ ...s, color: v }))} />
         </div>
-      )}
+      
+        </div>
 
-      {activeTab === "ability" && (
+      <div style={{ display: activeTab === "ability" ? "block" : "none" }}>
+
         <div>
           <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
             cursor: "pointer", fontSize: 13, color: showAbility ? "#cdccca" : "#4a4948" }}>
@@ -739,9 +797,11 @@ export default function TokenEditor() {
           <Sld label="Font size" value={Number(abilityStyle.fontSize)} onChange={v => setAbilityStyle(s => ({ ...s, fontSize: Number(v) }))} min={8} max={30} />
           <CP label="Colore testo" value={abilityStyle.color} onChange={v => setAbilityStyle(s => ({ ...s, color: v }))} />
         </div>
-      )}
+      
+        </div>
 
-      {activeTab === "pt" && (
+      <div style={{ display: activeTab === "pt" ? "block" : "none" }}>
+
         <div>
           <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
             cursor: "pointer", fontSize: 13, color: showPT ? "#cdccca" : "#4a4948" }}>
@@ -756,9 +816,11 @@ export default function TokenEditor() {
           <Sld label="Font size" value={ptStyle.fontSize} onChange={v => setPtStyle(s => ({ ...s, fontSize: v }))} min={14} max={60} />
           <CP label="Colore" value={ptStyle.color} onChange={v => setPtStyle(s => ({ ...s, color: v }))} />
         </div>
-      )}
+      
+        </div>
 
-      {activeTab === "info" && (
+      <div style={{ display: activeTab === "info" ? "block" : "none" }}>
+
         <div>
           <Row>
             <div style={{ flex: 1 }}><Lbl>Rarità</Lbl><TF value={infoLeft.rarity} onChange={v => setInfoLeft(s => ({ ...s, rarity: v }))} /></div>
@@ -786,9 +848,11 @@ export default function TokenEditor() {
           <Lbl>Anno copyright</Lbl>
           <TF value={copyright.year} onChange={v => setCopyright(s => ({ ...s, year: v }))} disabled={!showCopyright} />
         </div>
-      )}
+      
+        </div>
 
-      {activeTab === "pos" && (
+      <div style={{ display: activeTab === "pos" ? "block" : "none" }}>
+
         <div>
           <Lbl>Nome — posizione</Lbl>
           <Row>
@@ -825,7 +889,8 @@ export default function TokenEditor() {
             Attiva i box colorati sulla preview per trascinare gli elementi.
           </p>
         </div>
-      )}
+      
+        </div>
     </div>
   );
 
