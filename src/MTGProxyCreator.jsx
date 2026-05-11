@@ -157,7 +157,7 @@ function PrintGrid({ prints, selected, onToggle, onQty }) {
   );
 }
 
-function ScryfallSearchPanel({ onAddCards }) {
+function CardSearchPanel({ onAddCards }) {
   const [query, setQuery]         = React.useState("");
   const [suggestions, setSuggs]   = React.useState([]);
   const [showSugg, setShowSugg]   = React.useState(false);
@@ -306,8 +306,8 @@ function ScryfallSearchPanel({ onAddCards }) {
         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth={2}>
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
         </svg>
-        <span style={{ fontWeight:700, color:G, fontSize:14 }}>Cerca carta su Scryfall</span>
-        <span style={{ fontSize:11, color:"#4a4948" }}>— tutte le stampe + scelta art</span>
+        <span style={{ fontWeight:700, color:G, fontSize:14 }}>Cerca carte</span>
+        <span style={{ fontSize:11, color:"#4a4948" }}>— tutte le stampe + scelta illustrazione</span>
       </div>
 
       <div style={{ position:"relative", marginBottom:10 }}>
@@ -772,7 +772,7 @@ export default function MTGProxyCreator() {
       }
       setImages(prev => [...prev, ...results]);
       toast(`${results.length} carte casuali aggiunte!`);
-    } catch (e) { toast("Errore Scryfall: " + e.message, "e"); }
+    } catch (e) { toast("Errore ricerca: " + e.message, "e"); }
     finally { setLoadRnd(false); }
   };
 
@@ -898,7 +898,6 @@ export default function MTGProxyCreator() {
             {[
               { id:"proxy",   icon:"M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7", label:"Proxy Stampa" },
               { id:"token",   icon:"M12 5v14M5 12h14", label:"Token Creator" },
-              { id:"import",  icon:"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3", label:"Importa" },
             ].map(n => (
               <button key={n.id} style={s.navBtn(tab===n.id)} onClick={() => setTab(n.id)}>
                 <Icon d={n.icon} size={16} />
@@ -996,7 +995,7 @@ function ProxyTab({ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, i
             transition:"all .2s" }}>
           <svg width={16} height={16} viewBox="0 0 24 24" fill="none"
             stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          🔍 Cerca carte · Importa lista
+          🔍 Cerca carte · Aggiungi lista
           <span style={{ marginLeft:"auto", fontSize:11, opacity:.7 }}>
             {showScryfall ? "▲ chiudi" : "▼ apri"}
           </span>
@@ -1004,7 +1003,7 @@ function ProxyTab({ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, i
 
         {showScryfall && (
           <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:8 }}>
-            <ScryfallSearchPanel onAddCards={cards => {
+            <CardSearchPanel onAddCards={cards => {
               setImages(prev => [...prev, ...cards]);
               toast(`✅ ${cards.length} cop${cards.length===1?"ia":"ie"} aggiunte alla coda!`);
             }} />
@@ -1126,7 +1125,7 @@ function ProxyTab({ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, i
                     ✕ Rimuovi
                   </button>
                 </div>
-                {/* Nome carta da Scryfall */}
+                {/* Nome carta */}
                 {img.srcType === "scryfall" && img.name && (
                   <div style={{ position:"absolute", bottom:0, left:0, right:0,
                     background:"linear-gradient(transparent,rgba(0,0,0,.8))",
@@ -1157,7 +1156,7 @@ function ProxyTab({ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, i
           <div style={{ fontSize:48, marginBottom:12 }}>🃏</div>
           <div style={{ fontWeight:600, marginBottom:6 }}>Nessuna carta nella coda</div>
           <div style={{ fontSize:13 }}>
-            Usa la ricerca Scryfall, carica immagini locali, o aggiungi 9 carte casuali
+            Cerca carte, carica immagini locali, o aggiungi 9 carte casuali
           </div>
         </div>
       )}
