@@ -230,46 +230,56 @@ async function renderCard(canvas, state, withBleed = false) {
 
 // ─── DRAG BOX ─────────────────────────────────────────────────────────────────
 function DragBox({ label, style, onUpdate, color, children }) {
-  const drag = useRef(false);
-  const start = useRef({});
+  const drag      = useRef(false);
+  const start     = useRef({});
+  const onUpdateR = useRef(onUpdate);
+  const moveRef   = useRef(null);
+  const upRef     = useRef(null);
+
+  // Mantieni sempre il ref aggiornato all'ultima versione di onUpdate
+  useEffect(() => { onUpdateR.current = onUpdate; }, [onUpdate]);
+
   const dispX = style.x / SCALE;
   const dispY = style.y / SCALE;
 
-  // ── Ottieni coordinate normalizzate da mouse O touch ──────────────────────
   const getXY = (e) => {
-    if (e.touches && e.touches.length > 0) {
-      return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
-    }
-    return { clientX: e.clientX, clientY: e.clientY };
+    const t = e.touches?.[0] ?? e.changedTouches?.[0];
+    return t ? { clientX: t.clientX, clientY: t.clientY }
+             : { clientX: e.clientX, clientY: e.clientY };
   };
 
   const onDown = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     drag.current = true;
     const { clientX, clientY } = getXY(e);
     start.current = { mx: clientX, my: clientY, sx: style.x, sy: style.y };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    window.addEventListener("touchmove", onMove, { passive: false });
-    window.addEventListener("touchend", onUp);
+
+    moveRef.current = (ev) => {
+      if (!drag.current) return;
+      ev.preventDefault();
+      const { clientX: cx, clientY: cy } = getXY(ev);
+      const dx = (cx - start.current.mx) * SCALE;
+      const dy = (cy - start.current.my) * SCALE;
+      onUpdateR.current({
+        x: Math.round(start.current.sx + dx),
+        y: Math.round(start.current.sy + dy),
+      });
+    };
+
+    upRef.current = () => {
+      drag.current = false;
+      window.removeEventListener("mousemove", moveRef.current);
+      window.removeEventListener("mouseup",   upRef.current);
+      window.removeEventListener("touchmove", moveRef.current);
+      window.removeEventListener("touchend",  upRef.current);
+    };
+
+    window.addEventListener("mousemove", moveRef.current);
+    window.addEventListener("mouseup",   upRef.current);
+    window.addEventListener("touchmove", moveRef.current, { passive: false });
+    window.addEventListener("touchend",  upRef.current);
   };
-
-  const onMove = useCallback((e) => {
-    if (!drag.current) return;
-    e.preventDefault();
-    const { clientX, clientY } = getXY(e);
-    const dx = (clientX - start.current.mx) * SCALE;
-    const dy = (clientY - start.current.my) * SCALE;
-    onUpdate({ x: Math.round(start.current.sx + dx), y: Math.round(start.current.sy + dy) });
-  }, [onUpdate]);
-
-  const onUp = useCallback(() => {
-    drag.current = false;
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("mouseup", onUp);
-    window.removeEventListener("touchmove", onMove);
-    window.removeEventListener("touchend", onUp);
-  }, [onMove]);
 
   return (
     <div
@@ -277,17 +287,21 @@ function DragBox({ label, style, onUpdate, color, children }) {
       onTouchStart={onDown}
       title={`Trascina: ${label}`}
       style={{
-        position: "absolute", left: dispX, top: dispY, cursor: "move",
-        border: `1.5px dashed ${color}`, background: `${color}18`,
-        borderRadius: 3, padding: "4px 8px", userSelect: "none", zIndex: 10,
-        minWidth: 36, minHeight: 36,
-        touchAction: "none",          // blocca scroll su touch durante drag
+        position: "absolute", left: dispX, top: dispY,
+        cursor: "move", touchAction: "none",
+        border: `2px dashed ${color}`, background: `${color}22`,
+        borderRadius: 6, padding: "6px 10px",
+        userSelect: "none", zIndex: 20,
+        minWidth: 44, minHeight: 44,
         display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: `0 2px 8px ${color}44`,
       }}>
-      <span style={{ position: "absolute", top: -18, left: 0, fontSize: 10,
-        background: "rgba(0,0,0,.85)", color, padding: "2px 6px",
-        borderRadius: 3, whiteSpace: "nowrap", pointerEvents: "none",
-        fontWeight: 700 }}>{label}</span>
+      <span style={{
+        position: "absolute", top: -20, left: 0, fontSize: 10,
+        background: "rgba(0,0,0,.9)", color, padding: "2px 7px",
+        borderRadius: 4, whiteSpace: "nowrap", pointerEvents: "none",
+        fontWeight: 800, letterSpacing: ".03em",
+      }}>{label}</span>
       {children}
     </div>
   );
