@@ -280,14 +280,21 @@ function LayerChip({ active, label, onClick }) {
   return <button onClick={onClick} style={{ padding:"8px 10px", borderRadius:999, border:`1px solid ${active ? '#4f98a3' : '#393836'}`, background: active ? 'rgba(79,152,163,.15)' : '#201f1d', color: active ? '#7dd3dc' : '#c7c4bf', fontSize:12, cursor:'pointer' }}>{label}</button>;
 }
 
-function GuideOverlay({ activeLayer, state, scale }) {
-  const boxes = {
-    name: { x: 16, y: state.nameStyle.y - 18, w: CW - 32, h: 36, c: '#38bdf8' },
-    type: { x: state.typeStyle.x - 6, y: state.typeStyle.y - 16, w: 320, h: 32, c: '#22c55e' },
-    ability: { x: state.abilityStyle.x - 6, y: state.abilityStyle.y - 6, w: state.abilityStyle.width || (CW - state.abilityStyle.x * 2), h: 210, c: '#f59e0b' },
-    pt: { x: state.ptStyle.frameX, y: state.ptStyle.frameY, w: state.ptStyle.width, h: state.ptStyle.height, c: '#f472b6' },
-    footer: { x: 16, y: CH - 42, w: CW - 32, h: 22, c: '#a78bfa' },
+
+function getGuideMetrics(state) {
+  const abilityLines = Math.max(1, String(state.ability || '').split('\n').length || 1);
+  const abilityHeight = Math.max(54, abilityLines * (state.abilityStyle.fontSize * 1.45) + Math.max(8, state.abilityStyle.lineGap || 4) * (abilityLines - 1) + 12);
+  return {
+    name: { x: 22, y: state.nameStyle.y - Math.round(state.nameStyle.fontSize * 0.62), w: CW - 44, h: Math.max(24, Math.round(state.nameStyle.fontSize * 1.18)), c: '#38bdf8' },
+    type: { x: state.typeStyle.x - 4, y: state.typeStyle.y - Math.round(state.typeStyle.fontSize * 0.58), w: Math.max(180, Math.round((String(state.type || '').length * state.typeStyle.fontSize * 0.62) + 18)), h: Math.max(22, Math.round(state.typeStyle.fontSize * 1.15)), c: '#22c55e' },
+    ability: { x: state.abilityStyle.x - 4, y: state.abilityStyle.y - 4, w: state.abilityStyle.width || (CW - state.abilityStyle.x * 2), h: abilityHeight, c: '#f59e0b' },
+    pt: { x: state.ptStyle.frameX + 6, y: state.ptStyle.frameY + 6, w: Math.max(20, state.ptStyle.width - 12), h: Math.max(20, state.ptStyle.height - 12), c: '#f472b6' },
+    footer: { x: Math.max(10, (state.infoLeft?.x || 18) - 4), y: CH - (state.infoLeft?.y || 12) - Math.max(12, state.infoLeft?.fontSize || 11), w: CW - Math.max(10, (state.infoLeft?.x || 18) - 4) - Math.max(10, (state.copyright?.x || 18) - 4), h: Math.max(14, (state.infoLeft?.fontSize || 11) + 6), c: '#a78bfa' },
   };
+}
+
+function GuideOverlay({ activeLayer, state, scale }) {
+  const boxes = getGuideMetrics(state);
   return (
     <div style={{ position:'absolute', inset:0, pointerEvents:'none' }}>
       <div style={{ position:'absolute', left:BLEED*scale, top:BLEED*scale, width:CW*scale, height:CH*scale, border:'1px dashed rgba(255,255,255,.2)' }} />
@@ -355,11 +362,11 @@ function PreviewCard({ canvasRef, previewScale, showGuides, activeLayer, state, 
           <canvas ref={canvasRef} style={{ width:CW*previewScale, height:CH*previewScale, display:'block', borderRadius:18, background:'#0d0d0d' }} />
           {showGuides && <GuideOverlay activeLayer={activeLayer} state={state} scale={previewScale} />}
           <button onMouseDown={e => { setActiveLayer('art'); beginDrag('art', e); }} onTouchStart={e => { setActiveLayer('art'); beginDrag('art', e); }} style={{ position:'absolute', inset:0, border:'none', background:'transparent', cursor:'grab' }} />
-          <div onMouseDown={e => beginDrag('name', e)} onTouchStart={e => beginDrag('name', e)} onClick={() => setActiveLayer('name')} style={{ position:'absolute', left:16*previewScale, top:(state.nameStyle.y-18)*previewScale, width:(CW-32)*previewScale, height:36*previewScale, cursor:'move' }} />
-          <div onMouseDown={e => beginDrag('type', e)} onTouchStart={e => beginDrag('type', e)} onClick={() => setActiveLayer('type')} style={{ position:'absolute', left:(state.typeStyle.x-6)*previewScale, top:(state.typeStyle.y-16)*previewScale, width:320*previewScale, height:32*previewScale, cursor:'move' }} />
-          <div onMouseDown={e => beginDrag('ability', e)} onTouchStart={e => beginDrag('ability', e)} onClick={() => setActiveLayer('ability')} style={{ position:'absolute', left:(state.abilityStyle.x-6)*previewScale, top:(state.abilityStyle.y-6)*previewScale, width:(state.abilityStyle.width || (CW-state.abilityStyle.x*2))*previewScale, height:210*previewScale, cursor:'move' }} />
-          <div onMouseDown={e => beginDrag('pt', e)} onTouchStart={e => beginDrag('pt', e)} onClick={() => setActiveLayer('pt')} style={{ position:'absolute', left:state.ptStyle.frameX*previewScale, top:state.ptStyle.frameY*previewScale, width:state.ptStyle.width*previewScale, height:state.ptStyle.height*previewScale, cursor:'move' }} />
-          <div onMouseDown={e => beginDrag('footer', e)} onTouchStart={e => beginDrag('footer', e)} onClick={() => setActiveLayer('footer')} style={{ position:'absolute', left:16*previewScale, top:(CH-42)*previewScale, width:(CW-32)*previewScale, height:22*previewScale, cursor:'move' }} />
+          {(() => { const b = getGuideMetrics(state).name; return <div onMouseDown={e => beginDrag('name', e)} onTouchStart={e => beginDrag('name', e)} onClick={() => setActiveLayer('name')} style={{ position:'absolute', left:b.x*previewScale, top:b.y*previewScale, width:b.w*previewScale, height:b.h*previewScale, cursor:'move' }} />; })()}
+          {(() => { const b = getGuideMetrics(state).type; return <div onMouseDown={e => beginDrag('type', e)} onTouchStart={e => beginDrag('type', e)} onClick={() => setActiveLayer('type')} style={{ position:'absolute', left:b.x*previewScale, top:b.y*previewScale, width:b.w*previewScale, height:b.h*previewScale, cursor:'move' }} />; })()}
+          {(() => { const b = getGuideMetrics(state).ability; return <div onMouseDown={e => beginDrag('ability', e)} onTouchStart={e => beginDrag('ability', e)} onClick={() => setActiveLayer('ability')} style={{ position:'absolute', left:b.x*previewScale, top:b.y*previewScale, width:b.w*previewScale, height:b.h*previewScale, cursor:'move' }} />; })()}
+          {(() => { const b = getGuideMetrics(state).pt; return <div onMouseDown={e => beginDrag('pt', e)} onTouchStart={e => beginDrag('pt', e)} onClick={() => setActiveLayer('pt')} style={{ position:'absolute', left:b.x*previewScale, top:b.y*previewScale, width:b.w*previewScale, height:b.h*previewScale, cursor:'move' }} />; })()}
+          {(() => { const b = getGuideMetrics(state).footer; return <div onMouseDown={e => beginDrag('footer', e)} onTouchStart={e => beginDrag('footer', e)} onClick={() => setActiveLayer('footer')} style={{ position:'absolute', left:b.x*previewScale, top:b.y*previewScale, width:b.w*previewScale, height:b.h*previewScale, cursor:'move' }} />; })()}
         </div>
       </div>
     </div>
