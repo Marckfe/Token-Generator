@@ -62,7 +62,16 @@ const Icon = ({ d, size = 16 }) => (
 // ── SCRYFALL SEARCH PANEL ─────────────────────────────────────────────────────
 // Recupera TUTTE le stampe (segue next_page fino a esaurimento)
 async function fetchAllPrints(name) {
-  let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(name)}"&unique=prints&order=released&dir=desc`;
+  // Step 1: risolvi nome canonico via fuzzy (gestisce "bolt" → "Lightning Bolt", typo, ecc.)
+  let canonicalName = name;
+  try {
+    const nr = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
+    const nj = await nr.json();
+    if (nj.object !== "error") canonicalName = nj.name;
+  } catch { /* usa il nome originale */ }
+
+  // Step 2: tutte le stampe con nome canonico esatto, paginazione completa
+  let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(canonicalName)}"&unique=prints&order=released&dir=desc`;
   const all = [];
   while (url) {
     const r = await fetch(url);
@@ -70,19 +79,7 @@ async function fetchAllPrints(name) {
     if (j.object === "error") break;
     all.push(...(j.data || []));
     url = j.has_more ? j.next_page : null;
-    if (url) await new Promise(r => setTimeout(r, 80)); // rispetta rate-limit
-  }
-  // fallback fuzzy se esatto non trova nulla
-  if (!all.length) {
-    let url2 = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(name)}&unique=prints&order=released&dir=desc`;
-    while (url2) {
-      const r = await fetch(url2);
-      const j = await r.json();
-      if (j.object === "error") break;
-      all.push(...(j.data || []));
-      url2 = j.has_more ? j.next_page : null;
-      if (url2) await new Promise(r => setTimeout(r, 80));
-    }
+    if (url) await new Promise(r => setTimeout(r, 80));
   }
   return all;
 }
@@ -392,12 +389,14 @@ function ScryfallSearchPanel({ onAddCards }) {
                     <div style={{ fontSize:11, color:"#797876", marginBottom:8 }}>
                       {cardPrints.length} stampe — clicca per selezionare, modifica la quantità
                     </div>
+                    <div style={{ maxHeight:320, overflowY:"auto", paddingRight:4 }}>
                     <PrintGrid
                       prints={cardPrints}
                       selected={selected}
                       onToggle={togglePrint}
                       onQty={setQty}
                     />
+                    </div>
                   </div>
                 )}
               </div>
@@ -630,6 +629,7 @@ function BulkImportPanel({ onAddCards, toast }) {
                       <div style={{ fontSize:11, color:"#797876", marginBottom:8 }}>
                         {entry.prints.length} stampe disponibili — clicca per scegliere
                       </div>
+                      <div style={{ maxHeight:320, overflowY:"auto", paddingRight:4 }}>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(88px,1fr))", gap:8 }}>
                         {entry.prints.map(card => {
                           const t = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small;
@@ -660,6 +660,7 @@ function BulkImportPanel({ onAddCards, toast }) {
                             </div>
                           );
                         })}
+                      </div>
                       </div>
                     </div>
                   )}
