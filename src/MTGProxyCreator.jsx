@@ -62,12 +62,14 @@ const Icon = ({ d, size = 16 }) => (
 // ── SCRYFALL SEARCH PANEL ─────────────────────────────────────────────────────
 // Recupera TUTTE le stampe (segue next_page fino a esaurimento)
 async function fetchAllPrints(name) {
-  // Step 1: risolvi nome canonico via fuzzy (gestisce "bolt" → "Lightning Bolt", typo, ecc.)
+  // Step 1: risolvi nome canonico via fuzzy
   let canonicalName = name;
   try {
     const nr = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
-    const nj = await nr.json();
-    if (nj.object !== "error") canonicalName = nj.name;
+    if (nr.ok) {
+      const nj = await nr.json();
+      if (nj.object !== "error" && nj.name) canonicalName = nj.name;
+    }
   } catch { /* usa il nome originale */ }
 
   // Step 2: tutte le stampe con nome canonico esatto, paginazione completa
@@ -75,6 +77,7 @@ async function fetchAllPrints(name) {
   const all = [];
   while (url) {
     const r = await fetch(url);
+    if (!r.ok) break;
     const j = await r.json();
     if (j.object === "error") break;
     all.push(...(j.data || []));
@@ -181,10 +184,12 @@ function ScryfallSearchPanel({ onAddCards }) {
       let canonicalName = name;
       try {
         const nr = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
-        const nj = await nr.json();
-        if (nj.object !== "error") {
-          canonicalName = nj.name;
-          setQuery(canonicalName); // mostra il nome corretto nell'input
+        if (nr.ok) {
+          const nj = await nr.json();
+          if (nj.object !== "error" && nj.name) {
+            canonicalName = nj.name;
+            setQuery(canonicalName); // mostra il nome corretto nell'input
+          }
         }
       } catch { /* usa nome originale */ }
 
@@ -628,39 +633,97 @@ function BulkImportPanel({ onAddCards, toast }) {
                       <div style={{ fontSize:11, color:"#797876", marginBottom:8 }}>
                         {entry.prints.length} stampe disponibili — clicca per scegliere
                       </div>
-                      <div style={{ maxHeight:320, overflowY:"auto", paddingRight:4 }}>
-                      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(88px,1fr))", gap:8 }}>
-                        {entry.prints.map(card => {
-                          const t = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small;
-                          const isCurrent = (entry.selectedPrint||entry.card)?.id === card.id;
-                          return (
-                            <div key={card.id} onClick={() => { selectPrint(i, card); setExpandedArt(null); }}
-                              style={{ cursor:"pointer", borderRadius:6, overflow:"hidden", position:"relative",
-                                border:`2px solid ${isCurrent ? G : BD}`,
-                                boxShadow: isCurrent ? `0 0 0 2px ${G}44` : "none",
-                                background:"#1a1917", transition:"border-color .15s" }}>
-                              <img src={t} alt={card.name} style={{ width:"100%", display:"block" }} />
-                              <div style={{ padding:"3px 5px 4px" }}>
-                                <div style={{ fontSize:9, color:"#cdccca", fontWeight:600,
-                                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                                  {card.set_name} {card.released_at?.slice(0,4) && `'${card.released_at.slice(2,4)}`}
+                      {/* Raggruppa per nome carta, come nella ricerca singola */}
+                      {(() => {
+                        const grouped = {};
+                        for (const c of entry.prints) {
+                          if (!grouped[c.name]) grouped[c.name] = [];
+                          grouped[c.name].push(c);
+                        }
+                        const names = Object.keys(grouped);
+                        return (
+                          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                            {names.map(cardName => {
+                              const cardPrints = grouped[cardName];
+                              const isGroupExp = expandedArt === `${i}_${cardName}`;
+                              const rep = cardPrints[0];
+                              const repThumb = rep.image_uris?.small || rep.card_faces?.[0]?.image_uris?.small;
+                              const isCurrent = (entry.selectedPrint||entry.card)?.id === rep.id || cardPrints.some(p => (entry.selectedPrint||entry.card)?.id === p.id);
+                              const G = "#4f98a3", BD = "#393836";
+                              return (
+                                <div key={cardName} style={{ border:`1px solid ${BD}`, borderRadius:8, overflow:"hidden" }}>
+                                  {/* Header gruppo */}
+                                  <div
+                                    onClick={() => setExpandedArt(isGroupExp ? i : `${i}_${cardName}`)}
+                                    style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 10px",
+                                      background: isGroupExp ? "#252420" : "#1c1b19", cursor:"pointer" }}>
+                                    <img src={repThumb} alt={cardName}
+                                      style={{ width:28, height:39, objectFit:"cover", borderRadius:3, flexShrink:0 }} />
+                                    <div style={{ flex:1, minWidth:0 }}>
+                                      <div style={{ fontWeight:700, fontSize:12, color:"#cdccca",
+                                        overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{cardName}</div>
+                                      <div style={{ fontSize:10, color:"#797876" }}>
+                                        {cardPrints.length} stampa{cardPrints.length>1?"e":""} disponibili
+                                        {isCurrent && <span style={{ marginLeft:6, color:G }}>· selezionata</span>}
+                                      </div>
+                                    </div>
+                                    {/* Quick select se stampa singola */}
+                                    {cardPrints.length === 1 && (
+                                      <button
+                                        onClick={e => { e.stopPropagation(); selectPrint(i, rep); setExpandedArt(i); }}
+                                        style={{ padding:"4px 10px", borderRadius:5, border:`1px solid ${G}`,
+                                          background: (entry.selectedPrint||entry.card)?.id===rep.id ? G : "transparent",
+                                          color: (entry.selectedPrint||entry.card)?.id===rep.id ? "#000" : G,
+                                          fontSize:11, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
+                                        {(entry.selectedPrint||entry.card)?.id===rep.id ? "✓ Selezionata" : "Usa questa"}
+                                      </button>
+                                    )}
+                                    <span style={{ color:"#4a4948", fontSize:12, flexShrink:0 }}>{isGroupExp?"▲":"▼"}</span>
+                                  </div>
+                                  {/* Griglia stampe espansa */}
+                                  {isGroupExp && (
+                                    <div style={{ padding:"8px 10px", background:"#181716",
+                                      maxHeight:260, overflowY:"auto" }}>
+                                      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(80px,1fr))", gap:6 }}>
+                                        {cardPrints.map(card => {
+                                          const t = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small;
+                                          const isSel = (entry.selectedPrint||entry.card)?.id === card.id;
+                                          return (
+                                            <div key={card.id}
+                                              onClick={() => { selectPrint(i, card); setExpandedArt(i); }}
+                                              style={{ cursor:"pointer", borderRadius:6, overflow:"hidden", position:"relative",
+                                                border:`2px solid ${isSel ? G : BD}`,
+                                                boxShadow: isSel ? `0 0 0 2px ${G}44` : "none",
+                                                background:"#1a1917", transition:"border-color .15s" }}>
+                                              <img src={t} alt={card.name} style={{ width:"100%", display:"block" }} />
+                                              <div style={{ padding:"2px 4px 3px" }}>
+                                                <div style={{ fontSize:8, color:"#cdccca", fontWeight:600,
+                                                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                                                  {card.set_name} {card.released_at?.slice(2,4) && `'${card.released_at.slice(2,4)}`}
+                                                </div>
+                                                <div style={{ fontSize:7, color:"#797876",
+                                                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                                                  {card.artist}
+                                                </div>
+                                              </div>
+                                              {isSel && (
+                                                <div style={{ position:"absolute", top:3, left:3, background:G,
+                                                  borderRadius:"50%", width:16, height:16,
+                                                  display:"flex", alignItems:"center", justifyContent:"center",
+                                                  fontSize:10, color:"#000", fontWeight:800, pointerEvents:"none" }}>✓</div>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                                <div style={{ fontSize:8, color:"#797876",
-                                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                                  {card.artist}
-                                </div>
-                              </div>
-                              {isCurrent && (
-                                <div style={{ position:"absolute", top:4, left:4, background:G,
-                                  borderRadius:"50%", width:18, height:18, display:"flex",
-                                  alignItems:"center", justifyContent:"center",
-                                  fontSize:11, color:"#000", fontWeight:800, pointerEvents:"none" }}>✓</div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
