@@ -320,17 +320,52 @@ function Lbl({ children }) {
   return <div style={{ fontSize: 11, color: "#797876", marginBottom: 3, textTransform: "uppercase", letterSpacing: ".05em" }}>{children}</div>;
 }
 function TF({ value, onChange, placeholder, disabled, type = "text" }) {
+  const [local, setLocal] = React.useState(value);
+  const focused = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!focused.current) setLocal(value);
+  }, [value]);
+
   return (
-    <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
+    <input
+      type={type}
+      value={local}
+      placeholder={placeholder}
+      disabled={disabled}
+      onFocus={() => { focused.current = true; }}
+      onChange={e => { setLocal(e.target.value); onChange(e.target.value); }}
+      onBlur={() => { focused.current = false; onChange(local); }}
       style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
         borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box",
         outline: "none", marginBottom: 6, opacity: disabled ? 0.4 : 1 }} />
   );
 }
 function TFArea({ value, onChange, placeholder, disabled, rows = 3 }) {
+  // Stato locale per non perdere il focus ad ogni keystroke
+  const [local, setLocal] = React.useState(value);
+  const focused = React.useRef(false);
+
+  // Sincronizza dall'esterno solo se non stiamo editando
+  React.useEffect(() => {
+    if (!focused.current) setLocal(value);
+  }, [value]);
+
   return (
-    <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-      disabled={disabled} rows={rows}
+    <textarea
+      value={local}
+      placeholder={placeholder}
+      disabled={disabled}
+      rows={rows}
+      onFocus={() => { focused.current = true; }}
+      onChange={e => {
+        setLocal(e.target.value);
+        onChange(e.target.value);  // aggiorna stato globale subito
+      }}
+      onBlur={() => {
+        focused.current = false;
+        onChange(local);
+      }}
       style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
         borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box",
         outline: "none", resize: "vertical", marginBottom: 6,
@@ -520,33 +555,40 @@ export default function TokenEditor() {
     copyright, showCopyright,
   };
 
-  const drawCanvas = useCallback(() => {
+  // Ridisegna il canvas ogni volta che qualcosa cambia — senza debounce
+  // cardDataRef.current è già aggiornato prima di questo punto
+  useEffect(() => {
     if (downloading) return;
     const c = canvasRef.current;
     if (!c) return;
-    c.width  = CW;
-    c.height = CH;
-    c.style.width  = DISPLAY_W + "px";
-    c.style.height = DISPLAY_H + "px";
-    renderCard(c, cardDataRef.current);
-  }, [downloading]);
-
-  useEffect(() => {
-    // Debounce: aspetta 250ms dopo l'ultimo cambiamento prima di ridisegnare
-    // Così durante la digitazione il canvas non si aggiorna ad ogni tasto
-    const timer = setTimeout(() => { drawCanvas(); }, 250);
-    return () => clearTimeout(timer);
+    let raf;
+    raf = requestAnimationFrame(() => {
+      c.width  = CW;
+      c.height = CH;
+      c.style.width  = DISPLAY_W + "px";
+      c.style.height = DISPLAY_H + "px";
+      renderCard(c, cardDataRef.current);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [
     downloading,
     artUrl, frame, ptFrame,
-    name, nameStyle,
-    type, typeStyle,
-    ability, abilityStyle, showAbility,
-    pt, ptStyle, showPT,
+    nameStyle, typeStyle, abilityStyle, showAbility,
+    ptStyle, showPT,
     infoLeft, showInfoLeft, showArtist,
     copyright, showCopyright,
-    drawCanvas,
   ]);
+
+  // Ridisegna solo i testi quando cambiano (separato per non bloccare drag/slider)
+  const textRafRef = useRef(null);
+  useEffect(() => {
+    if (textRafRef.current) cancelAnimationFrame(textRafRef.current);
+    textRafRef.current = requestAnimationFrame(() => {
+      const c = canvasRef.current;
+      if (!c || downloading) return;
+      renderCard(c, cardDataRef.current);
+    });
+  }, [name, type, ability, pt, downloading]);
 
   // ── Download: usa stateRef.current — ZERO re-render, ZERO doppia carta ────
   const handleDownload = async () => {
