@@ -61,44 +61,118 @@ const Icon = ({ d, size = 16 }) => (
 
 // ── SCRYFALL SEARCH PANEL ─────────────────────────────────────────────────────
 function ScryfallSearchPanel({ onAddCards }) {
-  const [query, setQuery]       = useState("");
-  const [results, setResults]   = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
-  const [selected, setSelected] = useState({}); // cardId → qty
+  const [query, setQuery]         = React.useState("");
+  const [suggestions, setSuggestions] = React.useState([]);
+  const [showSugg, setShowSugg]   = React.useState(false);
+  const [results, setResults]     = React.useState([]);   // stampe della carta selezionata
+  const [loading, setLoading]     = React.useState(false);
+  const [loadingSugg, setLoadingSugg] = React.useState(false);
+  const [error, setError]         = React.useState("");
+  const [selected, setSelected]   = React.useState({});   // printId → qty
+  const [expandedCard, setExpandedCard] = React.useState(null); // nome carta → mostra tutte le stampe
+  const [artMap, setArtMap]       = React.useState({});   // nome → [stampe]
+  const [loadingArts, setLoadingArts] = React.useState(null); // nome carta in caricamento
+  const suggTimer   = React.useRef(null);
+  const inputRef    = React.useRef(null);
+  const G = "#4f98a3", BD = "#393836", SURFACE = "#252420";
 
-  const search = async () => {
-    if (!query.trim()) return;
-    setLoading(true); setError(""); setResults([]); setSelected({});
+  // ── Autocomplete (catalog/card-names) ───────────────────────────────────────
+  const fetchSuggestions = (val) => {
+    clearTimeout(suggTimer.current);
+    if (val.length < 2) { setSuggestions([]); return; }
+    setLoadingSugg(true);
+    suggTimer.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(val)}`);
+        const j = await r.json();
+        setSuggestions((j.data || []).slice(0, 10));
+      } catch { setSuggestions([]); }
+      setLoadingSugg(false);
+    }, 220);
+  };
+
+  const handleInput = (val) => {
+    setQuery(val);
+    setShowSugg(true);
+    setResults([]);
+    setError("");
+    setSelected({});
+    setExpandedCard(null);
+    fetchSuggestions(val);
+  };
+
+  // ── Cerca tutte le stampe di una carta (unique=prints) ───────────────────────
+  const searchCard = async (name) => {
+    setQuery(name);
+    setShowSugg(false);
+    setSuggestions([]);
+    setLoading(true);
+    setError("");
+    setResults([]);
+    setSelected({});
+    setExpandedCard(null);
     try {
+      // Prima ricerca: unique=prints per avere TUTTE le edizioni/art
       const r = await fetch(
-        `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&unique=prints&order=released&dir=desc`
+        `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(name)}"&unique=prints&order=released&dir=desc`
       );
-      const json = await r.json();
-      if (json.object === "error") setError("Nessun risultato: " + (json.details || query));
-      else setResults(json.data.slice(0, 18));
+      const j = await r.json();
+      if (j.object === "error") {
+        // fallback fuzzy
+        const r2 = await fetch(
+          `https://api.scryfall.com/cards/search?q=${encodeURIComponent(name)}&unique=prints&order=released&dir=desc`
+        );
+        const j2 = await r2.json();
+        if (j2.object === "error") { setError("Nessun risultato per \"" + name + "\""); }
+        else setResults(j2.data || []);
+      } else {
+        setResults(j.data || []);
+      }
     } catch { setError("Errore di rete."); }
     setLoading(false);
   };
 
-  const toggleSelect = (card) => {
+  const handleKey = (e) => {
+    if (e.key === "Enter") { if (query.trim()) searchCard(query.trim()); }
+    if (e.key === "Escape") { setShowSugg(false); }
+  };
+
+  // ── Raggruppa risultati per nome carta ───────────────────────────────────────
+  // Se una carta ha più stampe mostriamo il gruppo espandibile
+  const grouped = React.useMemo(() => {
+    const map = {};
+    for (const card of results) {
+      const key = card.name;
+      if (!map[key]) map[key] = [];
+      map[key].push(card);
+    }
+    return map;
+  }, [results]);
+
+  const cardNames = Object.keys(grouped);
+
+  // ── Selezione stampa ─────────────────────────────────────────────────────────
+  const selectPrint = (card) => {
     setSelected(prev => {
       if (prev[card.id]) {
         const n = { ...prev }; delete n[card.id]; return n;
       }
-      return { ...prev, [card.id]: 1 };
+      return { ...prev, [card.id]: { qty: 1, card } };
     });
   };
 
   const setQty = (id, qty) =>
-    setSelected(prev => ({ ...prev, [id]: Math.max(1, Math.min(20, Number(qty))) }));
+    setSelected(prev => ({
+      ...prev,
+      [id]: { ...prev[id], qty: Math.max(1, Math.min(20, Number(qty))) }
+    }));
 
+  // ── Aggiungi selezionate ─────────────────────────────────────────────────────
   const addSelected = async () => {
-    const cards = results.filter(c => selected[c.id]);
-    if (!cards.length) return;
+    const entries = Object.values(selected);
+    if (!entries.length) return;
     const items = [];
-    for (const card of cards) {
-      const qty = selected[card.id] || 1;
+    for (const { card, qty } of entries) {
       const imgUrl = card.image_uris?.normal
         || card.image_uris?.large
         || card.card_faces?.[0]?.image_uris?.normal;
@@ -114,8 +188,8 @@ function ScryfallSearchPanel({ onAddCards }) {
             url: localUrl,
             file,
             srcType: "scryfall",
-            set: card.set_name,
             thumb: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small,
+            set: card.set_name,
           });
         }
       } catch {
@@ -130,101 +204,228 @@ function ScryfallSearchPanel({ onAddCards }) {
     }
     onAddCards(items);
     setSelected({});
+    setResults([]);
+    setQuery("");
+    setSuggestions([]);
   };
 
-  const selectedCount = Object.values(selected).reduce((a, b) => a + b, 0);
-  const G = "#4f98a3", BD = "#393836", SURFACE = "#252420";
+  const selectedCount = Object.values(selected).reduce((a, { qty }) => a + qty, 0);
+  const selectedPrints = Object.keys(selected).length;
 
   return (
-    <div style={{ background: "#201f1d", border: `1px solid ${BD}`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <span style={{ fontWeight: 700, color: G, fontSize: 14 }}>Cerca carte su Scryfall</span>
+    <div style={{ background: "#201f1d", border: `1px solid ${BD}`, borderRadius: 10, padding: 16, marginBottom: 0 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth={2}>
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <span style={{ fontWeight:700, color:G, fontSize:14 }}>Cerca carta su Scryfall</span>
+        <span style={{ fontSize:11, color:"#4a4948", marginLeft:4 }}>
+          — suggerimenti automatici + scelta stampa
+        </span>
       </div>
 
-      {/* Search bar */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && search()}
-          placeholder="Es. Lightning Bolt, t:creature c:red …"
-          style={{ flex: 1, background: SURFACE, color: "#cdccca", border: `1px solid ${BD}`,
-            borderRadius: 6, padding: "7px 10px", fontSize: 13, outline: "none" }}
-        />
-        <button onClick={search} disabled={loading || !query.trim()}
-          style={{ padding: "7px 16px", borderRadius: 6, background: G, color: "#000",
-            border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer",
-            opacity: loading || !query.trim() ? 0.5 : 1 }}>
-          {loading ? "…" : "Cerca"}
-        </button>
-      </div>
-
-      {/* Error */}
-      {error && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 8 }}>{error}</div>}
-
-      {/* Risultati */}
-      {results.length > 0 && (
-        <>
-          <div style={{ fontSize: 11, color: "#797876", marginBottom: 8 }}>
-            {results.length} risultati — clicca per selezionare, imposta la quantità
+      {/* Search input con autocomplete */}
+      <div style={{ position:"relative", marginBottom:10 }}>
+        <div style={{ display:"flex", gap:8 }}>
+          <div style={{ position:"relative", flex:1 }}>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={e => handleInput(e.target.value)}
+              onKeyDown={handleKey}
+              onFocus={() => query.length >= 2 && setShowSugg(true)}
+              onBlur={() => setTimeout(() => setShowSugg(false), 180)}
+              placeholder="Es. Lightning Bolt, Llanowar Elves…"
+              style={{ width:"100%", background:SURFACE, color:"#cdccca",
+                border:`1px solid ${BD}`, borderRadius:6, padding:"8px 36px 8px 10px",
+                fontSize:13, outline:"none", boxSizing:"border-box" }}
+            />
+            {/* Indicatore loading suggerimenti */}
+            {loadingSugg && (
+              <div style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)",
+                width:14, height:14, border:`2px solid ${BD}`, borderTopColor:G,
+                borderRadius:"50%", animation:"spin .7s linear infinite" }} />
+            )}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8, marginBottom: 12, maxHeight: 320, overflowY: "auto" }}>
-            {results.map(card => {
-              const isOn = !!selected[card.id];
-              const thumb = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small;
+          <button onClick={() => query.trim() && searchCard(query.trim())}
+            disabled={loading || !query.trim()}
+            style={{ padding:"8px 18px", borderRadius:6, background:G, color:"#000",
+              border:"none", fontWeight:700, fontSize:13, cursor:"pointer",
+              opacity: loading || !query.trim() ? 0.5 : 1, whiteSpace:"nowrap" }}>
+            {loading ? "…" : "Cerca"}
+          </button>
+        </div>
+
+        {/* Dropdown suggerimenti */}
+        {showSugg && suggestions.length > 0 && (
+          <div style={{ position:"absolute", top:"100%", left:0, right:60,
+            background:"#1c1b19", border:`1px solid ${BD}`, borderRadius:8,
+            zIndex:200, boxShadow:"0 8px 24px rgba(0,0,0,.5)", overflow:"hidden", marginTop:2 }}>
+            {suggestions.map((s, i) => (
+              <div key={i}
+                onMouseDown={() => searchCard(s)}
+                style={{ padding:"9px 14px", cursor:"pointer", fontSize:13, color:"#cdccca",
+                  borderBottom: i < suggestions.length-1 ? `1px solid ${BD}` : "none",
+                  transition:"background .1s" }}
+                onMouseEnter={e => e.currentTarget.style.background="#252420"}
+                onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                <span style={{ color:G, marginRight:6, fontSize:11 }}>🃏</span>
+                {s}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Errore */}
+      {error && <div style={{ fontSize:12, color:"#f87171", marginBottom:8 }}>{error}</div>}
+
+      {/* Risultati raggruppati per carta */}
+      {cardNames.length > 0 && (
+        <>
+          <div style={{ fontSize:11, color:"#797876", marginBottom:10 }}>
+            {results.length} stampe trovate per{" "}
+            <strong style={{ color:"#cdccca" }}>{cardNames.length}</strong> car{cardNames.length===1?"ta":"te"}
+            {" — "}seleziona la stampa che preferisci, poi imposta la quantità
+          </div>
+
+          <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:420, overflowY:"auto" }}>
+            {cardNames.map(cardName => {
+              const prints = grouped[cardName];
+              const isExpanded = expandedCard === cardName;
+              // stampa "rappresentante" per il riassunto collassato
+              const rep = prints[0];
+              const repThumb = rep.image_uris?.small || rep.card_faces?.[0]?.image_uris?.small;
+
+              // quante stampe di questa carta sono selezionate
+              const selForCard = prints.filter(p => selected[p.id]);
+
               return (
-                <div key={card.id}
-                  onClick={() => toggleSelect(card)}
-                  style={{ position: "relative", borderRadius: 6, overflow: "visible", cursor: "pointer",
-                    border: `2px solid ${isOn ? G : BD}`,
-                    boxShadow: isOn ? `0 0 0 2px ${G}44` : "none",
-                    background: "#1a1917", transition: "border-color .15s" }}>
-                  <img src={thumb} alt={card.name}
-                    style={{ width: "100%", display: "block", borderRadius: 4 }} />
-                  <div style={{ fontSize: 9, color: "#797876", padding: "3px 4px",
-                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {card.name}
-                  </div>
-                  {isOn && (
-                    <div style={{ position: "absolute", top: 4, right: 4, zIndex: 10 }}
-                      onClick={e => e.stopPropagation()}>
-                      <input
-                        type="number" min={1} max={20} value={selected[card.id]}
-                        onChange={e => setQty(card.id, e.target.value)}
-                        style={{ width: 38, background: "#000", color: G, border: `1px solid ${G}`,
-                          borderRadius: 4, padding: "2px 4px", fontSize: 12, fontWeight: 700,
-                          textAlign: "center", outline: "none" }}
-                      />
+                <div key={cardName} style={{ border:`1px solid ${BD}`, borderRadius:8, overflow:"hidden" }}>
+                  {/* Header gruppo */}
+                  <div
+                    onClick={() => setExpandedCard(isExpanded ? null : cardName)}
+                    style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px",
+                      background: isExpanded ? "#252420" : "#1c1b19", cursor:"pointer",
+                      transition:"background .15s" }}>
+                    <img src={repThumb} alt={cardName}
+                      style={{ width:32, height:44, objectFit:"cover", borderRadius:3, flexShrink:0 }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:13, color:"#cdccca" }}>{cardName}</div>
+                      <div style={{ fontSize:11, color:"#797876" }}>
+                        {prints.length} stampa{prints.length>1?"e disponibili":""} disponibile
+                        {selForCard.length > 0 && (
+                          <span style={{ marginLeft:8, color:"#4ade80", fontWeight:600 }}>
+                            · {selForCard.length} selezionat{selForCard.length===1?"a":"e"}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  {isOn && (
-                    <div style={{ position: "absolute", top: 4, left: 4,
-                      background: G, borderRadius: "50%", width: 18, height: 18,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 12, color: "#000", fontWeight: 800, pointerEvents: "none" }}>✓</div>
+                    {/* Quick-add se c'è solo 1 stampa */}
+                    {prints.length === 1 && (
+                      <div onClick={e => e.stopPropagation()}
+                        style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <input type="number" min={1} max={20}
+                          value={selected[rep.id]?.qty || 1}
+                          onChange={e => {
+                            if (selected[rep.id]) setQty(rep.id, e.target.value);
+                          }}
+                          onClick={() => { if (!selected[rep.id]) selectPrint(rep); }}
+                          style={{ width:44, background:"#252420", color:G, border:`1px solid ${BD}`,
+                            borderRadius:5, padding:"4px 6px", fontSize:13, fontWeight:700,
+                            textAlign:"center", outline:"none" }} />
+                        <button onClick={() => selectPrint(rep)}
+                          style={{ padding:"5px 12px", borderRadius:6, border:"none", fontWeight:700,
+                            fontSize:12, cursor:"pointer",
+                            background: selected[rep.id] ? "#4ade8033" : G,
+                            color: selected[rep.id] ? "#4ade80" : "#000" }}>
+                          {selected[rep.id] ? "✓" : "+"}
+                        </button>
+                      </div>
+                    )}
+                    {/* Toggle expand */}
+                    <span style={{ color:"#4a4948", fontSize:14, marginLeft:4, flexShrink:0 }}>
+                      {isExpanded ? "▲" : "▼"}
+                    </span>
+                  </div>
+
+                  {/* Griglia stampe espansa */}
+                  {isExpanded && (
+                    <div style={{ padding:"10px 12px", background:"#181716",
+                      display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(90px, 1fr))", gap:8 }}>
+                      {prints.map(card => {
+                        const thumb = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small;
+                        const isOn  = !!selected[card.id];
+                        const artist = card.artist || "";
+                        const setName = card.set_name || "";
+                        const yr   = card.released_at?.slice(0,4) || "";
+                        return (
+                          <div key={card.id}
+                            onClick={() => selectPrint(card)}
+                            style={{ cursor:"pointer", borderRadius:6, overflow:"visible",
+                              border:`2px solid ${isOn ? G : BD}`,
+                              boxShadow: isOn ? `0 0 0 2px ${G}44` : "none",
+                              background:"#1a1917", transition:"border-color .15s",
+                              position:"relative" }}>
+                            <img src={thumb} alt={card.name}
+                              style={{ width:"100%", display:"block", borderRadius:4 }} />
+                            <div style={{ padding:"3px 5px" }}>
+                              <div style={{ fontSize:9, color:"#cdccca", fontWeight:600,
+                                whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                                {setName} {yr && `'${yr.slice(2)}`}
+                              </div>
+                              <div style={{ fontSize:8, color:"#797876",
+                                whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                                {artist}
+                              </div>
+                            </div>
+                            {/* Checkmark + qty */}
+                            {isOn && (
+                              <>
+                                <div style={{ position:"absolute", top:4, left:4,
+                                  background:G, borderRadius:"50%", width:18, height:18,
+                                  display:"flex", alignItems:"center", justifyContent:"center",
+                                  fontSize:11, color:"#000", fontWeight:800, pointerEvents:"none" }}>✓</div>
+                                <div onClick={e => e.stopPropagation()}
+                                  style={{ position:"absolute", top:4, right:4 }}>
+                                  <input type="number" min={1} max={20}
+                                    value={selected[card.id].qty}
+                                    onChange={e => setQty(card.id, e.target.value)}
+                                    style={{ width:38, background:"#000", color:G,
+                                      border:`1px solid ${G}`, borderRadius:4,
+                                      padding:"2px 4px", fontSize:12, fontWeight:700,
+                                      textAlign:"center", outline:"none" }} />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               );
             })}
           </div>
 
-          {/* Add button */}
-          <button onClick={addSelected} disabled={!selectedCount}
-            style={{ width: "100%", padding: "9px", borderRadius: 7,
-              background: selectedCount ? G : "#333", color: selectedCount ? "#000" : "#555",
-              border: "none", fontWeight: 700, fontSize: 13, cursor: selectedCount ? "pointer" : "not-allowed",
-              transition: "background .2s" }}>
-            {selectedCount
-              ? `➕ Aggiungi ${selectedCount} cop${selectedCount === 1 ? "ia" : "ie"} alla coda di stampa`
-              : "Seleziona almeno una carta"}
-          </button>
+          {/* Footer aggiungi */}
+          {selectedPrints > 0 && (
+            <button onClick={addSelected}
+              style={{ width:"100%", marginTop:12, padding:"10px", borderRadius:7,
+                background:G, color:"#000", border:"none", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+              ➕ Aggiungi {selectedCount} cop{selectedCount===1?"ia":"ie"} alla coda
+              ({selectedPrints} stampa{selectedPrints===1?"":"e"})
+            </button>
+          )}
         </>
       )}
+
+      <style>{`
+        @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+      `}</style>
     </div>
   );
 }
-
 
 // ── BULK IMPORT PANEL ─────────────────────────────────────────────────────────
 function BulkImportPanel({ onAddCards, toast }) {
