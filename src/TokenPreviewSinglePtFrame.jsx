@@ -411,6 +411,7 @@ export default function TokenPreviewSinglePtFrame() {
   const [withBleed, setWithBleed] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(100);
   const canvasRef = useRef(null);
+  const artInputRef = useRef(null);
   const responsiveScale = useResponsiveScale();
   const previewScale = useMemo(() => (DISPLAY_W / CW) * responsiveScale * (previewZoom / 100), [responsiveScale, previewZoom]);
   const frameSetNames = Object.keys(FRAME_MAP);
@@ -483,7 +484,7 @@ export default function TokenPreviewSinglePtFrame() {
         <div style={{ display:'grid', gap:12, alignSelf:'start' }}>
           <Section title='Artwork' right='drag on preview'>
             <Field label='Immagine'>
-              <Input type='file' accept='image/*' onChange={onArtFile} />
+              <Input ref={artInputRef} type='file' accept='image/*' onChange={onArtFile} />
             </Field>
             <Row>
               <Field label='Zoom'>
@@ -603,7 +604,7 @@ export default function TokenPreviewSinglePtFrame() {
               <button onClick={() => nudge(activeLayer, -1, 0)} style={btnSecondary}>←</button>
               <button onClick={() => nudge(activeLayer, 1, 0)} style={btnSecondary}>→</button>
               <button onClick={() => nudge(activeLayer, 0, 1)} style={btnSecondary}>↓</button>
-              <button onClick={() => setState({ ...DEFAULT_STATE, artUrl:'', artTransform:{ zoom:1, x:0, y:0 }, copyright:{ ...DEFAULT_STATE.copyright, year:new Date().getFullYear() } })} style={btnDanger}>Reset</button>
+              <button onClick={() => { setState({ ...DEFAULT_STATE, artUrl:'', artTransform:{ zoom:1, x:0, y:0 }, copyright:{ ...DEFAULT_STATE.copyright, year:new Date().getFullYear() } }); if (artInputRef.current) artInputRef.current.value = ''; }} style={btnDanger}>Reset</button>
               <button onClick={exportPNG} style={btnPrimary}>Esporta PNG</button>
             </div>
             <div style={{ fontSize:12, color:'#9d9891' }}>Suggerimento: trascina direttamente i box in preview; con Shift + frecce sposti di 10px.</div>
