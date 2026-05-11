@@ -174,34 +174,33 @@ function ScryfallSearchPanel({ onAddCards }) {
   // ── Ricerca: recupera TUTTE le stampe con paginazione ───────────────────────
   const searchCard = async (name) => {
     setQuery(name); setShowSugg(false); setSuggs([]);
-    setLoading(true); setLoadMsg("Cerco stampe…"); setPrints([]);
+    setLoading(true); setLoadMsg("Cerco nome canonico…"); setPrints([]);
     setError(""); setSelected({}); setExpandedName(null);
     try {
-      // Prima pagina per mostrare subito qualcosa
-      let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(name)}"&unique=prints&order=released&dir=desc`;
+      // Step 1: risolvi nome canonico via fuzzy (bolt → Lightning Bolt, ecc.)
+      let canonicalName = name;
+      try {
+        const nr = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
+        const nj = await nr.json();
+        if (nj.object !== "error") {
+          canonicalName = nj.name;
+          setQuery(canonicalName); // mostra il nome corretto nell'input
+        }
+      } catch { /* usa nome originale */ }
+
+      // Step 2: tutte le stampe con paginazione progressiva
+      let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(canonicalName)}"&unique=prints&order=released&dir=desc`;
       const all = [];
+      setLoadMsg("Caricamento stampe…");
       while (url) {
         const r = await fetch(url);
         const j = await r.json();
         if (j.object === "error") { url = null; break; }
         all.push(...(j.data || []));
-        setPrints([...all]); // aggiorna in tempo reale
+        setPrints([...all]);
         setLoadMsg(`Caricamento… ${all.length} stampe`);
         url = j.has_more ? j.next_page : null;
         if (url) await new Promise(r => setTimeout(r, 100));
-      }
-      // fallback fuzzy
-      if (!all.length) {
-        let url2 = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(name)}&unique=prints&order=released&dir=desc`;
-        while (url2) {
-          const r = await fetch(url2);
-          const j = await r.json();
-          if (j.object === "error") { url2 = null; break; }
-          all.push(...(j.data || []));
-          setPrints([...all]);
-          url2 = j.has_more ? j.next_page : null;
-          if (url2) await new Promise(r => setTimeout(r, 100));
-        }
       }
       if (!all.length) setError(`Nessun risultato per "${name}"`);
       else setLoadMsg(`${all.length} stampe totali`);
