@@ -264,9 +264,9 @@ function Field({ label, children }) {
   return <label style={{ display:"grid", gap:6, fontSize:12, color:"#b8b5b1" }}><span>{label}</span>{children}</label>;
 }
 
-function Input(props) {
-  return <input {...props} style={{ width:"100%", background:"#11100f", color:"#ece9e4", border:"1px solid #393836", borderRadius:8, padding:"9px 10px", fontSize:13, outline:"none", ...(props.style||{}) }} />;
-}
+const Input = React.forwardRef(function Input(props, ref) {
+  return <input ref={ref} {...props} style={{ width:"100%", background:"#11100f", color:"#ece9e4", border:"1px solid #393836", borderRadius:8, padding:"9px 10px", fontSize:13, outline:"none", ...(props.style||{}) }} />;
+});
 
 function Textarea(props) {
   return <textarea {...props} style={{ width:"100%", background:"#11100f", color:"#ece9e4", border:"1px solid #393836", borderRadius:8, padding:"9px 10px", fontSize:13, outline:"none", resize:"both", ...(props.style||{}) }} />;
