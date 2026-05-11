@@ -286,7 +286,7 @@ function GuideOverlay({ activeLayer, state, scale }) {
     type: { x: state.typeStyle.x - 6, y: state.typeStyle.y - 16, w: 320, h: 32, c: '#22c55e' },
     ability: { x: state.abilityStyle.x - 6, y: state.abilityStyle.y - 6, w: state.abilityStyle.width || (CW - state.abilityStyle.x * 2), h: 210, c: '#f59e0b' },
     pt: { x: state.ptStyle.frameX, y: state.ptStyle.frameY, w: state.ptStyle.width, h: state.ptStyle.height, c: '#f472b6' },
-    footer: { x: 12, y: CH - 52, w: CW - 24, h: 40, c: '#a78bfa' },
+    footer: { x: 16, y: CH - 42, w: CW - 32, h: 22, c: '#a78bfa' },
   };
   return (
     <div style={{ position:'absolute', inset:0, pointerEvents:'none' }}>
@@ -325,7 +325,7 @@ function PreviewCard({ canvasRef, previewScale, showGuides, activeLayer, state, 
       if (dragRef.current.kind === 'type') setState(prev => ({ ...prev, typeStyle:{ ...prev.typeStyle, x: Math.round(snap.typeStyle.x + dx), y: Math.round(snap.typeStyle.y + dy) } }));
       if (dragRef.current.kind === 'ability') setState(prev => ({ ...prev, abilityStyle:{ ...prev.abilityStyle, x: Math.round(snap.abilityStyle.x + dx), y: Math.round(snap.abilityStyle.y + dy) } }));
       if (dragRef.current.kind === 'pt') setState(prev => ({ ...prev, ptStyle:{ ...prev.ptStyle, frameX: Math.round(snap.ptStyle.frameX + dx), frameY: Math.round(snap.ptStyle.frameY + dy) } }));
-      if (dragRef.current.kind === 'footer') setState(prev => ({ ...prev, infoLeft:{ ...prev.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||10) - dy) }, copyright:{ ...prev.copyright, x: Math.round((snap.copyright?.x||18) - dx), y: Math.round((snap.copyright?.y||10) - dy) } }));
+      if (dragRef.current.kind === 'footer') setState(prev => ({ ...prev, infoLeft:{ ...prev.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||12) - dy) }, copyright:{ ...prev.copyright, x: snap.copyright?.x ?? 18, y: Math.round((snap.copyright?.y||12) - dy), color: snap.copyright?.color || prev.copyright.color, fontSize: snap.copyright?.fontSize || prev.copyright.fontSize, year: snap.copyright?.year || prev.copyright.year } }));
     };
     const up = () => {
       dragRef.current = null;
@@ -359,7 +359,7 @@ function PreviewCard({ canvasRef, previewScale, showGuides, activeLayer, state, 
           <div onMouseDown={e => beginDrag('type', e)} onTouchStart={e => beginDrag('type', e)} onClick={() => setActiveLayer('type')} style={{ position:'absolute', left:(state.typeStyle.x-6)*previewScale, top:(state.typeStyle.y-16)*previewScale, width:320*previewScale, height:32*previewScale, cursor:'move' }} />
           <div onMouseDown={e => beginDrag('ability', e)} onTouchStart={e => beginDrag('ability', e)} onClick={() => setActiveLayer('ability')} style={{ position:'absolute', left:(state.abilityStyle.x-6)*previewScale, top:(state.abilityStyle.y-6)*previewScale, width:(state.abilityStyle.width || (CW-state.abilityStyle.x*2))*previewScale, height:210*previewScale, cursor:'move' }} />
           <div onMouseDown={e => beginDrag('pt', e)} onTouchStart={e => beginDrag('pt', e)} onClick={() => setActiveLayer('pt')} style={{ position:'absolute', left:state.ptStyle.frameX*previewScale, top:state.ptStyle.frameY*previewScale, width:state.ptStyle.width*previewScale, height:state.ptStyle.height*previewScale, cursor:'move' }} />
-          <div onMouseDown={e => beginDrag('footer', e)} onTouchStart={e => beginDrag('footer', e)} onClick={() => setActiveLayer('footer')} style={{ position:'absolute', left:12*previewScale, top:(CH-52)*previewScale, width:(CW-24)*previewScale, height:40*previewScale, cursor:'move' }} />
+          <div onMouseDown={e => beginDrag('footer', e)} onTouchStart={e => beginDrag('footer', e)} onClick={() => setActiveLayer('footer')} style={{ position:'absolute', left:16*previewScale, top:(CH-42)*previewScale, width:(CW-32)*previewScale, height:22*previewScale, cursor:'move' }} />
         </div>
       </div>
     </div>
@@ -431,9 +431,19 @@ export default function TokenPreviewSinglePtFrame() {
   const exportPNG = async () => {
     const c = document.createElement('canvas');
     await renderCard(c, state, withBleed);
+
+    const scale = 4;
+    const out = document.createElement('canvas');
+    out.width = c.width * scale;
+    out.height = c.height * scale;
+    const octx = out.getContext('2d');
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = 'high';
+    octx.drawImage(c, 0, 0, out.width, out.height);
+
     const a = document.createElement('a');
-    a.href = c.toDataURL('image/png');
-    a.download = `${(state.name || 'token').replace(/\s+/g,'_')}.png`;
+    a.href = out.toDataURL('image/png');
+    a.download = `${(state.name || 'token').replace(/\s+/g,'_')}_4x.png`;
     a.click();
   };
 
@@ -558,6 +568,12 @@ export default function TokenPreviewSinglePtFrame() {
               <Field label='Artist'><Input value={state.infoLeft.artist} onChange={e => setState(prev => ({ ...prev, infoLeft:{ ...prev.infoLeft, artist:e.target.value } }))} /></Field>
               <Field label='Year'><Input value={state.copyright.year} onChange={e => setState(prev => ({ ...prev, copyright:{ ...prev.copyright, year:e.target.value } }))} /></Field>
               <Field label='Footer color'><Input type='color' value={state.infoLeft.color} onChange={e => setState(prev => ({ ...prev, infoLeft:{ ...prev.infoLeft, color:e.target.value }, copyright:{ ...prev.copyright, color:e.target.value } }))} style={{ padding:4, height:42 }} /></Field>
+            </Row>
+            <Row>
+              <Field label='Footer X'><Input type='number' value={state.infoLeft.x} onChange={e => setState(prev => ({ ...prev, infoLeft:{ ...prev.infoLeft, x:Number(e.target.value) } }))} /></Field>
+              <Field label='Footer Y'><Input type='number' value={state.infoLeft.y} onChange={e => setState(prev => ({ ...prev, infoLeft:{ ...prev.infoLeft, y:Number(e.target.value) } }))} /></Field>
+              <Field label='Footer size'><Input type='number' value={state.infoLeft.fontSize} onChange={e => setState(prev => ({ ...prev, infoLeft:{ ...prev.infoLeft, fontSize:Number(e.target.value) }, copyright:{ ...prev.copyright, fontSize:Math.max(8, Number(e.target.value)-2) } }))} /></Field>
+              <Field label='Copyright Y'><Input type='number' value={state.copyright.y} onChange={e => setState(prev => ({ ...prev, copyright:{ ...prev.copyright, y:Number(e.target.value) } }))} /></Field>
             </Row>
           </Section>
 
