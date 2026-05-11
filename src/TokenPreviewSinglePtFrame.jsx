@@ -508,24 +508,34 @@ export default function TokenEditor() {
 
   // ── useEffect: ridisegna SOLO quando i dati della carta cambiano ──────────
   // Non dipende da `downloading` → nessun re-render spurio durante l'export
-  useEffect(() => {
-    if (downloading) return; // blocca re-render durante il download
+  // Usa ref per tenere sempre i dati aggiornati senza ri-triggerare l'effect
+  const cardDataRef = useRef({});
+  cardDataRef.current = {
+    artUrl, frame, ptFrame,
+    name, nameStyle,
+    type, typeStyle,
+    ability, abilityStyle, showAbility,
+    pt, ptStyle, showPT,
+    infoLeft, showInfoLeft, showArtist,
+    copyright, showCopyright,
+  };
+
+  const drawCanvas = useCallback(() => {
+    if (downloading) return;
     const c = canvasRef.current;
     if (!c) return;
     c.width  = CW;
     c.height = CH;
     c.style.width  = DISPLAY_W + "px";
     c.style.height = DISPLAY_H + "px";
-    renderCard(c, {
-      artUrl, frame, ptFrame,
-      name, nameStyle,
-      type, typeStyle,
-      ability, abilityStyle, showAbility,
-      pt, ptStyle, showPT,
-      infoLeft, showInfoLeft, showArtist,
-      copyright, showCopyright,
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    renderCard(c, cardDataRef.current);
+  }, [downloading]);
+
+  useEffect(() => {
+    // Debounce: aspetta 250ms dopo l'ultimo cambiamento prima di ridisegnare
+    // Così durante la digitazione il canvas non si aggiorna ad ogni tasto
+    const timer = setTimeout(() => { drawCanvas(); }, 250);
+    return () => clearTimeout(timer);
   }, [
     downloading,
     artUrl, frame, ptFrame,
@@ -535,6 +545,7 @@ export default function TokenEditor() {
     pt, ptStyle, showPT,
     infoLeft, showInfoLeft, showArtist,
     copyright, showCopyright,
+    drawCanvas,
   ]);
 
   // ── Download: usa stateRef.current — ZERO re-render, ZERO doppia carta ────
