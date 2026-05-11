@@ -320,6 +320,9 @@ function Lbl({ children }) {
   return <div style={{ fontSize: 11, color: "#797876", marginBottom: 3, textTransform: "uppercase", letterSpacing: ".05em" }}>{children}</div>;
 }
 function TF({ value, onChange, placeholder, disabled, type = "text" }) {
+  // Stato completamente locale — NON aggiorna lo stato globale ad ogni tasto
+  // Lo stato globale viene aggiornato solo onBlur (quando esci dal campo)
+  // Questo evita qualsiasi re-render del padre durante la digitazione
   const [local, setLocal] = React.useState(value);
   const focused = React.useRef(false);
 
@@ -334,7 +337,7 @@ function TF({ value, onChange, placeholder, disabled, type = "text" }) {
       placeholder={placeholder}
       disabled={disabled}
       onFocus={() => { focused.current = true; }}
-      onChange={e => { setLocal(e.target.value); onChange(e.target.value); }}
+      onChange={e => setLocal(e.target.value)}
       onBlur={() => { focused.current = false; onChange(local); }}
       style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
         borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box",
@@ -342,11 +345,9 @@ function TF({ value, onChange, placeholder, disabled, type = "text" }) {
   );
 }
 function TFArea({ value, onChange, placeholder, disabled, rows = 3 }) {
-  // Stato locale per non perdere il focus ad ogni keystroke
   const [local, setLocal] = React.useState(value);
   const focused = React.useRef(false);
 
-  // Sincronizza dall'esterno solo se non stiamo editando
   React.useEffect(() => {
     if (!focused.current) setLocal(value);
   }, [value]);
@@ -358,14 +359,8 @@ function TFArea({ value, onChange, placeholder, disabled, rows = 3 }) {
       disabled={disabled}
       rows={rows}
       onFocus={() => { focused.current = true; }}
-      onChange={e => {
-        setLocal(e.target.value);
-        onChange(e.target.value);  // aggiorna stato globale subito
-      }}
-      onBlur={() => {
-        focused.current = false;
-        onChange(local);
-      }}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={() => { focused.current = false; onChange(local); }}
       style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
         borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box",
         outline: "none", resize: "vertical", marginBottom: 6,
@@ -579,16 +574,9 @@ export default function TokenEditor() {
     copyright, showCopyright,
   ]);
 
-  // Ridisegna solo i testi quando cambiano (separato per non bloccare drag/slider)
-  const textRafRef = useRef(null);
-  useEffect(() => {
-    if (textRafRef.current) cancelAnimationFrame(textRafRef.current);
-    textRafRef.current = requestAnimationFrame(() => {
-      const c = canvasRef.current;
-      if (!c || downloading) return;
-      renderCard(c, cardDataRef.current);
-    });
-  }, [name, type, ability, pt, downloading]);
+  // I testi (name, type, ability, pt) vengono aggiornati nel canvas
+  // solo quando l'utente finisce di digitare (onBlur) — vedi TF e TFArea
+  // Questo evita re-render ad ogni keystroke che rubano il focus
 
   // ── Download: usa stateRef.current — ZERO re-render, ZERO doppia carta ────
   const handleDownload = async () => {
