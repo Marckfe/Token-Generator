@@ -45,8 +45,11 @@ export default function StudioEditor() {
       const mobile = window.innerWidth < 1000;
       setIsMobile(mobile);
       if (mobile) {
-        const availableW = window.innerWidth - 20;
-        setZoom(Math.min(availableW / CW, 0.6));
+        const availableW = window.innerWidth - 40;
+        const availableH = window.innerHeight - 250; // Account for nav and sidebar
+        const zoomW = availableW / CW;
+        const zoomH = availableH / CH;
+        setZoom(Math.min(zoomW, zoomH, 0.8));
       } else {
         setZoom(0.8);
       }
