@@ -18,26 +18,28 @@ const BASIC_LANDS   = new Set(["plains","island","swamp","mountain","forest","wa
   "snow-covered plains","snow-covered island","snow-covered swamp",
   "snow-covered mountain","snow-covered forest"]);
 
-// Aggiornata Aprile 2026 — fonte: mtgdc.info + duelcommander.org
+// Banlist ufficiale Duel Commander — fonte esclusiva: https://www.duelcommander.org/banlist/
 const DUEL_INDIVIDUALLY_BANNED = new Set([
   "Ancestral Recall","Ancient Tomb","Balance","Bazaar of Baghdad","Black Lotus",
   "Capture of Jingzhou","Channel","Chrome Mox","Comet, Stellar Pup","Dark Ritual",
   "Deadly Rollick","Deadpool, Trading Card","Deflecting Swat","Dig Through Time",
-  "Emrakul, the Aeons Torn","Fastbond","Flash","Fierce Guardianship","Frantic Search",
-  "Gifts Ungiven","Gitaxian Probe","Griselbrand","Hullbreacher","Imperial Seal",
+  "Entomb","Fastbond","Fierce Guardianship","Flawless Maneuver","Food Chain",
+  "Gaea's Cradle","Gifts Ungiven","Grim Monolith","Hermit Druid","Invert Polarity",
   "Jeweled Lotus","Karakas","Library of Alexandria","Lion's Eye Diamond","Lotus Petal",
-  "Maddening Hex","Mana Crypt","Mana Drain","Mana Vault","Mishra's Workshop",
-  "Mox Amber","Mox Diamond","Mox Emerald","Mox Jet","Mox Opal","Mox Pearl",
-  "Mox Ruby","Mox Sapphire","Mystical Tutor","Nadu, Winged Wisdom","Natural Order",
-  "Necropotence","Oath of Druids","Protean Hulk","Ragavan, Nimble Pilferer",
-  "Reanimate","Scapeshift","Sensei's Divining Top","Serra's Sanctum","Sol Ring",
-  "Strip Mine","Temporal Manipulation","Thassa's Oracle","The One Ring",
-  "The Tabernacle at Pendrell Vale","Time Vault","Time Walk","Time Warp",
-  "Timetwister","Tinker","Tolarian Academy","Treasure Cruise","Underworld Breach",
-  "Uro, Titan of Nature's Wrath","Vampiric Tutor","White Plume Adventurer"
+  "Lutri, the Spellchaser","Maddening Hex","Mana Crypt","Mana Drain","Mana Vault",
+  "Mishra's Workshop","Mox Amber","Mox Diamond","Mox Emerald","Mox Jet","Mox Opal",
+  "Mox Pearl","Mox Ruby","Mox Sapphire","Mystical Tutor","Nadu, Winged Wisdom",
+  "Natural Order","Necrotic Ooze","Oath of Druids","Protean Hulk",
+  "Ragavan, Nimble Pilferer","Reanimate","Scapeshift","Sensei's Divining Top",
+  "Serra's Sanctum","Sol Ring","Strip Mine","Temporal Manipulation","Thassa's Oracle",
+  "The One Ring","The Tabernacle at Pendrell Vale","Time Vault","Time Walk",
+  "Time Warp","Timetwister","Tinker","Tolarian Academy","Trazyn the Infinite",
+  "Treasure Cruise","Underworld Breach","Uro, Titan of Nature's Wrath",
+  "Vampiric Tutor","White Plume Adventurer"
 ]);
 
 // Bannate SOLO come comandante — legali nelle 99
+// Fonte esclusiva: https://www.duelcommander.org/banlist/
 const DUEL_BANNED_AS_COMMANDER = new Set([
   "Ajani, Nacatl Pariah","Arahbo, Roar of the World","Breya, Etherium Shaper",
   "Derevi, Empyrial Tactician","Dihada, Binder of Wills","Edgar Markov",
@@ -45,13 +47,14 @@ const DUEL_BANNED_AS_COMMANDER = new Set([
   "Ezio Auditore da Firenze","Hogaak, Arisen Necropolis","Inalla, Archmage Ritualist",
   "Minsc & Boo, Timeless Heroes","Old Stickfingers","Oloro, Ageless Ascetic",
   "Omnath, Locus of Creation","Prime Speaker Vannifar","Raffine, Scheming Seer",
-  "Rograkh, Son of Rohgahh","Shorikai, Genesis Engine","Tamiyo, Inquisitive Student",
+  "Shorikai, Genesis Engine","Tamiyo, Inquisitive Student","Tasigur, the Golden Fang",
   "Urza, Lord High Artificer","Vial Smasher the Fierce","Winota, Joiner of Forces",
   "Yuriko, the Tiger's Shadow"
 ]);
 
 // Bannata SOLO come companion
-const DUEL_BANNED_AS_COMPANION = new Set(["Lutri, the Spellchaser"]);
+// Companion-specific bans: usa esclusivamente duelcommander.org
+const DUEL_BANNED_AS_COMPANION = new Set();
 
 // Premodern — aggiornata 2026 (Parallax Tide bannata)
 const PREMODERN_BANLIST = new Set([
@@ -163,7 +166,7 @@ function parseDecklist(text) {
     if (m1) { count = parseInt(m1[1], 10); name = m1[2]; }
     else if (m2) { name = m2[1]; count = parseInt(m2[2], 10); }
     name = name.split(" [")[0]
-      .replace(/\s*\([A-Z0-9]{2,6}\)\s*\d*$/i, "")
+      .replace(/\s*\([A-Z0-9]{2,6}\)\s*[\w-]*$/i, "")
       .trim();
     (isSide ? side : main).push({ name, count });
   }
@@ -653,9 +656,7 @@ function DeckValidatorPanel() {
 
           {isDuel && (
             <div style={{ fontSize:".75rem", color:"var(--muted)", lineHeight:1.5 }}>
-              <b style={{ color:"var(--text)" }}>Duel Commander (Apr 2026):</b> Le carte individualmente bannate non
-              possono stare in nessuna parte del deck. I comandanti bannati sono vietati
-              <em> solo come commander</em>, ma legali nelle 99 carte. Lutri è bannata solo come companion.
+              <b style={{ color:"var(--text)" }}>Duel Commander:</b> la validazione usa solo la banlist ufficiale di duelcommander.org. Le carte bannate individualmente non possono stare in nessuna parte del mazzo; i commander bannati sono vietati solo nella command zone, ma restano legali nelle 99 quando previsto.
             </div>
           )}
           {format === "premodern" && (
