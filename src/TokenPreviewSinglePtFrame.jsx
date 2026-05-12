@@ -126,6 +126,28 @@ function fitTextBox(text, startSize, minSize, width, linesLimit = 12) {
 function cloneState(s) { return JSON.parse(JSON.stringify(s)); }
 function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 
+// --- REUSABLE UI COMPONENTS ---
+const ColorPickerField = ({ label, value, onChange, onTarget }) => (
+  <div className="control-field mb-4">
+    <span className="control-label">
+      {label}
+      {onTarget && <span className="text-xs opacity-60 hover:opacity-100 cursor-pointer" onClick={onTarget}>🎯 Seleziona Layer</span>}
+    </span>
+    <div className="color-picker-input-group">
+      <div className="color-preview-block" style={{ backgroundColor: value }}>
+        <input type="color" value={value} onChange={e => onChange(e.target.value)} />
+      </div>
+      <input 
+        type="text" 
+        className="control-input hex-input" 
+        value={value} 
+        onChange={e => onChange(e.target.value)}
+        placeholder="#FFFFFF"
+      />
+    </div>
+  </div>
+);
+
 // --- SYNCHRONOUS RENDER CARD ---
 function renderCardSync(canvas, state, withBleed = false) {
   if (!canvas) return;
@@ -177,7 +199,7 @@ function renderCardSync(canvas, state, withBleed = false) {
     ctx.textBaseline = "middle";
     ctx.textAlign = nameStyle.align || "center";
     const nameX = nameStyle.align === "left" ? nameStyle.x + 10 : nameStyle.align === "right" ? nameStyle.x + CW - 10 : nameStyle.x + CW / 2;
-    ctx.fillText((name || "TOKEN").toUpperCase(), nameX, nameStyle.y);
+    ctx.fillText(name || "TOKEN", nameX, nameStyle.y);
     ctx.restore();
   }
 
@@ -657,10 +679,12 @@ export default function TokenPreviewSinglePtFrame() {
                     <input type="text" className="control-input" value={state.pt.toughness} onChange={e => applyState({ ...state, pt: { ...state.pt, toughness: e.target.value } })} />
                   </div>
                 </div>
-                <div className="control-field mb-2">
-                  <span className="control-label">Colore Testo P/T</span>
-                  <input type="color" className="control-color" style={{ width: '100%', height: '36px', padding: '2px', borderRadius: '6px' }} value={state.ptStyle.color} onChange={e => update('ptStyle', { color: e.target.value })} />
-                </div>
+                
+                <ColorPickerField 
+                  label="Colore Testo P/T" 
+                  value={state.ptStyle.color} 
+                  onChange={v => update('ptStyle', { color: v })}
+                />
                 <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} className="custom-checkbox"/> Mostra P/T Box</label>
                 
                 <span className="control-label mb-2">Scegli Badge</span>
@@ -681,38 +705,47 @@ export default function TokenPreviewSinglePtFrame() {
               <div className="sidebar-panel-title">📝 Modifica Testi</div>
               <div className="control-group">
                 <div className="control-field mb-4">
-                  <span className="control-label">
-                    Nome Carta 
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <input type="color" title="Colore Nome" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.nameStyle.color} onChange={e => update('nameStyle', { color: e.target.value })} />
-                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('name')}>🎯</span>
-                    </div>
-                  </span>
+                  <span className="control-label">Nome Carta</span>
                   <input type="text" className="control-input" value={state.name} onChange={e => applyState({ ...state, name: e.target.value })} onClick={() => setActiveLayer('name')} list="token-names" />
-                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showName !== false} onChange={e => applyState({ ...state, showName: e.target.checked })} className="custom-checkbox"/> Mostra Nome Carta</label>
+                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showName !== false} onChange={e => applyState({ ...state, showName: e.target.checked })} className="custom-checkbox"/> Mostra Nome</label>
                 </div>
+                
+                <ColorPickerField 
+                  label="Colore Nome" 
+                  value={state.nameStyle.color} 
+                  onChange={v => update('nameStyle', { color: v })}
+                  onTarget={() => setActiveLayer('name')}
+                />
+
+                <hr className="my-4 border-[var(--border)] opacity-30" />
+
                 <div className="control-field mb-4">
-                  <span className="control-label">
-                    Tipo 
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <input type="color" title="Colore Tipo" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.typeStyle.color} onChange={e => update('typeStyle', { color: e.target.value })} />
-                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('type')}>🎯</span>
-                    </div>
-                  </span>
+                  <span className="control-label">Tipo</span>
                   <input type="text" className="control-input" value={state.type} onChange={e => applyState({ ...state, type: e.target.value })} onClick={() => setActiveLayer('type')} list="token-types" />
                   <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showType !== false} onChange={e => applyState({ ...state, showType: e.target.checked })} className="custom-checkbox"/> Mostra Tipo</label>
                 </div>
-                <div className="control-field">
-                  <span className="control-label">
-                    Regole 
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <input type="color" title="Colore Regole" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.abilityStyle.color} onChange={e => update('abilityStyle', { color: e.target.value })} />
-                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('ability')}>🎯</span>
-                    </div>
-                  </span>
+
+                <ColorPickerField 
+                  label="Colore Tipo" 
+                  value={state.typeStyle.color} 
+                  onChange={v => update('typeStyle', { color: v })}
+                  onTarget={() => setActiveLayer('type')}
+                />
+
+                <hr className="my-4 border-[var(--border)] opacity-30" />
+
+                <div className="control-field mb-4">
+                  <span className="control-label">Regole</span>
                   <textarea className="control-input control-textarea" value={state.ability} onChange={e => applyState({ ...state, ability: e.target.value })} onClick={() => setActiveLayer('ability')} />
                   <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showAbility} onChange={e => applyState({ ...state, showAbility: e.target.checked })} className="custom-checkbox"/> Mostra regole</label>
                 </div>
+
+                <ColorPickerField 
+                  label="Colore Regole" 
+                  value={state.abilityStyle.color} 
+                  onChange={v => update('abilityStyle', { color: v })}
+                  onTarget={() => setActiveLayer('ability')}
+                />
               </div>
             </>
           )}

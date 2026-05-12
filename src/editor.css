@@ -248,3 +248,36 @@
   color: var(--muted); border-bottom: 2px solid transparent;
 }
 .mobile-editor-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Custom Color Picker UI */
+.color-picker-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.color-preview-block {
+  width: 42px;
+  height: 38px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: var(--sh-sm);
+}
+.color-preview-block input[type="color"] {
+  position: absolute;
+  inset: -10px;
+  width: 200%;
+  height: 200%;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+.hex-input {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 0.8rem !important;
+  letter-spacing: 0.05em;
+  color: var(--accent) !important;
+}
