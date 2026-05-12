@@ -11,13 +11,25 @@ export default function BulkImportPanel({ onAddCards, toast }) {
 
   const parseList = (raw) =>
     raw.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
-      const m1 = line.match(/^(\d+)[xX]?\s+(.+)$/);
-      const m2 = line.match(/^(.+?)\s+[xX](\d+)$/);
-      const m3 = line.match(/^(.+?)\s+(\d+)$/);
-      if (m1) return { qty: Math.min(20, parseInt(m1[1])), name: m1[2].trim() };
-      if (m2) return { qty: Math.min(20, parseInt(m2[2])), name: m2[1].trim() };
-      if (m3) return { qty: Math.min(20, parseInt(m3[2])), name: m3[1].trim() };
-      return { qty: 1, name: line.trim() };
+      // 1. Rimuovi subito l'espansione e numero di collezione (es. "(OTP) 8" o "(MH3) 241")
+      let cleanLine = line.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
+      
+      // 2. Estrai quantità e nome
+      const m1 = cleanLine.match(/^(\d+)[xX]?\s+(.+)$/);
+      const m2 = cleanLine.match(/^(.+?)\s+[xX](\d+)$/);
+      const m3 = cleanLine.match(/^(.+?)\s+(\d+)$/);
+      
+      let qty = 1;
+      let name = cleanLine;
+      
+      if (m1) { qty = Math.min(20, parseInt(m1[1])); name = m1[2].trim(); }
+      else if (m2) { qty = Math.min(20, parseInt(m2[2])); name = m2[1].trim(); }
+      else if (m3) { qty = Math.min(20, parseInt(m3[2])); name = m3[1].trim(); }
+      
+      // 3. Estrai la faccia frontale per le carte doppie/split
+      name = name.split(/\s*\/\/?\s*/)[0].trim();
+      
+      return { qty, name, original: line };
     }).filter(e => e.name);
 
   const resolveCards = async () => {
@@ -29,10 +41,7 @@ export default function BulkImportPanel({ onAddCards, toast }) {
 
     let fetchedCards = [];
     try {
-      const identifiers = parsed.map(p => {
-        let cleanName = p.name.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
-        return { name: cleanName.split(/\s*\/\/?\s*/)[0].trim() };
-      });
+      const identifiers = parsed.map(p => ({ name: p.name }));
       for (let i = 0; i < identifiers.length; i += 75) {
         const chunk = identifiers.slice(i, i + 75);
         const res = await fetch('https://api.scryfall.com/cards/collection', {
@@ -50,10 +59,7 @@ export default function BulkImportPanel({ onAddCards, toast }) {
     }
 
     const results = parsed.map(entry => {
-      // Pulizia ulteriore da Moxfield come nel DeckChecker per massima compatibilità
-      let cleanName = entry.name.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
-      const frontName = cleanName.split(/\s*\/\/?\s*/)[0].trim().toLowerCase();
-      
+      const frontName = entry.name.toLowerCase();
       const card = fetchedCards.find(c => c.name.toLowerCase().startsWith(frontName) || (c.card_faces && c.card_faces[0].name.toLowerCase().startsWith(frontName)));
       if (card) {
         return { ...entry, status: "found", card, prints: [card], selectedPrint: card };
