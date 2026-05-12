@@ -24,26 +24,65 @@ export default function BulkImportPanel({ onAddCards, toast }) {
     const parsed = parseList(text);
     if (!parsed.length) return;
     setLoading(true); setResolved(false); setEntries([]);
-    const results = [];
-    for (let i = 0; i < parsed.length; i++) {
-      const entry = parsed[i];
-      setLoadMsg(`Verifico ${i + 1}/${parsed.length}: ${entry.name}`);
-      try {
-        const allPrints = await fetchAllPrints(entry.name);
-        if (!allPrints.length) {
-          results.push({ ...entry, status: "not_found", card: null, prints: [], selectedPrint: null });
-        } else {
-          results.push({ ...entry, status: "found", card: allPrints[0], prints: allPrints, selectedPrint: allPrints[0] });
-        }
-      } catch {
-        results.push({ ...entry, status: "error", card: null, prints: [], selectedPrint: null });
+    
+    setLoadMsg("Verifico la lista su Scryfall in bulk...");
+
+    let fetchedCards = [];
+    try {
+      const identifiers = parsed.map(p => ({ name: p.name.split(/\s*\/\/?\s*/)[0].trim() }));
+      for (let i = 0; i < identifiers.length; i += 75) {
+        const chunk = identifiers.slice(i, i + 75);
+        const res = await fetch('https://api.scryfall.com/cards/collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifiers: chunk })
+        });
+        const data = await res.json();
+        if (data.data) fetchedCards = fetchedCards.concat(data.data);
       }
-      await new Promise(r => setTimeout(r, 80));
+    } catch (e) {
+      setLoadMsg("Errore di rete durante la verifica.");
+      setLoading(false);
+      return;
     }
+
+    const results = parsed.map(entry => {
+      // Pulizia ulteriore da Moxfield come nel DeckChecker per massima compatibilità
+      let cleanName = entry.name.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
+      const frontName = cleanName.split(/\s*\/\/?\s*/)[0].trim().toLowerCase();
+      
+      const card = fetchedCards.find(c => c.name.toLowerCase().startsWith(frontName) || (c.card_faces && c.card_faces[0].name.toLowerCase().startsWith(frontName)));
+      if (card) {
+        return { ...entry, status: "found", card, prints: [card], selectedPrint: card };
+      } else {
+        return { ...entry, status: "not_found", card: null, prints: [], selectedPrint: null };
+      }
+    });
+
     setEntries(results);
     setResolved(true);
     setLoading(false);
     setLoadMsg("");
+  };
+
+  const handleExpandArt = async (idx, cardName) => {
+    if (expandedArt === idx) {
+      setExpandedArt(null);
+      return;
+    }
+    setExpandedArt(idx);
+    
+    if (entries[idx].prints.length <= 1) {
+      setLoadMsg(`Cerco stampe per ${cardName}...`);
+      try {
+        const cleanName = cardName.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim().split(/\s*\/\/?\s*/)[0].trim();
+        const allPrints = await fetchAllPrints(cleanName);
+        if (allPrints.length > 0) {
+          setEntries(prev => prev.map((e, i) => i === idx ? { ...e, prints: allPrints } : e));
+        }
+      } catch (e) {}
+      setLoadMsg("");
+    }
   };
 
   const updateQty = (i, val) => setEntries(prev => prev.map((e, idx) => idx === i ? { ...e, qty: Math.max(1, Math.min(20, Number(val))) } : e));
@@ -53,21 +92,31 @@ export default function BulkImportPanel({ onAddCards, toast }) {
   const addAll = async () => {
     const toAdd = entries.filter(e => e.status === "found" && !e.excluded);
     if (!toAdd.length) return;
-    setLoading(true); setLoadMsg("Scarico immagini…");
+    setLoading(true); 
+    
     const items = [];
-    for (const entry of toAdd) {
-      const card = entry.selectedPrint || entry.card;
-      const imgUrl = card.image_uris?.normal || card.image_uris?.large || card.card_faces?.[0]?.image_uris?.normal;
-      if (!imgUrl) continue;
-      try {
-        const blob = await fetch(imgUrl).then(r => r.blob());
-        const lu = URL.createObjectURL(blob);
-        const file = new File([blob], `${card.name}.jpg`, { type: blob.type });
-        for (let i = 0; i < entry.qty; i++) items.push({ id: card.id + "_" + i + "_" + Math.random(), name: card.name, url: lu, file, srcType: "scryfall", thumb: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small });
-      } catch {
-        for (let i = 0; i < entry.qty; i++) items.push({ id: card.id + "_" + i + "_" + Math.random(), name: card.name, url: imgUrl, srcType: "scryfall", thumb: card.image_uris?.small });
-      }
+    let completed = 0;
+
+    // Concurrency limit of 10 to be fast but safe
+    for (let i = 0; i < toAdd.length; i += 10) {
+      const chunk = toAdd.slice(i, i + 10);
+      await Promise.all(chunk.map(async (entry) => {
+        const card = entry.selectedPrint || entry.card;
+        const imgUrl = card.image_uris?.normal || card.image_uris?.large || card.card_faces?.[0]?.image_uris?.normal;
+        if (!imgUrl) return;
+        try {
+          const blob = await fetch(imgUrl).then(r => r.blob());
+          const lu = URL.createObjectURL(blob);
+          const file = new File([blob], `${card.name}.jpg`, { type: blob.type });
+          for (let j = 0; j < entry.qty; j++) items.push({ id: card.id + "_" + j + "_" + Math.random(), name: card.name, url: lu, file, srcType: "scryfall", thumb: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small });
+        } catch {
+          for (let j = 0; j < entry.qty; j++) items.push({ id: card.id + "_" + j + "_" + Math.random(), name: card.name, url: imgUrl, srcType: "scryfall", thumb: card.image_uris?.small });
+        }
+        completed++;
+        setLoadMsg(`Scarico immagini: ${completed}/${toAdd.length}`);
+      }));
     }
+
     onAddCards(items);
     setText(""); setEntries([]); setResolved(false); setLoading(false); setLoadMsg("");
   };
@@ -139,8 +188,8 @@ export default function BulkImportPanel({ onAddCards, toast }) {
                       {entry.status === "not_found" && <div className="text-error text-xs mt-1">Carta non trovata</div>}
                     </div>
                     
-                    {entry.status === "found" && entry.prints.length > 1 && (
-                      <button onClick={() => setExpandedArt(isArtOpen ? null : i)} className={`btn-outline-accent text-xs ${isArtOpen ? 'active' : ''}`}>
+                    {entry.status === "found" && (
+                      <button onClick={() => handleExpandArt(i, entry.name)} className={`btn-outline-accent text-xs ${isArtOpen ? 'active' : ''}`}>
                         🎨 {isArtOpen ? "Chiudi" : "Scegli art"}
                       </button>
                     )}
@@ -156,7 +205,7 @@ export default function BulkImportPanel({ onAddCards, toast }) {
 
                   {isArtOpen && entry.prints.length > 0 && (
                     <div className="bulk-art-picker">
-                      <div className="panel-hint mb-2">{entry.prints.length} stampe disponibili — clicca per scegliere</div>
+                      <div className="panel-hint mb-2">{entry.prints.length <= 1 ? 'Cerco stampe disponibili...' : `${entry.prints.length} stampe disponibili — clicca per scegliere`}</div>
                       {(() => {
                         const grouped = {};
                         for (const c of entry.prints) {
