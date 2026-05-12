@@ -117,6 +117,21 @@ export default function StudioEditor() {
   const activeLayer = layers.find(l => l.id === selectedId);
 
   // DRAG LOGIC
+  // SIDEBAR DRAG REORDERING
+  const handleLayerDragStart = (e, index) => {
+    e.dataTransfer.setData("index", index);
+  };
+
+  const handleLayerDrop = (e, targetIndex) => {
+    const sourceIndex = parseInt(e.dataTransfer.getData("index"));
+    if (sourceIndex === targetIndex) return;
+    
+    const newLayers = [...layers];
+    const [removed] = newLayers.splice(sourceIndex, 1);
+    newLayers.splice(targetIndex, 0, removed);
+    setLayers(newLayers);
+  };
+
   const onMouseDown = (id, e) => {
     if (e.button !== 0) return;
     setSelectedId(id);
@@ -246,19 +261,31 @@ export default function StudioEditor() {
             <div className="sidebar-panel-title mt-6" style={{ fontSize: '0.9rem' }}>Livelli ({layers.length})</div>
             <div className="layers-list">
               {layers.length === 0 && <div className="p-4 text-center text-muted text-sm">Nessun elemento aggiunto</div>}
-              {[...layers].reverse().map(l => (
-                <div 
-                  key={l.id} 
-                  className={`layer-item ${selectedId === l.id ? 'active' : ''}`}
-                  onClick={() => setSelectedId(l.id)}
-                >
-                  {l.type === 'text' ? <Type size={14} /> : <ImageIcon size={14} />}
-                  <span className="flex-1 truncate">{l.type === 'text' ? l.content : 'Immagine'}</span>
-                  <div className="layer-item-actions">
-                    <button onClick={(e) => { e.stopPropagation(); deleteLayer(l.id); }}><Trash2 size={14}/></button>
+              {[...layers].reverse().map((l, idx) => {
+                const actualIndex = layers.length - 1 - idx;
+                return (
+                  <div 
+                    key={l.id} 
+                    className={`layer-item ${selectedId === l.id ? 'active' : ''}`}
+                    onClick={() => setSelectedId(l.id)}
+                    draggable
+                    onDragStart={(e) => handleLayerDragStart(e, actualIndex)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleLayerDrop(e, actualIndex)}
+                  >
+                    <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                      <div className="drag-handle opacity-30 cursor-grab active:cursor-grabbing">
+                        <Move size={14} />
+                      </div>
+                      {l.type === 'text' ? <Type size={14} className="flex-shrink-0" /> : <ImageIcon size={14} className="flex-shrink-0" />}
+                      <span className="truncate">{l.type === 'text' ? l.content : 'Immagine'}</span>
+                    </div>
+                    <div className="layer-item-actions">
+                      <button onClick={(e) => { e.stopPropagation(); deleteLayer(l.id); }} className="hover:text-error transition-colors"><Trash2 size={14}/></button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -275,21 +302,22 @@ export default function StudioEditor() {
         </div>
 
         <div className="editor-canvas-container">
-          <div 
+            <div 
             ref={canvasRef}
             className="canvas-wrapper studio-canvas"
             style={{ 
               width: CW, 
               height: CH, 
               transform: `scale(${window.innerWidth < 1000 ? 0.6 : 0.8})`,
-              background: bgArt ? `url(${bgArt}) center/cover no-repeat` : '#1a1a1a',
+              background: bgArt ? `url(${bgArt}) center/cover no-repeat` : 'repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 50% / 40px 40px',
               position: 'relative',
               overflow: 'hidden',
-              boxShadow: '0 50px 100px rgba(0,0,0,0.8)'
+              boxShadow: '0 50px 100px rgba(0,0,0,0.8)',
+              borderRadius: '26px'
             }}
             onClick={() => setSelectedId(null)}
           >
-            {!bgArt && <div className="absolute inset-0 flex items-center justify-center text-muted font-bold opacity-20 uppercase tracking-widest">Sfondo Vuoto</div>}
+            {!bgArt && <div className="absolute inset-0 flex items-center justify-center text-muted font-bold opacity-30 uppercase tracking-widest text-center px-12">Carica immagine principale</div>}
             
             {layers.map((l) => (
               <div
