@@ -79,8 +79,7 @@ const iStyle = {
 };
 
 function parseDecklist(text) {
-  const lines = String(text || "").split("
-");
+  const lines = String(text || "").split("\n");
   const main = [];
   const side = [];
   let isSide = false;
