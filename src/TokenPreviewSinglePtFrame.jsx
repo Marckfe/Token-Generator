@@ -709,6 +709,14 @@ export default function TokenPreviewSinglePtFrame() {
                   fontValue={state.ptStyle.fontFamily}
                   onFontChange={v => update('ptStyle', { fontFamily: v })}
                 />
+
+                <div className="control-row">
+                  <div className="control-field">
+                    <span className="control-label">Dimensione ({state.ptStyle.fontSize}px)</span>
+                    <input type="range" min="10" max="80" value={state.ptStyle.fontSize} onChange={e => update('ptStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+                  </div>
+                </div>
+
                 <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} className="custom-checkbox"/> Mostra P/T Box</label>
                 
                 <span className="control-label mb-2">Scegli Badge</span>
@@ -743,6 +751,13 @@ export default function TokenPreviewSinglePtFrame() {
                   onFontChange={v => update('nameStyle', { fontFamily: v })}
                 />
 
+                <div className="control-row">
+                  <div className="control-field">
+                    <span className="control-label">Dimensione Nome ({state.nameStyle.fontSize}px)</span>
+                    <input type="range" min="10" max="60" value={state.nameStyle.fontSize} onChange={e => update('nameStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+                  </div>
+                </div>
+
                 <hr className="my-4 border-[var(--border)] opacity-30" />
 
                 <div className="control-field mb-4">
@@ -759,6 +774,13 @@ export default function TokenPreviewSinglePtFrame() {
                   fontValue={state.typeStyle.fontFamily}
                   onFontChange={v => update('typeStyle', { fontFamily: v })}
                 />
+                
+                <div className="control-row">
+                  <div className="control-field">
+                    <span className="control-label">Dimensione Tipo ({state.typeStyle.fontSize}px)</span>
+                    <input type="range" min="10" max="40" value={state.typeStyle.fontSize} onChange={e => update('typeStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+                  </div>
+                </div>
 
                 <hr className="my-4 border-[var(--border)] opacity-30" />
 
@@ -776,6 +798,17 @@ export default function TokenPreviewSinglePtFrame() {
                   fontValue={state.abilityStyle.fontFamily}
                   onFontChange={v => update('abilityStyle', { fontFamily: v })}
                 />
+
+                <div className="control-row">
+                  <div className="control-field">
+                    <span className="control-label">Dimensione ({state.abilityStyle.fontSize}px)</span>
+                    <input type="range" min="8" max="40" value={state.abilityStyle.fontSize} onChange={e => update('abilityStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+                  </div>
+                  <div className="control-field">
+                    <span className="control-label">Interlinea ({state.abilityStyle.lineGap}px)</span>
+                    <input type="range" min="0" max="20" value={state.abilityStyle.lineGap} onChange={e => update('abilityStyle', { lineGap: Number(e.target.value) })} className="control-input" />
+                  </div>
+                </div>
               </div>
             </>
           )}
@@ -820,6 +853,14 @@ export default function TokenPreviewSinglePtFrame() {
                   onFontChange={v => update('copyright', { fontFamily: v })}
                 />
                 <input type="text" className="control-input mb-2" value={state.copyright.text} onChange={e => update('copyright', { text: e.target.value })} placeholder="TM & © 2024 Wizards" />
+                
+                <div className="control-row">
+                  <div className="control-field">
+                    <span className="control-label">Dimensione ({state.copyright.fontSize}px)</span>
+                    <input type="range" min="6" max="20" value={state.copyright.fontSize} onChange={e => update('copyright', { fontSize: Number(e.target.value) })} className="control-input" />
+                  </div>
+                </div>
+
                 <label className="checkbox-label mb-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showCopyright !== false} onChange={e => applyState({ ...state, showCopyright: e.target.checked })} className="custom-checkbox"/> Mostra Copyright</label>
 
                 <button className="btn btn-ghost w-full mt-6 text-xs" style={{ background: 'var(--surf-off)' }} onClick={resetFooterAlign}>🔄 Ripristina Posizioni Footer</button>
