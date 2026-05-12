@@ -29,7 +29,7 @@ export default function ProxyCreatorMain({ isMobile }) {
   const [printGap, setPrintGap] = useState(2);
   const [cutMarks, setCutMarks] = useState(true);
   const [bleedPDF, setBleedPDF] = useState(false);
-  const [showScryfall, setShowScryfall] = useState(false);
+  const [showDatabase, setShowDatabase] = useState(false);
   
   const inputRef = useRef();
 
@@ -158,18 +158,18 @@ export default function ProxyCreatorMain({ isMobile }) {
         </div>
       </div>
 
-      {/* Scryfall Search & Bulk Import Accordion */}
+      {/* Database Search & Bulk Import Accordion */}
       <div className="section">
         <button
-          onClick={() => setShowScryfall(v => !v)}
-          className={`accordion-trigger ${showScryfall ? "open" : ""}`}
+          onClick={() => setShowDatabase(v => !v)}
+          className={`accordion-trigger ${showDatabase ? "open" : ""}`}
         >
           <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           🔍 Cerca carte · Aggiungi lista
-          <span className="accordion-icon">{showScryfall ? "▲ chiudi" : "▼ apri"}</span>
+          <span className="accordion-icon">{showDatabase ? "▲ chiudi" : "▼ apri"}</span>
         </button>
 
-        {showScryfall && (
+        {showDatabase && (
           <div className="accordion-content">
             <CardSearchPanel onAddCards={cards => {
               setImages(prev => [...prev, ...cards]);

@@ -138,7 +138,7 @@ export default function DeckChecker() {
 
       setResults(newResults);
     } catch (e) {
-      alert("Errore durante il controllo con Scryfall.");
+      alert("Errore durante il controllo nel database.");
     }
     setChecking(false);
   };
@@ -218,7 +218,7 @@ export default function DeckChecker() {
         </div>
         
         <div className="control-field mb-4">
-          <label className="control-label">Comandante (Ricerca rapida Scryfall)</label>
+          <label className="control-label">Comandante (Ricerca rapida database)</label>
           <input type="text" className="control-input mb-2" placeholder="Cerca Comandante 1..." value={commander1} onChange={e => handleCmdSearch(e.target.value, setCommander1)} list="cmd-list" />
           <input type="text" className="control-input" placeholder="Cerca eventuale Partner..." value={commander2} onChange={e => handleCmdSearch(e.target.value, setCommander2)} list="cmd-list" />
           <datalist id="cmd-list">
@@ -301,7 +301,7 @@ export default function DeckChecker() {
                 </div>
               </div>
             </div>
-            <p className="mt-8 text-[var(--faint)] text-center">Inserisci una lista e clicca "Controlla Legalità" per interrogare il database globale Scryfall, oppure compila i dati e scarica il foglio PDF ufficiale per i tornei!</p>
+            <p className="mt-8 text-[var(--faint)] text-center">Inserisci una lista e clicca "Controlla Legalità" per interrogare il database globale, oppure compila i dati e scarica il foglio PDF ufficiale per i tornei!</p>
           </div>
         )}
       </div>

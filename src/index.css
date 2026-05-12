@@ -410,3 +410,32 @@ input, select, textarea { font: inherit; color: inherit; outline: none; }
 .modal-title { font-weight: 800; font-size: 1.25rem; margin-bottom: 10px; color: var(--text-light); }
 .modal-body { color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; line-height: 1.5; }
 .modal-actions { display: flex; gap: 12px; justify-content: center; }
+
+/* Bulk Import Modal */
+.bulk-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center; z-index: 10000;
+  animation: fadein 0.2s ease; padding: 20px;
+}
+.bulk-modal-content {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); width: 100%; max-width: 1000px; max-height: 90vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: var(--sh-lg);
+}
+.bulk-modal-header {
+  padding: 20px 24px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface2);
+}
+.bulk-modal-body {
+  padding: 24px; overflow-y: auto; flex: 1;
+}
+.card-group-container { margin-bottom: 24px; }
+.card-group-label { 
+  font-size: 0.75rem; font-weight: 800; text-transform: uppercase; 
+  letter-spacing: 0.05em; color: var(--accent); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-group-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+

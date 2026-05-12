@@ -1,5 +1,5 @@
 // Cerca tutte le stampe di una carta dato il nome
-export async function fetchAllPrints(name) {
+export async function fetchAllPrints(name, lang = 'en') {
   const term = name.trim();
   const names = [];
   const seen = new Set();
@@ -10,6 +10,7 @@ export async function fetchAllPrints(name) {
     }
   };
 
+  // Find exact card names first
   try {
     let url = `https://api.scryfall.com/cards/search?q=name:${encodeURIComponent(term)}&unique=cards&order=released&dir=desc`;
     while (url) {
@@ -34,8 +35,12 @@ export async function fetchAllPrints(name) {
   }
 
   const all = [];
+  
+  const langQuery = lang === 'any' ? ' lang:any' : (lang !== 'en' ? ` lang:${lang}` : '');
+  const multiQuery = lang !== 'en' ? '&include_multilingual=true' : '';
+
   for (const cardName of names) {
-    let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(cardName)}"&unique=prints&order=released&dir=desc`;
+    let url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(cardName)}"${langQuery}&unique=prints${multiQuery}&order=released&dir=desc`;
     while (url) {
       const r = await fetch(url);
       if (!r.ok) break;
@@ -46,6 +51,14 @@ export async function fetchAllPrints(name) {
       if (url) await new Promise(r => setTimeout(r, 80));
     }
   }
+  
+  // Se ha cercato in una lingua specifica e non ha trovato nulla, fai un fallback sull'inglese
+  if (all.length === 0 && lang !== 'en') {
+    return fetchAllPrints(name, 'en');
+  }
+  
+  return all;
+}
   return all;
 }
 
