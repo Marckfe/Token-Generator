@@ -18,6 +18,17 @@ import "./editor.css";
 
 const CW = 620, CH = 890;
 
+const FONT_OPTIONS = [
+  { id: 'BelerenBold', name: 'Beleren Bold' },
+  { id: 'MatrixBold', name: 'Matrix Bold' },
+  { id: 'MatrixBoldSmallCaps', name: 'Matrix Small Caps' },
+  { id: 'Mplantin', name: 'MPlantin' },
+  { id: 'magic-font', name: 'Magic Font' },
+  { id: 'Cinzel', name: 'Cinzel' },
+  { id: 'Georgia', name: 'Georgia' },
+  { id: 'serif', name: 'Serif Standard' }
+];
+
 export default function StudioEditor() {
   const [layers, setLayers] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -43,7 +54,10 @@ export default function StudioEditor() {
         fontFamily: "BelerenBold",
         textAlign: "left",
         fontWeight: "bold",
-        textShadow: "2px 2px 4px rgba(0,0,0,0.8)"
+        textShadow: "2px 2px 4px rgba(0,0,0,0.8)",
+        bend: 0,
+        skew: 0,
+        letterSpacing: 0
       }
     };
     setLayers([...layers, newLayer]);
@@ -137,6 +151,55 @@ export default function StudioEditor() {
     const [removed] = newLayers.splice(sourceIndex, 1);
     newLayers.splice(targetIndex, 0, removed);
     setLayers(newLayers);
+  };
+
+  const renderCurvedText = (layer) => {
+    const text = layer.content || "";
+    const bend = layer.style.bend || 0;
+    const spacing = layer.style.letterSpacing || 0;
+    
+    if (bend === 0) return <div style={{ 
+      ...layer.style, 
+      letterSpacing: `${spacing}px`,
+      transform: `skew(${layer.style.skew || 0}deg)`,
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: layer.style.textAlign === 'center' ? 'center' : layer.style.textAlign === 'right' ? 'flex-end' : 'flex-start'
+    }}>{text}</div>;
+
+    const chars = text.split("");
+    const center = chars.length / 2;
+    
+    return (
+      <div style={{ 
+        ...layer.style, 
+        display: 'flex', 
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transform: `skew(${layer.style.skew || 0}deg)`,
+      }}>
+        {chars.map((char, i) => {
+          const offset = i - center + 0.5;
+          const rotate = offset * bend;
+          const translateY = Math.abs(offset) * Math.abs(bend) * 0.8;
+          return (
+            <span key={i} style={{ 
+              display: 'inline-block', 
+              transform: `rotate(${rotate}deg) translateY(${translateY}px)`,
+              transformOrigin: 'bottom center',
+              whiteSpace: 'pre',
+              margin: `0 ${spacing/2}px`
+            }}>
+              {char}
+            </span>
+          );
+        })}
+      </div>
+    );
   };
 
   const onMouseDown = (id, e) => {
@@ -237,6 +300,43 @@ export default function StudioEditor() {
                 <div className="control-field mb-4">
                   <span className="control-label">Font Size ({activeLayer.style.fontSize}px)</span>
                   <input type="range" min="8" max="120" value={activeLayer.style.fontSize} onChange={e => updateStyle(selectedId, { fontSize: parseInt(e.target.value) })} className="control-input" />
+                </div>
+                <div className="control-field mb-4">
+                  <span className="control-label">Font Family</span>
+                  <select 
+                    className="control-input" 
+                    value={activeLayer.style.fontFamily} 
+                    onChange={e => updateStyle(selectedId, { fontFamily: e.target.value })}
+                  >
+                    {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                </div>
+                <div className="control-field mb-4">
+                  <span className="control-label">Allineamento Testo</span>
+                  <div className="flex gap-2">
+                    {['left', 'center', 'right'].map(a => (
+                      <button 
+                        key={a} 
+                        className={`btn btn-ghost flex-1 py-1 text-xs ${activeLayer.style.textAlign === a ? 'active' : ''}`}
+                        onClick={() => updateStyle(selectedId, { textAlign: a })}
+                        style={{ background: activeLayer.style.textAlign === a ? 'var(--accent-hl)' : 'var(--surf-off)' }}
+                      >
+                        {a === 'left' ? 'Sx' : a === 'center' ? 'Centro' : 'Dx'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="control-field mb-4">
+                  <span className="control-label">Curvatura Arco ({activeLayer.style.bend}°)</span>
+                  <input type="range" min="-20" max="20" step="0.5" value={activeLayer.style.bend} onChange={e => updateStyle(selectedId, { bend: parseFloat(e.target.value) })} className="control-input" />
+                </div>
+                <div className="control-field mb-4">
+                  <span className="control-label">Inclinazione / Skew ({activeLayer.style.skew}°)</span>
+                  <input type="range" min="-45" max="45" value={activeLayer.style.skew} onChange={e => updateStyle(selectedId, { skew: parseInt(e.target.value) })} className="control-input" />
+                </div>
+                <div className="control-field mb-4">
+                  <span className="control-label">Spaziatura Lettere ({activeLayer.style.letterSpacing}px)</span>
+                  <input type="range" min="-5" max="20" value={activeLayer.style.letterSpacing} onChange={e => updateStyle(selectedId, { letterSpacing: parseInt(e.target.value) })} className="control-input" />
                 </div>
                 <div className="control-field mb-4">
                   <span className="control-label">Colore Testo</span>
@@ -373,17 +473,7 @@ export default function StudioEditor() {
                 {l.type === 'image' ? (
                   <img src={l.content} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
                 ) : (
-                  <div style={{ 
-                    ...l.style, 
-                    width: '100%', 
-                    height: '100%', 
-                    overflow: 'hidden',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: l.style.textAlign === 'center' ? 'center' : l.style.textAlign === 'right' ? 'flex-end' : 'flex-start'
-                  }}>
-                    {l.content}
-                  </div>
+                  renderCurvedText(l)
                 )}
                 {selectedId === l.id && (
                   <div className="layer-resize-handle" onMouseDown={(e) => {
