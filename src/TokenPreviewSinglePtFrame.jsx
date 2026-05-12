@@ -36,20 +36,13 @@ function getCachedImage(src) {
   if (!src) return null;
   if (imageCache.has(src)) {
     const cached = imageCache.get(src);
-    return cached instanceof Image ? cached : null; // returns image if loaded, null if still loading or error
+    return cached instanceof Image ? cached : null;
   }
-  
   const img = new Image();
   img.crossOrigin = "anonymous";
   imageCache.set(src, "loading");
-  
-  img.onload = () => {
-    imageCache.set(src, img);
-    if (globalRenderCallback) globalRenderCallback();
-  };
-  img.onerror = () => {
-    imageCache.set(src, null);
-  };
+  img.onload = () => { imageCache.set(src, img); if (globalRenderCallback) globalRenderCallback(); };
+  img.onerror = () => { imageCache.set(src, null); };
   img.src = src;
   return null;
 }
@@ -90,8 +83,7 @@ function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
         const word = (i === 0 ? "" : " ") + words[i];
         const w = ctx.measureText(word).width;
         if (maxWidth && curX + w > x + maxWidth && curX > x) {
-          curX = x;
-          y += fontSize * 1.45;
+          curX = x; y += fontSize * 1.45;
         }
         ctx.fillText(word, curX, y);
         curX += ctx.measureText(word).width;
@@ -100,19 +92,10 @@ function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
       const url = symbolUrl(p.v);
       if (url) {
         const img = getCachedImage(url);
-        if (img) {
-          ctx.drawImage(img, curX, y, symSize, symSize);
-          curX += symSize + 1;
-        } else {
-          // If image is loading, draw placeholder text
-          const token = `{${p.v}}`;
-          ctx.fillText(token, curX, y);
-          curX += ctx.measureText(token).width;
-        }
+        if (img) { ctx.drawImage(img, curX, y, symSize, symSize); curX += symSize + 1; } 
+        else { const token = `{${p.v}}`; ctx.fillText(token, curX, y); curX += ctx.measureText(token).width; }
       } else {
-        const token = `{${p.v}}`;
-        ctx.fillText(token, curX, y);
-        curX += ctx.measureText(token).width;
+        const token = `{${p.v}}`; ctx.fillText(token, curX, y); curX += ctx.measureText(token).width;
       }
     }
   }
@@ -132,9 +115,7 @@ function fitTextBox(text, startSize, minSize, width, linesLimit = 12) {
   while (size > minSize) {
     let ok = true;
     for (const line of lines) {
-      if (measureTextWidth(line.replace(/\{[^}]+\}/g, "MM"), size, FB, "normal") > width) {
-        ok = false; break;
-      }
+      if (measureTextWidth(line.replace(/\{[^}]+\}/g, "MM"), size, FB, "normal") > width) { ok = false; break; }
     }
     if (ok && lines.length <= linesLimit) return size;
     size -= 1;
@@ -211,7 +192,6 @@ function renderCardSync(canvas, state, withBleed = false) {
   if (showPT && ptFrame?.url) {
     const img = getCachedImage(ptFrame.url);
     if (img) ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height);
-    
     ctx.save();
     ctx.font = `bold ${ptStyle.fontSize}px ${FT}`;
     ctx.fillStyle = ptStyle.color;
@@ -280,29 +260,15 @@ function getGuideMetrics(state) {
 function getDefaultFrame() { const firstSet = Object.keys(FRAME_MAP)[0]; return firstSet ? FRAME_MAP[firstSet][0] : null; }
 function getDefaultPtFrame() { return PT_FRAMES[0] || null; }
 const DEFAULT_STATE = {
-  artUrl: "",
-  artTransform: { zoom: 1, x: 0, y: 0 },
-  frameSet: Object.keys(FRAME_MAP)[0] || "",
-  frame: getDefaultFrame(),
-  ptFrame: getDefaultPtFrame(),
-  name: "Goblin",
-  autoFitName: true,
-  autoFitType: true,
-  autoFitRules: false,
+  artUrl: "", artTransform: { zoom: 1, x: 0, y: 0 },
+  frameSet: Object.keys(FRAME_MAP)[0] || "", frame: getDefaultFrame(), ptFrame: getDefaultPtFrame(),
+  name: "Goblin", autoFitName: true, autoFitType: true, autoFitRules: false,
   nameStyle: { x: 0, y: 54, fontSize: 28, color: "#111111", align: "center" },
-  type: "Token Creature — Goblin",
-  typeStyle: { x: 44, y: 602, fontSize: 24, color: "#111111", align: "left" },
-  ability: "Haste",
-  abilityStyle: { x: 44, y: 644, width: 532, fontSize: 24, color: "#111111", lineGap: 4 },
-  showAbility: true,
-  pt: { power: "1", toughness: "1" },
-  ptStyle: { frameX: 457, frameY: 789, width: 126, height: 54, fontSize: 28, color: "#111111", powerOffsetX: 0 },
-  showPT: true,
-  infoLeft: { text: "SET • EN", artist: "Artist", x: 18, y: 12, color: "#111111", fontSize: 11 },
-  showInfoLeft: true,
-  showArtist: true,
-  copyright: { year: new Date().getFullYear(), x: 18, y: 12, color: "#111111", fontSize: 9 },
-  showCopyright: true,
+  type: "Token Creature — Goblin", typeStyle: { x: 44, y: 602, fontSize: 24, color: "#111111", align: "left" },
+  ability: "Haste", abilityStyle: { x: 44, y: 644, width: 532, fontSize: 24, color: "#111111", lineGap: 4 }, showAbility: true,
+  pt: { power: "1", toughness: "1" }, ptStyle: { frameX: 457, frameY: 789, width: 126, height: 54, fontSize: 28, color: "#111111", powerOffsetX: 0 }, showPT: true,
+  infoLeft: { text: "SET • EN", artist: "Artist", x: 18, y: 12, color: "#111111", fontSize: 11 }, showInfoLeft: true, showArtist: true,
+  copyright: { year: new Date().getFullYear(), x: 18, y: 12, color: "#111111", fontSize: 9 }, showCopyright: true,
 };
 
 export default function TokenPreviewSinglePtFrame() {
@@ -310,15 +276,18 @@ export default function TokenPreviewSinglePtFrame() {
   const [state, setState] = useState(DEFAULT_STATE);
   const [history, setHistory] = useState([cloneState(DEFAULT_STATE)]);
   const [historyIdx, setHistoryIdx] = useState(0);
+  
+  const [activeTab, setActiveTab] = useState('frame'); // 'art', 'frame', 'pt', 'text', 'settings'
   const [activeLayer, setActiveLayer] = useState('art');
   const [showGuides, setShowGuides] = useState(true);
   const [withBleed, setWithBleed] = useState(false);
   const [pngScale, setPngScale] = useState(4);
   const [previewZoom, setPreviewZoom] = useState(100);
-  const [mobileTab, setMobileTab] = useState('preview');
+  
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [snapGuides, setSnapGuides] = useState({ x: null, y: null });
   
   const canvasRef = useRef(null);
-  const artInputRef = useRef(null);
   const dragRef = useRef(null);
 
   useEffect(() => {
@@ -328,9 +297,7 @@ export default function TokenPreviewSinglePtFrame() {
   }, []);
 
   const triggerRender = useCallback(() => {
-    if (canvasRef.current) {
-      renderCardSync(canvasRef.current, state, false);
-    }
+    if (canvasRef.current) renderCardSync(canvasRef.current, state, false);
   }, [state]);
 
   useEffect(() => {
@@ -357,27 +324,49 @@ export default function TokenPreviewSinglePtFrame() {
     applyState(next);
   }, [state, applyState]);
 
-  // DRAG LOGIC
+  // DRAG LOGIC WITH SMART SNAPPING
   const beginDrag = (kind, e) => {
     e.preventDefault(); e.stopPropagation();
     const t = e.touches?.[0] || e;
     dragRef.current = { kind, startX: t.clientX, startY: t.clientY, snapshot: cloneState(state) };
     setActiveLayer(kind);
+    if (kind === 'name' || kind === 'type' || kind === 'ability') setActiveTab('text');
+    if (kind === 'pt') setActiveTab('pt');
+    if (kind === 'footer') setActiveTab('text');
+    if (kind === 'art') setActiveTab('art');
     
     const move = ev => {
       if (!dragRef.current) return;
-      // We use requestAnimationFrame implicitly by relying on React state updates 
-      // which are fast because of synchronous canvas drawing.
       const p = ev.touches?.[0] || ev;
       const baseScale = isMobile ? Math.min((window.innerWidth - 20) / CW, (window.innerHeight - 200) / CH) : Math.min(0.9, (window.innerWidth - 450) / CW);
       const pScale = isMobile ? Math.max(0.46, baseScale) : Math.max(0.34, baseScale * (previewZoom / 100));
       
-      const dx = (p.clientX - dragRef.current.startX) / pScale;
-      const dy = (p.clientY - dragRef.current.startY) / pScale;
+      let dx = (p.clientX - dragRef.current.startX) / pScale;
+      let dy = (p.clientY - dragRef.current.startY) / pScale;
       
       const snap = dragRef.current.snapshot;
       let next = cloneState(snap);
+      let sGuides = { x: null, y: null };
       
+      // Smart Snapping Logic (snap to center)
+      const SNAP_TOLERANCE = 10;
+      
+      if (kind === 'name') {
+        const cx = snap.nameStyle.x + dx;
+        if (Math.abs(cx) < SNAP_TOLERANCE) { dx = -snap.nameStyle.x; sGuides.x = CW/2; }
+      }
+      if (kind === 'art') {
+        const cx = snap.artTransform.x + dx;
+        const cy = snap.artTransform.y + dy;
+        if (Math.abs(cx) < SNAP_TOLERANCE) { dx = -snap.artTransform.x; sGuides.x = CW/2; }
+        if (Math.abs(cy) < SNAP_TOLERANCE) { dy = -snap.artTransform.y; sGuides.y = CH/2; }
+      }
+      if (kind === 'pt') {
+        // Snap to right edge or something, just let it be free mostly
+      }
+
+      setSnapGuides(sGuides);
+
       if (kind === 'art') next.artTransform = { ...next.artTransform, x: Math.round(snap.artTransform.x + dx), y: Math.round(snap.artTransform.y + dy) };
       if (kind === 'name') next.nameStyle = { ...next.nameStyle, x: Math.round(snap.nameStyle.x + dx), y: Math.round(snap.nameStyle.y + dy) };
       if (kind === 'type') next.typeStyle = { ...next.typeStyle, x: Math.round(snap.typeStyle.x + dx), y: Math.round(snap.typeStyle.y + dy) };
@@ -390,6 +379,7 @@ export default function TokenPreviewSinglePtFrame() {
     };
     
     const up = () => {
+      setSnapGuides({ x: null, y: null });
       if (dragRef.current && dragRef.current.lastState) {
         applyState(cloneState(dragRef.current.lastState), true);
       }
@@ -404,236 +394,271 @@ export default function TokenPreviewSinglePtFrame() {
     window.addEventListener('touchend', up);
   };
 
-  const nudge = (layer, dx, dy) => {
-    let next = cloneState(state);
-    if (layer === 'art') next.artTransform = { ...next.artTransform, x: next.artTransform.x + dx, y: next.artTransform.y + dy };
-    if (layer === 'name') next.nameStyle = { ...next.nameStyle, x: next.nameStyle.x + dx, y: next.nameStyle.y + dy };
-    if (layer === 'type') next.typeStyle = { ...next.typeStyle, x: next.typeStyle.x + dx, y: next.typeStyle.y + dy };
-    if (layer === 'ability') next.abilityStyle = { ...next.abilityStyle, x: next.abilityStyle.x + dx, y: next.abilityStyle.y + dy };
-    if (layer === 'pt') next.ptStyle = { ...next.ptStyle, frameX: next.ptStyle.frameX + dx, frameY: next.ptStyle.frameY + dy };
-    if (layer === 'footer') next.infoLeft = { ...next.infoLeft, x: next.infoLeft.x + dx, y: next.infoLeft.y - dy };
-    applyState(next);
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
+        setActiveTab('art');
+        setActiveLayer('art');
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  useEffect(() => {
-    const onKey = e => {
-      if (!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) return;
-      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
-      
-      const step = e.shiftKey ? 10 : 1;
-      e.preventDefault();
-      if (e.key === 'ArrowUp') nudge(activeLayer, 0, -step);
-      if (e.key === 'ArrowDown') nudge(activeLayer, 0, step);
-      if (e.key === 'ArrowLeft') nudge(activeLayer, -step, 0);
-      if (e.key === 'ArrowRight') nudge(activeLayer, step, 0);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [activeLayer, state]);
-
-  // Actions
-  const onArtFile = e => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
-    reader.readAsDataURL(file);
-  };
-  
-  const onFrameSetChange = setName => {
-    const frames = FRAME_MAP[setName] || [];
-    applyState({ ...state, frameSet: setName, frame: frames[0] || null });
-  };
-  
   const exportPNG = () => {
     const c = document.createElement('canvas');
     renderCardSync(c, state, withBleed);
     const out = document.createElement('canvas');
-    out.width = c.width * pngScale;
-    out.height = c.height * pngScale;
+    out.width = c.width * pngScale; out.height = c.height * pngScale;
     const octx = out.getContext('2d');
-    octx.imageSmoothingEnabled = true;
-    octx.imageSmoothingQuality = 'high';
+    octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality = 'high';
     octx.drawImage(c, 0, 0, out.width, out.height);
     const a = document.createElement('a');
     a.href = out.toDataURL('image/png');
     a.download = `${(state.name || 'token').replace(/\s+/g,'_')}_${pngScale}x.png`;
     a.click();
   };
-  
-  const resetAll = () => {
-    const next = { ...DEFAULT_STATE, artUrl:'', artTransform:{ zoom:1, x:0, y:0 }, copyright:{ ...DEFAULT_STATE.copyright, year:new Date().getFullYear() } };
-    applyState(next);
-    if (artInputRef.current) artInputRef.current.value = '';
-  };
-  
-  const undo = () => {
-    if (historyIdx === 0) return;
-    const prev = cloneState(history[historyIdx - 1]);
-    setState(prev); setHistoryIdx(historyIdx - 1);
-  };
-  const redo = () => {
-    if (historyIdx >= history.length - 1) return;
-    const next = cloneState(history[historyIdx + 1]);
-    setState(next); setHistoryIdx(historyIdx + 1);
-  };
 
   const baseScale = isMobile ? Math.min((window.innerWidth - 20) / CW, (window.innerHeight - 200) / CH) : Math.min(0.9, (window.innerWidth - 450) / CW);
   const pScale = isMobile ? Math.max(0.46, baseScale) : Math.max(0.34, baseScale * (previewZoom / 100));
   const boxes = getGuideMetrics(state);
 
+  const Icon = ({ d }) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>
+  );
+
   return (
     <div className={`editor-layout ${isMobile ? 'mobile' : ''}`}>
-      {/* Mobile Tabs */}
+      
+      {/* CANVA-STYLE LEFT NAVIGATION */}
+      {!isMobile && (
+        <nav className="editor-nav">
+          <div className={`nav-item ${activeTab === 'art' ? 'active' : ''}`} onClick={() => setActiveTab('art')}>
+            <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /> Artwork
+          </div>
+          <div className={`nav-item ${activeTab === 'frame' ? 'active' : ''}`} onClick={() => setActiveTab('frame')}>
+            <Icon d="M4 4h16v16H4zM4 9h16" /> Frames
+          </div>
+          <div className={`nav-item ${activeTab === 'pt' ? 'active' : ''}`} onClick={() => setActiveTab('pt')}>
+            <Icon d="M12 2l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" /> P/T
+          </div>
+          <div className={`nav-item ${activeTab === 'text' ? 'active' : ''}`} onClick={() => setActiveTab('text')}>
+            <Icon d="M4 7V4h16v3M9 20h6M12 4v16" /> Testi
+          </div>
+          <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')} style={{ marginTop: 'auto' }}>
+            <Icon d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /> Export
+          </div>
+        </nav>
+      )}
+
       {isMobile && (
         <div className="mobile-editor-tabs">
-          <button className={`mobile-editor-tab ${mobileTab === 'preview' ? 'active' : ''}`} onClick={() => setMobileTab('preview')}>Anteprima</button>
-          <button className={`mobile-editor-tab ${mobileTab === 'controls' ? 'active' : ''}`} onClick={() => setMobileTab('controls')}>Strumenti</button>
+          <button className={`mobile-editor-tab ${activeTab === 'preview' ? 'active' : ''}`} onClick={() => setActiveTab('preview')}>Anteprima</button>
+          <button className={`mobile-editor-tab ${activeTab !== 'preview' ? 'active' : ''}`} onClick={() => setActiveTab('frame')}>Strumenti</button>
         </div>
       )}
 
-      {/* Sidebar Controls */}
-      {(!isMobile || mobileTab === 'controls') && (
+      {/* SIDEBAR CONTEXTUAL PANELS */}
+      {(!isMobile || activeTab !== 'preview') && (
         <aside className="editor-sidebar">
-          {/* Layer Chips */}
-          <div className="layer-chips">
-            {['art','name','type','ability','pt','footer'].map(key => (
-              <button 
-                key={key} 
-                className={`layer-chip ${activeLayer === key ? 'active' : ''}`} 
-                onClick={() => setActiveLayer(key)}
-              >
-                {{art:'🎨 Artwork', name:'📝 Nome', type:'🏷️ Tipo', ability:'📜 Regole', pt:'⚔️ P/T', footer:'©️ Footer'}[key]}
-              </button>
-            ))}
-          </div>
+          {/* TAB: ARTWORK */}
+          {activeTab === 'art' && (
+            <>
+              <div className="sidebar-panel-title">🎨 Artwork</div>
+              <div className="control-group">
+                <div className="control-field">
+                  <label className="btn btn-primary" style={{ textAlign: 'center', cursor: 'pointer' }}>
+                    Carica Immagine
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                      const f = e.target.files?.[0]; if(!f) return;
+                      const r = new FileReader(); r.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
+                      r.readAsDataURL(f);
+                    }} />
+                  </label>
+                  <p className="text-xs text-muted mt-2 text-center">Puoi anche trascinare un'immagine direttamente sulla carta</p>
+                </div>
+                <hr className="my-4 border-[var(--border)]" />
+                <div className="control-field mt-4">
+                  <span className="control-label">Zoom ({state.artTransform.zoom}x)</span>
+                  <input type="range" min="0.8" max="2.2" step="0.01" value={state.artTransform.zoom} onChange={e => update('artTransform', { zoom: Number(e.target.value) })} className="control-input" />
+                </div>
+                <div className="control-row mt-4">
+                  <div className="control-field"><span className="control-label">Pos X</span><input type="number" className="control-input" value={state.artTransform.x} onChange={e => update('artTransform', { x: Number(e.target.value) })} /></div>
+                  <div className="control-field"><span className="control-label">Pos Y</span><input type="number" className="control-input" value={state.artTransform.y} onChange={e => update('artTransform', { y: Number(e.target.value) })} /></div>
+                </div>
+              </div>
+            </>
+          )}
 
-          <div className="control-group">
-            <div className="control-group-header">Artwork & Frame</div>
-            <div className="control-row">
-              <div className="control-field">
-                <span className="control-label">Immagine</span>
-                <input ref={artInputRef} type="file" accept="image/*" onChange={onArtFile} className="control-input" style={{ padding: '6px' }} />
+          {/* TAB: FRAMES */}
+          {activeTab === 'frame' && (
+            <>
+              <div className="sidebar-panel-title">🎴 Frame Template</div>
+              <div className="control-group">
+                <div className="control-field">
+                  <span className="control-label">Seleziona Categoria</span>
+                  <select className="control-input control-select" value={state.frameSet} onChange={e => {
+                    const setName = e.target.value;
+                    applyState({ ...state, frameSet: setName, frame: FRAME_MAP[setName][0] || null });
+                  }}>
+                    {Object.keys(FRAME_MAP).map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                
+                {/* Visual Asset Grid */}
+                <div className="asset-grid">
+                  {(FRAME_MAP[state.frameSet] || []).map(f => (
+                    <div key={f.name} className={`asset-item ${state.frame?.name === f.name ? 'active' : ''}`} onClick={() => applyState({ ...state, frame: f })}>
+                      <img src={f.url} alt={f.name} loading="lazy" />
+                      <div className="asset-item-name">{f.name}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="control-row">
-              <div className="control-field">
-                <span className="control-label">Zoom ({state.artTransform.zoom}x)</span>
-                <input type="range" min="0.8" max="2.2" step="0.01" value={state.artTransform.zoom} onChange={e => update('artTransform', { zoom: Number(e.target.value) })} className="control-input" />
-              </div>
-            </div>
-            <div className="control-row">
-              <div className="control-field">
-                <span className="control-label">Set</span>
-                <select className="control-input control-select" value={state.frameSet} onChange={e => onFrameSetChange(e.target.value)}>
-                  {Object.keys(FRAME_MAP).map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-              <div className="control-field">
-                <span className="control-label">Stile</span>
-                <select className="control-input control-select" value={state.frame?.name || ''} onChange={e => applyState({ ...state, frame: (FRAME_MAP[state.frameSet] || []).find(f => f.name === e.target.value) || null })}>
-                  {(FRAME_MAP[state.frameSet] || []).map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
-                </select>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
-          <div className="control-group">
-            <div className="control-group-header">Testi Principali</div>
-            <div className="control-row">
-              <div className="control-field" style={{ flex: 2 }}>
-                <span className="control-label">Nome Carta</span>
-                <input type="text" className="control-input" value={state.name} onChange={e => applyState({ ...state, name: e.target.value })} />
+          {/* TAB: P/T */}
+          {activeTab === 'pt' && (
+            <>
+              <div className="sidebar-panel-title">⚔️ Forza / Costituzione</div>
+              <div className="control-group">
+                <div className="control-row">
+                  <div className="control-field"><span className="control-label">Forza</span><input type="text" className="control-input" value={state.pt.power} onChange={e => applyState({ ...state, pt: { ...state.pt, power: e.target.value } })} /></div>
+                  <div className="control-field"><span className="control-label">Costituzione</span><input type="text" className="control-input" value={state.pt.toughness} onChange={e => applyState({ ...state, pt: { ...state.pt, toughness: e.target.value } })} /></div>
+                </div>
+                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} className="custom-checkbox"/> Mostra P/T Box</label>
+                
+                <span className="control-label mb-2">Scegli Badge</span>
+                <div className="pt-badge-grid">
+                  {PT_FRAMES.map(f => (
+                    <div key={f.name} className={`pt-badge-item ${state.ptFrame?.name === f.name ? 'active' : ''}`} onClick={() => applyState({ ...state, ptFrame: f })}>
+                      <img src={f.url} alt={f.name} />
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="control-field">
-                <span className="control-label">Size</span>
-                <input type="number" className="control-input" value={state.nameStyle.fontSize} onChange={e => update('nameStyle', { fontSize: Number(e.target.value) })} disabled={state.autoFitName} />
-              </div>
-            </div>
-            <div className="control-row">
-              <div className="control-field" style={{ flex: 2 }}>
-                <span className="control-label">Tipo</span>
-                <input type="text" className="control-input" value={state.type} onChange={e => applyState({ ...state, type: e.target.value })} />
-              </div>
-              <div className="control-field">
-                <span className="control-label">Size</span>
-                <input type="number" className="control-input" value={state.typeStyle.fontSize} onChange={e => update('typeStyle', { fontSize: Number(e.target.value) })} disabled={state.autoFitType} />
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
-          <div className="control-group">
-            <div className="control-group-header">Testo Regole</div>
-            <div className="control-field mb-2">
-              <span className="control-label">Testo (usa {'{G}'} per i simboli mana)</span>
-              <textarea className="control-input control-textarea" value={state.ability} onChange={e => applyState({ ...state, ability: e.target.value })} />
-            </div>
-            <div className="control-row">
-              <label className="checkbox-label" style={{ fontSize: '0.75rem' }}><input type="checkbox" checked={state.showAbility} onChange={e => applyState({ ...state, showAbility: e.target.checked })} className="custom-checkbox"/> Mostra</label>
-              <label className="checkbox-label" style={{ fontSize: '0.75rem' }}><input type="checkbox" checked={state.autoFitRules} onChange={e => applyState({ ...state, autoFitRules: e.target.checked })} className="custom-checkbox"/> Auto-fit</label>
-            </div>
-          </div>
+          {/* TAB: TEXT */}
+          {activeTab === 'text' && (
+            <>
+              <div className="sidebar-panel-title">📝 Modifica Testi</div>
+              <div className="control-group">
+                <div className="control-field mb-4">
+                  <span className="control-label">Nome Carta <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('name')}>Mirino 🎯</span></span>
+                  <input type="text" className="control-input" value={state.name} onChange={e => applyState({ ...state, name: e.target.value })} onClick={() => setActiveLayer('name')} />
+                </div>
+                <div className="control-field mb-4">
+                  <span className="control-label">Tipo <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('type')}>Mirino 🎯</span></span>
+                  <input type="text" className="control-input" value={state.type} onChange={e => applyState({ ...state, type: e.target.value })} onClick={() => setActiveLayer('type')} />
+                </div>
+                <div className="control-field">
+                  <span className="control-label">Regole (usa {'{G}'} per simboli) <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('ability')}>Mirino 🎯</span></span>
+                  <textarea className="control-input control-textarea" value={state.ability} onChange={e => applyState({ ...state, ability: e.target.value })} onClick={() => setActiveLayer('ability')} />
+                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showAbility} onChange={e => applyState({ ...state, showAbility: e.target.checked })} className="custom-checkbox"/> Mostra regole</label>
+                </div>
+              </div>
+            </>
+          )}
 
-          <div className="control-group">
-            <div className="control-group-header">Forza/Costituzione & Frame P/T</div>
-            <div className="control-row">
-              <div className="control-field">
-                <span className="control-label">Forza</span>
-                <input type="text" className="control-input" value={state.pt.power} onChange={e => applyState({ ...state, pt: { ...state.pt, power: e.target.value } })} />
+          {/* TAB: SETTINGS */}
+          {activeTab === 'settings' && (
+            <>
+              <div className="sidebar-panel-title">⚙️ Impostazioni & Esporta</div>
+              <div className="control-group">
+                <div className="control-field mb-4">
+                  <span className="control-label">Info Footer (Sx)</span>
+                  <input type="text" className="control-input" value={state.infoLeft.text} onChange={e => update('infoLeft', { text: e.target.value })} />
+                </div>
+                <div className="control-field mb-4">
+                  <span className="control-label">Artista</span>
+                  <input type="text" className="control-input" value={state.infoLeft.artist} onChange={e => update('infoLeft', { artist: e.target.value })} />
+                </div>
+                <hr className="my-4 border-[var(--border)]" />
+                <button className="btn btn-primary w-full" onClick={exportPNG}>⬇ Scarica PNG</button>
+                <button className="btn btn-ghost w-full mt-2" onClick={() => applyState(DEFAULT_STATE)}>Reset Iniziale</button>
               </div>
-              <div className="control-field">
-                <span className="control-label">Costituzione</span>
-                <input type="text" className="control-input" value={state.pt.toughness} onChange={e => applyState({ ...state, pt: { ...state.pt, toughness: e.target.value } })} />
-              </div>
-            </div>
-            <div className="control-row">
-              <div className="control-field">
-                <span className="control-label">Frame P/T</span>
-                <select className="control-input control-select" value={state.ptFrame?.name || ''} onChange={e => applyState({ ...state, ptFrame: PT_FRAMES.find(f => f.name === e.target.value) || null })}>
-                  {PT_FRAMES.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
-                </select>
-              </div>
-              <label className="checkbox-label mt-3" style={{ fontSize: '0.75rem' }}><input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} className="custom-checkbox"/> Mostra</label>
-            </div>
-          </div>
-
+            </>
+          )}
         </aside>
       )}
 
-      {/* Main Workspace (Toolbar + Canvas) */}
-      {(!isMobile || mobileTab === 'preview') && (
-        <main className="editor-workspace">
-          {/* Top Toolbar */}
-          <div className="editor-toolbar">
-            <button className="btn btn-icon" onClick={undo} disabled={historyIdx === 0} title="Annulla">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>
-            </button>
-            <button className="btn btn-icon" onClick={redo} disabled={historyIdx >= history.length - 1} title="Ripeti">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/></svg>
-            </button>
-            <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 8px' }}></div>
-            
-            <label className="checkbox-label" style={{ fontSize: '0.8rem' }} title="Mostra guide tratteggiate">
-              <input type="checkbox" checked={showGuides} onChange={e => setShowGuides(e.target.checked)} className="custom-checkbox"/> Guide
-            </label>
-            
-            <div className="ml-auto flex" style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn btn-ghost text-xs" onClick={resetAll}>Reset</button>
-              <button className="btn btn-primary" onClick={exportPNG}>⬇ Esporta PNG</button>
-            </div>
+      {/* MAIN WORKSPACE */}
+      {(!isMobile || activeTab === 'preview') && (
+        <main 
+          className="editor-workspace"
+          onDragOver={e => { e.preventDefault(); setIsDraggingOver(true); }}
+          onDragLeave={e => { e.preventDefault(); setIsDraggingOver(false); }}
+          onDrop={handleDrop}
+        >
+          {/* Universal Drop Overlay */}
+          <div className={`drop-overlay ${isDraggingOver ? 'active' : ''}`}>
+            Rilascia l'immagine per aggiornare l'Artwork
           </div>
 
-          {/* Canvas Area */}
+          <div className="editor-toolbar justify-center">
+            <button className="btn btn-icon" onClick={undo} disabled={historyIdx === 0} title="Annulla">
+              <Icon d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
+            </button>
+            <button className="btn btn-icon" onClick={redo} disabled={historyIdx >= history.length - 1} title="Ripeti">
+              <Icon d="M21 7v6h-6M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" />
+            </button>
+            <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 8px' }}></div>
+            <label className="checkbox-label" style={{ fontSize: '0.8rem' }}>
+              <input type="checkbox" checked={showGuides} onChange={e => setShowGuides(e.target.checked)} className="custom-checkbox"/> Mostra Guide
+            </label>
+            {!isMobile && (
+              <div className="ml-auto" style={{ display: 'flex', gap: '8px' }}>
+                <select className="control-input py-1 text-xs w-auto" value={previewZoom} onChange={e => setPreviewZoom(Number(e.target.value))}>
+                  <option value="75">75% Zoom</option><option value="100">100% Zoom</option><option value="125">125% Zoom</option>
+                </select>
+                <button className="btn btn-primary text-xs py-1" onClick={exportPNG}>Esporta</button>
+              </div>
+            )}
+          </div>
+
           <div className="editor-canvas-container">
+            {/* FLOATING CONTEXT MENU (Visible when a text layer is selected) */}
+            {activeLayer !== 'art' && activeLayer !== 'frame' && activeLayer !== 'footer' && (
+              <div className="context-menu" style={{ transform: `translateX(-50%) translateY(${isMobile ? 0 : -20}px)` }}>
+                {activeLayer === 'name' && <input type="color" className="control-color" value={state.nameStyle.color} onChange={e => update('nameStyle', { color: e.target.value })} title="Colore Nome" />}
+                {activeLayer === 'type' && <input type="color" className="control-color" value={state.typeStyle.color} onChange={e => update('typeStyle', { color: e.target.value })} title="Colore Tipo" />}
+                {activeLayer === 'ability' && <input type="color" className="control-color" value={state.abilityStyle.color} onChange={e => update('abilityStyle', { color: e.target.value })} title="Colore Regole" />}
+                {activeLayer === 'pt' && <input type="color" className="control-color" value={state.ptStyle.color} onChange={e => update('ptStyle', { color: e.target.value })} title="Colore PT" />}
+                <div style={{ width: 1, background: 'var(--border)', margin: '0 4px' }}></div>
+                {activeLayer === 'name' && (
+                  <>
+                    <button className="btn btn-icon" onClick={() => update('nameStyle', { align: 'left' })}><Icon d="M3 6h18 M3 12h12 M3 18h18"/></button>
+                    <button className="btn btn-icon" onClick={() => update('nameStyle', { align: 'center' })}><Icon d="M3 6h18 M6 12h12 M3 18h18"/></button>
+                  </>
+                )}
+                {/* AutoFit Toggle */}
+                <button className="btn btn-ghost text-xs px-2" onClick={() => {
+                  if(activeLayer === 'name') update('autoFitName', !state.autoFitName);
+                  if(activeLayer === 'type') update('autoFitType', !state.autoFitType);
+                  if(activeLayer === 'ability') update('autoFitRules', !state.autoFitRules);
+                }}>
+                  { (activeLayer==='name'&&state.autoFitName) || (activeLayer==='type'&&state.autoFitType) || (activeLayer==='ability'&&state.autoFitRules) ? 'AutoFit: ON' : 'AutoFit: OFF' }
+                </button>
+              </div>
+            )}
+
             <div className="canvas-wrapper" style={{ width: CW * pScale, height: CH * pScale }}>
-              <canvas 
-                ref={canvasRef} 
-                style={{ width: '100%', height: '100%', display: 'block', borderRadius: 16 * (pScale/0.5), background: '#0d0d0d' }} 
-              />
+              <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', borderRadius: 16 * (pScale/0.5), background: '#0d0d0d' }} />
               
+              {/* Smart Snapping Lines overlay */}
+              <div className={`snap-line vertical ${snapGuides.x !== null ? 'visible' : ''}`} style={{ left: (snapGuides.x || 0) * pScale }} />
+              <div className={`snap-line horizontal ${snapGuides.y !== null ? 'visible' : ''}`} style={{ top: (snapGuides.y || 0) * pScale }} />
+
               {showGuides && (
                 <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-                  <div style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', border: '1px dashed rgba(255,255,255,.1)' }} />
+                  <div style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', border: '1px dashed rgba(255,255,255,.05)' }} />
                   {Object.entries(boxes).map(([k, b]) => (
                     <div 
                       key={k} 
@@ -644,19 +669,18 @@ export default function TokenPreviewSinglePtFrame() {
                 </div>
               )}
 
-              {/* Interaction Layer */}
+              {/* Interaction Drag Layer */}
               <div 
                 style={{ position: 'absolute', inset: 0, cursor: activeLayer === 'art' ? 'grab' : 'default', zIndex: 50 }}
                 onMouseDown={e => beginDrag('art', e)}
                 onTouchStart={e => beginDrag('art', e)}
               >
-                {/* Specific draggable handles for text boxes over the art layer */}
                 {Object.entries(boxes).map(([k, b]) => (
                   <div 
                     key={k}
                     onMouseDown={e => beginDrag(k === 'footer' ? 'footer' : k, e)}
                     onTouchStart={e => beginDrag(k === 'footer' ? 'footer' : k, e)}
-                    onClick={(e) => { e.stopPropagation(); setActiveLayer(k); }}
+                    onClick={(e) => { e.stopPropagation(); setActiveLayer(k); if(k==='name'||k==='type'||k==='ability') setActiveTab('text'); else if (k==='pt') setActiveTab('pt'); }}
                     style={{ position: 'absolute', left: b.x * pScale, top: b.y * pScale, width: b.w * pScale, height: b.h * pScale, cursor: 'move' }} 
                   />
                 ))}
@@ -664,7 +688,7 @@ export default function TokenPreviewSinglePtFrame() {
             </div>
           </div>
           <div style={{ position: 'absolute', bottom: 10, right: 20, fontSize: 11, color: 'var(--faint)' }}>
-            Trascina sulla carta. Maiusc + Frecce = Muovi
+            ✨ Canva Mode Attivo
           </div>
         </main>
       )}
