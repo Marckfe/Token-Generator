@@ -523,16 +523,7 @@ export default function MTGDeckValidatorPanel() {
 
           <label style={{ display:"grid", gap:6, color:"var(--muted,#bdbdbd)", fontSize:".8rem" }}>
             <span>Decklist (usa 'Sideboard:' per separare)</span>
-            <textarea rows={16} value={decklist} onChange={e => setDecklist(e.target.value)} style={{ ...iStyle, resize:"vertical" }} placeholder={"1 Brainstorm (CNS) 91
-1 Ponder
-1 Force of Will
-
-Sideboard:
-1 Hydroblast"} />
-          </label>
-
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            <button onClick={validateAll} disabled={busy || !decklist.trim()} style={{ padding:"9px 14px", borderRadius:999, border:"none", background:"#c9a227", color:"#111", fontWeight:700, cursor:"pointer" }}>{busy ? "Validazione…" : "Valida lista"}</button>
+            <textarea rows={16} value={decklist} onChange={e => setDecklist(e.target.value)} style={{ ...iStyle, resize:"vertical" }} placeholder={"1 Brainstorm (CNS) 91\n1 Ponder\n1 Force of Will\n\nSideboard:\n1 Hydroblast"} />
             <button onClick={() => window.print()} disabled={!canPrint} style={{ padding:"9px 14px", borderRadius:999, border:"1px solid #3a3a3a", background:"transparent", color:"#ddd", fontWeight:700, cursor:"pointer" }}>Stampa</button>
             <button onClick={exportPDF} disabled={!canPrint} style={{ padding:"9px 14px", borderRadius:999, border:"1px solid #3a3a3a", background:"transparent", color:"#ddd", fontWeight:700, cursor:"pointer" }}>PDF</button>
           </div>
