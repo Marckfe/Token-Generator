@@ -330,11 +330,11 @@ function PreviewCard({ mobile, canvasRef, previewScale, showGuides, activeLayer,
   const boxes = getGuideMetrics(state);
   return (
     <div style={{ position: mobile ? 'relative' : 'sticky', top:12 }}>
-      {!mobile && <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
         {['art','name','type','ability','pt','footer'].map(key => <LayerChip key={key} active={activeLayer===key} label={{art:'Artwork',name:'Name',type:'Type',ability:'Text',pt:'P/T',footer:'Footer'}[key]} onClick={() => setActiveLayer(key)} />)}
-      </div>}
-      <div style={{ position:'relative', overflow: mobile ? 'hidden' : 'auto', background:'#141311', border:'1px solid #393836', borderRadius:16, padding: mobile ? 8 : 14, minHeight: mobile ? 'auto' : 520 }}>
-        <div style={{ position:'relative', width:CW*previewScale, height:CH*previewScale, margin:'0 auto', boxShadow:'0 12px 30px rgba(0,0,0,.35)', maxWidth:'100%' }}>
+      </div>
+      <div style={{ position:'relative', overflow:'auto', background:'#141311', border:'1px solid #393836', borderRadius:16, padding: mobile ? 8 : 14, minHeight: mobile ? 'auto' : 520 }}>
+        <div style={{ position:'relative', width:CW*previewScale, height:CH*previewScale, margin:'0 auto', boxShadow:'0 12px 30px rgba(0,0,0,.35)' }}>
           <canvas ref={canvasRef} style={{ width:CW*previewScale, height:CH*previewScale, display:'block', borderRadius:18, background:'#0d0d0d' }} />
           {showGuides && <GuideOverlay activeLayer={activeLayer} state={state} scale={previewScale} />}
           <button onMouseDown={e => { setActiveLayer('art'); beginDrag('art', e); }} onTouchStart={e => { setActiveLayer('art'); beginDrag('art', e); }} style={{ position:'absolute', inset:0, border:'none', background:'transparent', cursor:'grab' }} />
@@ -387,8 +387,8 @@ export default function TokenPreviewSinglePtFrame() {
   const canvasRef = useRef(null);
   const artInputRef = useRef(null);
 
-  const basePreviewScale = screen.mobile ? Math.min((screen.w - 24) / CW, ((screen.h - 170)) / CH) : Math.min(0.9, (screen.w - 560) / CW);
-  const previewScale = screen.mobile ? Math.max(0.46, basePreviewScale) : Math.max(0.34, basePreviewScale * (previewZoom / 100));
+  const basePreviewScale = screen.mobile ? Math.min((screen.w - 32) / CW, (screen.h * 0.58) / CH) : Math.min(0.9, (screen.w - 560) / CW);
+  const previewScale = Math.max(0.34, basePreviewScale * (previewZoom / 100));
 
   const pushHistory = useCallback((next) => {
     setHistory(prev => {
@@ -573,7 +573,6 @@ export default function TokenPreviewSinglePtFrame() {
         </Row>
       </Section>
 
-      {screen.mobile && <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>{['art','name','type','ability','pt','footer'].map(key => <LayerChip key={key} active={activeLayer===key} label={{art:'Artwork',name:'Name',type:'Type',ability:'Text',pt:'P/T',footer:'Footer'}[key]} onClick={() => setActiveLayer(key)} />)}</div>}
       <Section title='Tools' right='workflow'>
         <Row>
           <Field label='Preview zoom'><Select value={previewZoom} onChange={e => setPreviewZoom(Number(e.target.value))}><option value='75'>75%</option><option value='100'>100%</option><option value='125'>125%</option><option value='150'>150%</option></Select></Field>
@@ -602,7 +601,7 @@ export default function TokenPreviewSinglePtFrame() {
     <div style={{ minHeight:'100vh', background:'#131211', color:'#ece9e4', padding: screen.mobile ? 8 : 12 }}>
       <div style={{ maxWidth:1500, margin:'0 auto' }}>
         {screen.mobile && (
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10, position:'sticky', top:0, zIndex:20, background:'#131211', paddingBottom:8 }}>
+          <div style={{ display:'flex', gap:8, marginBottom:10, position:'sticky', top:0, zIndex:20, background:'#131211', paddingBottom:8 }}>
             <button onClick={() => setMobilePanel('preview')} style={mobilePanel==='preview' ? btnPrimary : btnSecondary}>Preview</button>
             <button onClick={() => setMobilePanel('controls')} style={mobilePanel==='controls' ? btnPrimary : btnSecondary}>Controlli</button>
           </div>
