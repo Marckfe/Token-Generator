@@ -359,6 +359,8 @@
 /* Mobile Responsive Studio Mode */
 .studio-mode.is-mobile {
   flex-direction: column;
+  height: auto;
+  flex: 1;
 }
 
 .studio-mode.is-mobile .editor-nav {
@@ -391,13 +393,19 @@
 }
 
 .studio-mode.is-mobile .editor-workspace {
-  height: 60vh;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .studio-mode.is-mobile .editor-canvas-container {
-  padding: 20px 10px;
-  align-items: flex-start;
+  flex: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .mobile-properties-bar {

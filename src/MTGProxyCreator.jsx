@@ -76,7 +76,7 @@ export default function MTGProxyCreator() {
               </button>
             ))}
           </div>
-          <div className="mobile-content">
+          <div className="mobile-content" style={tab === 'studio' ? { padding: 0, overflow: 'hidden', gap: 0 } : {}}>
             {tab === "proxy" && <ProxyCreatorMain isMobile={true} />}
             {tab === "token" && <TokenPreviewSinglePtFrame />}
             {tab === "studio" && <StudioEditor />}
