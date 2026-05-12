@@ -366,10 +366,12 @@ export default function TokenPreviewSinglePtFrame() {
     const t = e.touches?.[0] || e;
     dragRef.current = { kind, startX: t.clientX, startY: t.clientY, snapshot: cloneState(state) };
     setActiveLayer(kind);
-    if (kind === 'name' || kind === 'type' || kind === 'ability') setActiveTab('text');
-    if (kind === 'pt') setActiveTab('pt');
-    if (kind === 'infoLeft' || kind === 'artist' || kind === 'copyright') setActiveTab('settings');
-    if (kind === 'art') setActiveTab('art');
+    if (!isMobile) {
+      if (kind === 'name' || kind === 'type' || kind === 'ability') setActiveTab('text');
+      else if (kind === 'pt') setActiveTab('pt');
+      else if (kind === 'infoLeft' || kind === 'artist' || kind === 'copyright') setActiveTab('settings');
+      else if (kind === 'art') setActiveTab('art');
+    }
     
     const move = ev => {
       if (!dragRef.current) return;
@@ -701,17 +703,35 @@ export default function TokenPreviewSinglePtFrame() {
               <div className="sidebar-panel-title">⚙️ Impostazioni & Esporta</div>
               <div className="control-group">
                 <div className="control-field mb-4">
-                  <span className="control-label">Testo Extra (Sx) <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('infoLeft')}>🎯</span></span>
+                  <span className="control-label">
+                    Testo Extra (Sx) 
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="color" title="Colore Extra" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.infoLeft.color} onChange={e => update('infoLeft', { color: e.target.value })} />
+                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('infoLeft')}>🎯</span>
+                    </div>
+                  </span>
                   <input type="text" className="control-input" value={state.infoLeft.text} onChange={e => update('infoLeft', { text: e.target.value })} />
                   <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showInfoLeft !== false} onChange={e => applyState({ ...state, showInfoLeft: e.target.checked })} className="custom-checkbox"/> Mostra</label>
                 </div>
                 <div className="control-field mb-4">
-                  <span className="control-label">Artista <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('artist')}>🎯</span></span>
+                  <span className="control-label">
+                    Artista 
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="color" title="Colore Artista" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.artistStyle?.color || "#111111"} onChange={e => update('artistStyle', { color: e.target.value })} />
+                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('artist')}>🎯</span>
+                    </div>
+                  </span>
                   <input type="text" className="control-input" value={state.artist} onChange={e => applyState({ ...state, artist: e.target.value })} />
                   <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showArtist !== false} onChange={e => applyState({ ...state, showArtist: e.target.checked })} className="custom-checkbox"/> Mostra</label>
                 </div>
                 <div className="control-field mb-4">
-                  <span className="control-label">Copyright <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('copyright')}>🎯</span></span>
+                  <span className="control-label">
+                    Copyright 
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="color" title="Colore Copyright" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.copyright.color} onChange={e => update('copyright', { color: e.target.value })} />
+                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('copyright')}>🎯</span>
+                    </div>
+                  </span>
                   <input type="text" className="control-input" value={state.copyright.text} onChange={e => update('copyright', { text: e.target.value })} />
                   <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showCopyright !== false} onChange={e => applyState({ ...state, showCopyright: e.target.checked })} className="custom-checkbox"/> Mostra</label>
                 </div>
@@ -833,7 +853,15 @@ export default function TokenPreviewSinglePtFrame() {
                     key={k}
                     onMouseDown={e => beginDrag(k, e)}
                     onTouchStart={e => beginDrag(k, e)}
-                    onClick={(e) => { e.stopPropagation(); setActiveLayer(k); if(k==='name'||k==='type'||k==='ability') setActiveTab('text'); else if (k==='pt') setActiveTab('pt'); else if (k==='infoLeft'||k==='artist'||k==='copyright') setActiveTab('settings'); }}
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setActiveLayer(k); 
+                      if (!isMobile) {
+                        if(k==='name'||k==='type'||k==='ability') setActiveTab('text'); 
+                        else if (k==='pt') setActiveTab('pt'); 
+                        else if (k==='infoLeft'||k==='artist'||k==='copyright') setActiveTab('settings'); 
+                      }
+                    }}
                     style={{ position: 'absolute', left: b.x * pScale, top: b.y * pScale, width: b.w * pScale, height: b.h * pScale, cursor: 'move' }} 
                   />
                 ))}
