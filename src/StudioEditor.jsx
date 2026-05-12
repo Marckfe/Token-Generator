@@ -99,6 +99,7 @@ export default function StudioEditor() {
     reader.onload = (ev) => {
       const img = new Image();
       img.onload = () => {
+        const ar = img.width / img.height;
         const MAX_SIZE = 150;
         const width = ar > 1 ? MAX_SIZE : MAX_SIZE * ar;
         const height = ar > 1 ? MAX_SIZE / ar : MAX_SIZE;
@@ -168,6 +169,7 @@ export default function StudioEditor() {
 
   const exportCanvas = async () => {
     if (!canvasRef.current) return;
+    const canvas = await html2canvas(canvasRef.current, {
       useCORS: true,
       backgroundColor: null,
       logging: false,
