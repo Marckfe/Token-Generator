@@ -104,9 +104,16 @@ export default function StudioEditor() {
     const canvas = await html2canvas(canvasRef.current, {
       width: CW,
       height: CH,
-      scale: 2,
+      scale: 4, // High resolution (4x the original size)
       useCORS: true,
-      backgroundColor: null
+      backgroundColor: null,
+      logging: false,
+      imageTimeout: 0,
+      onclone: (clonedDoc) => {
+        // Ensure the cloned canvas is visible and properly scaled for the capture
+        const el = clonedDoc.querySelector('.studio-canvas');
+        if (el) el.style.transform = 'none';
+      }
     });
     const link = document.createElement("a");
     link.download = "studio_card.png";
