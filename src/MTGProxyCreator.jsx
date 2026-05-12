@@ -390,6 +390,117 @@ function TournamentSheet({ data, format, player, commander1, commander2 }) {
   );
 }
 
+
+// ── COMMANDER AUTOCOMPLETE ────────────────────────────────────────────────────
+function CommanderAutocomplete({ value, onChange, placeholder }) {
+  const [suggestions, setSuggestions] = React.useState([]);
+  const [open, setOpen]               = React.useState(false);
+  const [loading, setLoading]         = React.useState(false);
+  const debounceRef                   = React.useRef(null);
+  const wrapRef                       = React.useRef(null);
+
+  React.useEffect(() => {
+    const handler = e => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const search = async (q) => {
+    if (q.length < 2) { setSuggestions([]); setOpen(false); return; }
+    setLoading(true);
+    try {
+      const r = await fetch(
+        `https://api.scryfall.com/cards/search?q=${encodeURIComponent(q)}+is:commander&unique=cards&order=name&dir=asc`
+      );
+      if (!r.ok) throw new Error();
+      const j = await r.json();
+      setSuggestions((j.data || []).slice(0, 8));
+      setOpen(true);
+    } catch {
+      setSuggestions([]); setOpen(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChange = e => {
+    const v = e.target.value;
+    onChange(v);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => search(v), 320);
+  };
+
+  const pick = card => {
+    onChange(card.name);
+    setSuggestions([]);
+    setOpen(false);
+  };
+
+  const getImg = card =>
+    card.image_uris?.art_crop ||
+    card.image_uris?.small ||
+    card.card_faces?.[0]?.image_uris?.art_crop ||
+    card.card_faces?.[0]?.image_uris?.small;
+
+  return (
+    <div ref={wrapRef} style={{ position:"relative" }}>
+      <div style={{ position:"relative" }}>
+        <input
+          value={value}
+          onChange={handleChange}
+          onFocus={() => suggestions.length && setOpen(true)}
+          style={{ ...iStyle, paddingRight: loading ? 30 : undefined }}
+          placeholder={placeholder}
+          autoComplete="off"
+        />
+        {loading && (
+          <div style={{ position:"absolute", right:9, top:"50%", transform:"translateY(-50%)", width:14, height:14,
+            border:"2px solid var(--border)", borderTopColor:"var(--primary)",
+            borderRadius:"50%", animation:"spin .7s linear infinite" }} />
+        )}
+      </div>
+      {open && suggestions.length > 0 && (
+        <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, right:0, zIndex:200,
+          background:"var(--surface)", border:"1px solid var(--border)", borderRadius:"var(--r-lg)",
+          boxShadow:"var(--sh-lg)", overflow:"hidden", maxHeight:340, overflowY:"auto" }}>
+          {suggestions.map(card => (
+            <button key={card.id} onMouseDown={() => pick(card)}
+              style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"8px 12px",
+                border:"none", background:"transparent", cursor:"pointer", textAlign:"left",
+                transition:"background var(--tr)", color:"var(--text)" }}
+              onMouseEnter={e => e.currentTarget.style.background="var(--surf-off)"}
+              onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+              {getImg(card) && (
+                <img src={getImg(card)} alt="" width={36} height={26}
+                  style={{ borderRadius:3, objectFit:"cover", flexShrink:0 }} />
+              )}
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontWeight:600, fontSize:".83rem", color:"var(--text)",
+                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                  {card.name}
+                </div>
+                <div style={{ fontSize:".72rem", color:"var(--muted)" }}>
+                  {card.type_line?.replace("Legendary ", "")}
+                </div>
+              </div>
+              <div style={{ marginLeft:"auto", flexShrink:0, display:"flex", gap:3 }}>
+                {(card.color_identity || []).map(c => (
+                  <span key={c} style={{ fontSize:".7rem", background:"var(--surf-off)",
+                    border:"1px solid var(--border)", borderRadius:3, padding:"1px 4px",
+                    color:"var(--muted)" }}>{c}</span>
+                ))}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      <style>{`@keyframes spin { to { transform:translateY(-50%) rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
 // ── DECK VALIDATOR PANEL ──────────────────────────────────────────────────────
 function DeckValidatorPanel() {
   const [format, setFormat]       = useState("modern");
@@ -502,10 +613,10 @@ function DeckValidatorPanel() {
                 Comandante/i — Duel Commander
               </div>
               <Field label="Comandante 1">
-                <input value={commander1} onChange={e => setCmd1(e.target.value)} style={iStyle} placeholder="es. Yuriko, the Tiger's Shadow" />
+                <CommanderAutocomplete value={commander1} onChange={setCmd1} placeholder="es. Yuriko, the Tiger's Shadow" />
               </Field>
               <Field label="Comandante 2 (solo Partner / Friends Forever)">
-                <input value={commander2} onChange={e => setCmd2(e.target.value)} style={iStyle} placeholder="Lascia vuoto se hai un solo comandante" />
+                <CommanderAutocomplete value={commander2} onChange={setCmd2} placeholder="Lascia vuoto se hai un solo comandante" />
               </Field>
               {cmdErrors.length > 0 && (
                 <div style={{ padding:10, background:"rgba(200,50,50,.12)", borderRadius:"var(--r-md)", border:"1px solid rgba(200,50,50,.4)" }}>
