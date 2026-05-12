@@ -281,6 +281,7 @@ input, select, textarea { font: inherit; color: inherit; outline: none; }
   border: 2px solid transparent;
   display: flex; flex-direction: column;
   background: var(--surface); position: relative;
+  min-height: 240px;
 }
 .bulk-item-wrapper.excluded { opacity: 0.4; filter: grayscale(1); border-color: var(--border); }
 .bulk-item-wrapper.found { border-color: rgba(109, 170, 69, 0.6); }

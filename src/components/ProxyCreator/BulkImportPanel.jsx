@@ -29,7 +29,10 @@ export default function BulkImportPanel({ onAddCards, toast }) {
 
     let fetchedCards = [];
     try {
-      const identifiers = parsed.map(p => ({ name: p.name.split(/\s*\/\/?\s*/)[0].trim() }));
+      const identifiers = parsed.map(p => {
+        let cleanName = p.name.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
+        return { name: cleanName.split(/\s*\/\/?\s*/)[0].trim() };
+      });
       for (let i = 0; i < identifiers.length; i += 75) {
         const chunk = identifiers.slice(i, i + 75);
         const res = await fetch('https://api.scryfall.com/cards/collection', {
