@@ -59,8 +59,6 @@ export async function fetchAllPrints(name, lang = 'en') {
   
   return all;
 }
-  return all;
-}
 
 export async function fetchSuggestions(val) {
   if (val.length < 2) return [];
