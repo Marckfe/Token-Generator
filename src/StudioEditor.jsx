@@ -37,6 +37,25 @@ export default function StudioEditor() {
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef(null);
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1000);
+  const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    const fn = () => {
+      const mobile = window.innerWidth < 1000;
+      setIsMobile(mobile);
+      if (mobile) {
+        const availableW = window.innerWidth - 20;
+        setZoom(Math.min(availableW / CW, 0.6));
+      } else {
+        setZoom(0.8);
+      }
+    };
+    window.addEventListener("resize", fn);
+    fn();
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+
   const addLayer = (type, content = "") => {
     const newLayer = {
       id: "layer_" + Math.random().toString(36).substr(2, 9),
@@ -48,6 +67,7 @@ export default function StudioEditor() {
       rotate: 0,
       opacity: 1,
       content,
+      aspectRatio: type === 'image' ? 1 : null,
       style: {
         color: "#ffffff",
         fontSize: 24,
@@ -76,12 +96,45 @@ export default function StudioEditor() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => addLayer('image', ev.target.result);
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX_SIZE = 150;
+        const width = ar > 1 ? MAX_SIZE : MAX_SIZE * ar;
+        const height = ar > 1 ? MAX_SIZE / ar : MAX_SIZE;
+        
+        const newLayer = {
+          id: "layer_" + Math.random().toString(36).substr(2, 9),
+          type: 'image',
+          x: (CW - width) / 2,
+          y: (CH - height) / 2,
+          width: Math.round(width),
+          height: Math.round(height),
+          rotate: 0,
+          opacity: 1,
+          content: ev.target.result,
+          aspectRatio: ar,
+          style: { opacity: 1 }
+        };
+        setLayers([...layers, newLayer]);
+        setSelectedId(newLayer.id);
+      };
+      img.src = ev.target.result;
+    };
     reader.readAsDataURL(file);
   };
 
   const updateLayer = (id, patch) => {
-    setLayers(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l));
+    setLayers(prev => prev.map(l => {
+      if (l.id === id) {
+        if (l.aspectRatio) {
+          if ('width' in patch) return { ...l, ...patch, height: Math.round(patch.width / l.aspectRatio) };
+          if ('height' in patch) return { ...l, ...patch, width: Math.round(patch.height * l.aspectRatio) };
+        }
+        return { ...l, ...patch };
+      }
+      return l;
+    }));
   };
 
   const updateStyle = (id, patch) => {
@@ -115,18 +168,19 @@ export default function StudioEditor() {
 
   const exportCanvas = async () => {
     if (!canvasRef.current) return;
-    const canvas = await html2canvas(canvasRef.current, {
-      width: CW,
-      height: CH,
-      scale: 4, // High resolution (4x the original size)
       useCORS: true,
       backgroundColor: null,
       logging: false,
       imageTimeout: 0,
+      scale: 4,
       onclone: (clonedDoc) => {
-        // Ensure the cloned canvas is visible and properly scaled for the capture
         const el = clonedDoc.querySelector('.studio-canvas');
-        if (el) el.style.transform = 'none';
+        if (el) {
+          el.style.transform = 'none';
+          el.style.width = CW + 'px';
+          el.style.height = CH + 'px';
+          el.style.borderRadius = '0'; // No rounded corners in export
+        }
       }
     });
     const link = document.createElement("a");
@@ -203,59 +257,72 @@ export default function StudioEditor() {
   };
 
   const onMouseDown = (id, e) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 && e.type !== 'touchstart') return;
     setSelectedId(id);
     setIsDragging(true);
     const layer = layers.find(l => l.id === id);
+    const t = e.touches?.[0] || e;
     dragRef.current = {
       id,
-      startX: e.clientX,
-      startY: e.clientY,
+      startX: t.clientX,
+      startY: t.clientY,
       initialX: layer.x,
       initialY: layer.y
     };
-    e.stopPropagation();
+    if (e.type !== 'touchstart') e.stopPropagation();
   };
 
   useEffect(() => {
-    const onMouseMove = (e) => {
+    const onMove = (e) => {
       if (!isDragging || !dragRef.current) return;
-      const dx = e.clientX - dragRef.current.startX;
-      const dy = e.clientY - dragRef.current.startY;
+      const t = e.touches?.[0] || e;
+      const dx = (t.clientX - dragRef.current.startX) / zoom;
+      const dy = (t.clientY - dragRef.current.startY) / zoom;
       updateLayer(dragRef.current.id, {
-        x: dragRef.current.initialX + dx,
-        y: dragRef.current.initialY + dy
+        x: Math.round(dragRef.current.initialX + dx),
+        y: Math.round(dragRef.current.initialY + dy)
       });
     };
-    const onMouseUp = () => setIsDragging(false);
+    const onEnd = () => setIsDragging(false);
     
     if (isDragging) {
-      window.addEventListener("mousemove", onMouseMove);
-      window.addEventListener("mouseup", onMouseUp);
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onEnd);
+      window.addEventListener("touchmove", onMove, { passive: false });
+      window.addEventListener("touchend", onEnd);
     }
     return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onEnd);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
     };
-  }, [isDragging]);
+  }, [isDragging, zoom]);
 
   return (
-    <div className="editor-layout studio-mode">
+    <div className={`editor-layout studio-mode ${isMobile ? 'is-mobile' : ''}`}>
       <nav className="editor-nav">
         <div className="nav-item" onClick={() => addLayer('text', 'NUOVO TESTO')}>
-          <Type size={20} /> Testo
+          <Type size={20} /> <span className="nav-label">Testo</span>
         </div>
         <label className="nav-item">
-          <ImageIcon size={20} /> Asset
+          <ImageIcon size={20} /> <span className="nav-label">Asset</span>
           <input type="file" hidden accept="image/*" onChange={handleAssetUpload} />
         </label>
         <div className="nav-item" onClick={() => setSelectedId(null)}>
-          <Layers size={20} /> Livelli
+          <Layers size={20} /> <span className="nav-label">Livelli</span>
         </div>
-        <div className="nav-item" style={{ marginTop: 'auto' }} onClick={exportCanvas}>
-          <Download size={20} /> Esporta
+        <div className="nav-item" style={{ marginTop: isMobile ? 0 : 'auto' }} onClick={exportCanvas}>
+          <Download size={20} /> <span className="nav-label">Esporta</span>
         </div>
       </nav>
+
+      {isMobile && selectedId && (
+        <div className="mobile-properties-bar">
+           <button className="btn btn-ghost" onClick={() => setSelectedId(null)}>✕ Chiudi</button>
+           <span className="text-xs opacity-60">Modifica: {activeLayer.type === 'text' ? 'Testo' : 'Immagine'}</span>
+        </div>
+      )}
 
       <aside className="editor-sidebar">
         {selectedId ? (
@@ -415,7 +482,8 @@ export default function StudioEditor() {
             style={{ 
               width: CW, 
               height: CH, 
-              transform: `scale(${window.innerWidth < 1000 ? 0.6 : 0.8})`,
+              transform: `scale(${zoom})`,
+              transformOrigin: 'top center',
               background: bgArt ? `url(${bgArt}) center/cover no-repeat` : 'repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 50% / 40px 40px',
               position: 'relative',
               overflow: 'hidden',
@@ -453,6 +521,7 @@ export default function StudioEditor() {
                   setSelectedId(l.id);
                 }}
                 onMouseDown={(e) => onMouseDown(l.id, e)}
+                onTouchStart={(e) => onMouseDown(l.id, e)}
                 style={{
                   position: 'absolute',
                   left: l.x,
@@ -467,7 +536,8 @@ export default function StudioEditor() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   zIndex: layers.indexOf(l) + 1,
-                  userSelect: 'none'
+                  userSelect: 'none',
+                  touchAction: 'none'
                 }}
               >
                 {l.type === 'image' ? (
