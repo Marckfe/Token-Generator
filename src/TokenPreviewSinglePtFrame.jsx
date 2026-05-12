@@ -160,24 +160,28 @@ function renderCardSync(canvas, state, withBleed = false) {
     if (img) ctx.drawImage(img, 0, 0, CW, CH);
   }
 
-  const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1) : nameStyle.fontSize;
-  ctx.save();
-  ctx.font = `bold ${fittedNameSize}px ${FT}`;
-  ctx.fillStyle = nameStyle.color;
-  ctx.textBaseline = "middle";
-  ctx.textAlign = nameStyle.align || "center";
-  const nameX = nameStyle.align === "left" ? nameStyle.x + 10 : nameStyle.align === "right" ? nameStyle.x + CW - 10 : nameStyle.x + CW / 2;
-  ctx.fillText((name || "TOKEN").toUpperCase(), nameX, nameStyle.y);
-  ctx.restore();
+  if (state.showName !== false) {
+    const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1) : nameStyle.fontSize;
+    ctx.save();
+    ctx.font = `bold ${fittedNameSize}px ${FT}`;
+    ctx.fillStyle = nameStyle.color;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = nameStyle.align || "center";
+    const nameX = nameStyle.align === "left" ? nameStyle.x + 10 : nameStyle.align === "right" ? nameStyle.x + CW - 10 : nameStyle.x + CW / 2;
+    ctx.fillText((name || "TOKEN").toUpperCase(), nameX, nameStyle.y);
+    ctx.restore();
+  }
 
-  const fittedTypeSize = state.autoFitType ? fitTextBox(type || "Token", typeStyle.fontSize, 14, CW - typeStyle.x - 40, 1) : typeStyle.fontSize;
-  ctx.save();
-  ctx.font = `bold ${fittedTypeSize}px ${FT}`;
-  ctx.fillStyle = typeStyle.color;
-  ctx.textBaseline = "middle";
-  ctx.textAlign = typeStyle.align || "left";
-  ctx.fillText(type || "Token", typeStyle.x, typeStyle.y);
-  ctx.restore();
+  if (state.showType !== false) {
+    const fittedTypeSize = state.autoFitType ? fitTextBox(type || "Token", typeStyle.fontSize, 14, CW - typeStyle.x - 40, 1) : typeStyle.fontSize;
+    ctx.save();
+    ctx.font = `bold ${fittedTypeSize}px ${FT}`;
+    ctx.fillStyle = typeStyle.color;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = typeStyle.align || "left";
+    ctx.fillText(type || "Token", typeStyle.x, typeStyle.y);
+    ctx.restore();
+  }
 
   if (showAbility && ability) {
     const size = state.autoFitRules ? fitTextBox(ability, abilityStyle.fontSize, 14, abilityStyle.width || (CW - abilityStyle.x * 2), 10) : abilityStyle.fontSize;
@@ -193,22 +197,34 @@ function renderCardSync(canvas, state, withBleed = false) {
     const img = getCachedImage(ptFrame.url);
     if (img) ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height);
     ctx.save();
-    ctx.font = `bold ${ptStyle.fontSize}px ${FT}`;
     ctx.fillStyle = ptStyle.color;
     ctx.textBaseline = "middle";
-    const pw = ctx.measureText(pt?.power || "0").width;
-    const sw = ctx.measureText("/").width;
-    const tw = pw + sw + ctx.measureText(pt?.toughness || "0").width;
+    
+    // Auto-fit per numeri doppi (es. 10/10)
+    let ptSize = ptStyle.fontSize || 36;
+    let pw, sw, rw, totalW;
+    do {
+      ctx.font = `bold ${ptSize}px ${FT}`;
+      pw = ctx.measureText(pt?.power || "0").width;
+      sw = ctx.measureText("/").width;
+      rw = ctx.measureText(pt?.toughness || "0").width;
+      totalW = pw + sw + rw;
+      if (totalW <= ptStyle.width - 24 || ptSize <= 16) break;
+      ptSize -= 1;
+    } while (true);
+
     const ptCX = ptStyle.frameX + ptStyle.width / 2 + (ptStyle.powerOffsetX || 0);
-    const ptCY = ptStyle.frameY + ptStyle.height / 2;
+    const ptCY = ptStyle.frameY + ptStyle.height / 2 + 2; // +2 per centrare meglio otticamente
     ctx.textAlign = "left";
-    ctx.fillText(pt?.power || "0", ptCX - tw / 2, ptCY);
-    ctx.fillText("/", ptCX - tw / 2 + pw, ptCY);
-    ctx.fillText(pt?.toughness || "0", ptCX - tw / 2 + pw + sw, ptCY);
+    
+    const startX = ptCX - totalW / 2;
+    ctx.fillText(pt?.power || "0", startX, ptCY);
+    ctx.fillText("/", startX + pw, ptCY);
+    ctx.fillText(pt?.toughness || "0", startX + pw + sw, ptCY);
     ctx.restore();
   }
 
-  if (showInfoLeft && infoLeft) {
+  if (state.showInfoLeft !== false && infoLeft) {
     ctx.save();
     ctx.font = `${infoLeft.fontSize || 11}px ${FT}`;
     ctx.fillStyle = infoLeft.color || "#1a1a1a";
@@ -217,22 +233,22 @@ function renderCardSync(canvas, state, withBleed = false) {
     ctx.fillText(infoLeft.text || "", infoLeft.x || 18, CH - (infoLeft.y || 12));
     ctx.restore();
   }
-  if (showArtist && infoLeft?.artist) {
+  if (state.showArtist !== false && state.artist) {
     ctx.save();
-    ctx.font = `${infoLeft.fontSize || 11}px ${FT}`;
-    ctx.fillStyle = infoLeft.color || "#1a1a1a";
+    ctx.font = `${state.artistStyle?.fontSize || 11}px ${FT}`;
+    ctx.fillStyle = state.artistStyle?.color || "#1a1a1a";
     ctx.textBaseline = "bottom";
     ctx.textAlign = "left";
-    ctx.fillText(`Illus. ${infoLeft.artist}`, infoLeft.x || 18, CH - (infoLeft.y || 12) + (infoLeft.fontSize || 11) + 2);
+    ctx.fillText(`Illus. ${state.artist}`, state.artistStyle?.x || 18, CH - (state.artistStyle?.y || 26));
     ctx.restore();
   }
-  if (showCopyright && copyright) {
+  if (state.showCopyright !== false && copyright) {
     ctx.save();
     ctx.font = `${copyright.fontSize || 9}px ${FT}`;
     ctx.fillStyle = copyright.color || "#111";
     ctx.textBaseline = "bottom";
     ctx.textAlign = "right";
-    ctx.fillText(`™ & © ${copyright.year || new Date().getFullYear()} Wizards of the Coast`, CW - (copyright.x || 18), CH - (copyright.y || 12));
+    ctx.fillText(copyright.text || `™ & © ${new Date().getFullYear()} Wizards of the Coast`, CW - (copyright.x || 18), CH - (copyright.y || 12));
     ctx.restore();
   }
   ctx.restore();
@@ -248,13 +264,17 @@ function getGuideMetrics(state) {
   const abilityHeight = Math.max(54, abilityLines * (abilitySize * 1.45) + Math.max(8, state.abilityStyle.lineGap || 4) * (abilityLines - 1) + 12);
   const nameCenterX = state.nameStyle.align === 'left' ? state.nameStyle.x + 10 + nameWidth/2 : state.nameStyle.align === 'right' ? state.nameStyle.x + CW - 10 - nameWidth/2 : state.nameStyle.x + CW/2;
   
-  return {
-    name: { x: clamp(nameCenterX - nameWidth/2 - 10, 12, CW-12), y: state.nameStyle.y - Math.round(nameSize * 0.62), w: clamp(nameWidth + 20, 80, CW-24), h: Math.max(24, Math.round(nameSize * 1.18)), c: '#38bdf8' },
-    type: { x: state.typeStyle.x - 4, y: state.typeStyle.y - Math.round(typeSize * 0.58), w: Math.max(100, typeWidth + 14), h: Math.max(22, Math.round(typeSize * 1.15)), c: '#22c55e' },
-    ability: { x: state.abilityStyle.x - 4, y: state.abilityStyle.y - 4, w: state.abilityStyle.width || (CW - state.abilityStyle.x * 2), h: abilityHeight, c: '#f59e0b' },
-    pt: { x: state.ptStyle.frameX + 6, y: state.ptStyle.frameY + 6, w: Math.max(20, state.ptStyle.width - 12), h: Math.max(20, state.ptStyle.height - 12), c: '#f472b6' },
-    footer: { x: Math.max(10, (state.infoLeft?.x || 18) - 4), y: CH - (state.infoLeft?.y || 12) - Math.max(12, state.infoLeft?.fontSize || 11), w: CW - Math.max(10, (state.infoLeft?.x || 18) - 4) - Math.max(10, (state.copyright?.x || 18) - 4), h: Math.max(14, (state.infoLeft?.fontSize || 11) + 6), c: '#a78bfa' },
+  const boxes = {
+    name: state.showName !== false ? { x: clamp(nameCenterX - nameWidth/2 - 10, 12, CW-12), y: state.nameStyle.y - Math.round(nameSize * 0.62), w: clamp(nameWidth + 20, 80, CW-24), h: Math.max(24, Math.round(nameSize * 1.18)), c: '#38bdf8' } : null,
+    type: state.showType !== false ? { x: state.typeStyle.x - 4, y: state.typeStyle.y - Math.round(typeSize * 0.58), w: Math.max(100, typeWidth + 14), h: Math.max(22, Math.round(typeSize * 1.15)), c: '#22c55e' } : null,
+    ability: state.showAbility !== false ? { x: state.abilityStyle.x - 4, y: state.abilityStyle.y - 4, w: state.abilityStyle.width || (CW - state.abilityStyle.x * 2), h: abilityHeight, c: '#f59e0b' } : null,
+    pt: state.showPT !== false ? { x: state.ptStyle.frameX + 6, y: state.ptStyle.frameY + 6, w: Math.max(20, state.ptStyle.width - 12), h: Math.max(20, state.ptStyle.height - 12), c: '#f472b6' } : null,
+    infoLeft: state.showInfoLeft !== false ? { x: Math.max(10, (state.infoLeft?.x || 18) - 4), y: CH - (state.infoLeft?.y || 12) - Math.max(12, state.infoLeft?.fontSize || 11), w: Math.max(40, measureTextWidth(state.infoLeft?.text, state.infoLeft?.fontSize || 11, FT, 'normal') + 8), h: Math.max(14, (state.infoLeft?.fontSize || 11) + 6), c: '#a78bfa' } : null,
+    artist: state.showArtist !== false ? { x: Math.max(10, (state.artistStyle?.x || 18) - 4), y: CH - (state.artistStyle?.y || 26) - Math.max(12, state.artistStyle?.fontSize || 11), w: Math.max(60, measureTextWidth("Illus. " + state.artist, state.artistStyle?.fontSize || 11, FT, 'normal') + 8), h: Math.max(14, (state.artistStyle?.fontSize || 11) + 6), c: '#a78bfa' } : null,
+    copyright: state.showCopyright !== false ? { x: CW - (state.copyright?.x || 18) - measureTextWidth(state.copyright?.text || `™ & © ${new Date().getFullYear()} Wizards of the Coast`, state.copyright?.fontSize || 9, FT, 'normal') - 4, y: CH - (state.copyright?.y || 12) - Math.max(10, state.copyright?.fontSize || 9), w: Math.max(80, measureTextWidth(state.copyright?.text || `™ & © ${new Date().getFullYear()} Wizards of the Coast`, state.copyright?.fontSize || 9, FT, 'normal') + 8), h: Math.max(12, (state.copyright?.fontSize || 9) + 6), c: '#a78bfa' } : null,
   };
+  for (let k in boxes) if (!boxes[k]) delete boxes[k];
+  return boxes;
 }
 
 function getDefaultFrame() { const firstSet = Object.keys(FRAME_MAP)[0]; return firstSet ? FRAME_MAP[firstSet][0] : null; }
@@ -262,13 +282,14 @@ function getDefaultPtFrame() { return PT_FRAMES[0] || null; }
 const DEFAULT_STATE = {
   artUrl: "", artTransform: { zoom: 1, x: 0, y: 0 },
   frameSet: Object.keys(FRAME_MAP)[0] || "", frame: getDefaultFrame(), ptFrame: getDefaultPtFrame(),
-  name: "Goblin", autoFitName: true, autoFitType: true, autoFitRules: false,
+  name: "Goblin", showName: true, autoFitName: true, autoFitType: true, autoFitRules: false,
   nameStyle: { x: 0, y: 54, fontSize: 28, color: "#111111", align: "center" },
-  type: "Token Creature — Goblin", typeStyle: { x: 44, y: 602, fontSize: 24, color: "#111111", align: "left" },
+  type: "Token Creature — Goblin", showType: true, typeStyle: { x: 44, y: 602, fontSize: 24, color: "#111111", align: "left" },
   ability: "Haste", abilityStyle: { x: 44, y: 644, width: 532, fontSize: 24, color: "#111111", lineGap: 4 }, showAbility: true,
-  pt: { power: "1", toughness: "1" }, ptStyle: { frameX: 457, frameY: 789, width: 126, height: 54, fontSize: 28, color: "#111111", powerOffsetX: 0 }, showPT: true,
-  infoLeft: { text: "SET • EN", artist: "Artist", x: 18, y: 12, color: "#111111", fontSize: 11 }, showInfoLeft: true, showArtist: true,
-  copyright: { year: new Date().getFullYear(), x: 18, y: 12, color: "#111111", fontSize: 9 }, showCopyright: true,
+  pt: { power: "1", toughness: "1" }, ptStyle: { frameX: 457, frameY: 789, width: 126, height: 54, fontSize: 36, color: "#111111", powerOffsetX: 0 }, showPT: true,
+  infoLeft: { text: "SET • EN", x: 18, y: 12, color: "#111111", fontSize: 11 }, showInfoLeft: true,
+  artist: "Artist Name", artistStyle: { x: 18, y: 26, color: "#111111", fontSize: 11 }, showArtist: true,
+  copyright: { text: `™ & © ${new Date().getFullYear()} Wizards of the Coast`, x: 18, y: 12, color: "#111111", fontSize: 9 }, showCopyright: true,
 };
 
 export default function TokenPreviewSinglePtFrame() {
@@ -280,9 +301,10 @@ export default function TokenPreviewSinglePtFrame() {
   const [activeTab, setActiveTab] = useState('frame'); // 'art', 'frame', 'pt', 'text', 'settings'
   const [activeLayer, setActiveLayer] = useState('art');
   const [showGuides, setShowGuides] = useState(true);
-  const [withBleed, setWithBleed] = useState(false);
   const [pngScale, setPngScale] = useState(4);
   const [previewZoom, setPreviewZoom] = useState(100);
+  const [exportBleed, setExportBleed] = useState(false);
+  const [exportCropMarks, setExportCropMarks] = useState(false);
   
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [snapGuides, setSnapGuides] = useState({ x: null, y: null });
@@ -346,7 +368,7 @@ export default function TokenPreviewSinglePtFrame() {
     setActiveLayer(kind);
     if (kind === 'name' || kind === 'type' || kind === 'ability') setActiveTab('text');
     if (kind === 'pt') setActiveTab('pt');
-    if (kind === 'footer') setActiveTab('text');
+    if (kind === 'infoLeft' || kind === 'artist' || kind === 'copyright') setActiveTab('settings');
     if (kind === 'art') setActiveTab('art');
     
     const move = ev => {
@@ -386,7 +408,9 @@ export default function TokenPreviewSinglePtFrame() {
       if (kind === 'type') next.typeStyle = { ...next.typeStyle, x: Math.round(snap.typeStyle.x + dx), y: Math.round(snap.typeStyle.y + dy) };
       if (kind === 'ability') next.abilityStyle = { ...next.abilityStyle, x: Math.round(snap.abilityStyle.x + dx), y: Math.round(snap.abilityStyle.y + dy) };
       if (kind === 'pt') next.ptStyle = { ...next.ptStyle, frameX: Math.round(snap.ptStyle.frameX + dx), frameY: Math.round(snap.ptStyle.frameY + dy) };
-      if (kind === 'footer') next.infoLeft = { ...next.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||12) - dy) };
+      if (kind === 'infoLeft') next.infoLeft = { ...next.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||12) - dy) };
+      if (kind === 'artist') next.artistStyle = { ...next.artistStyle, x: Math.round((snap.artistStyle?.x||18) + dx), y: Math.round((snap.artistStyle?.y||26) - dy) };
+      if (kind === 'copyright') next.copyright = { ...next.copyright, x: Math.round((snap.copyright?.x||18) - dx), y: Math.round((snap.copyright?.y||12) - dy) };
       
       dragRef.current.lastState = next;
       applyState(next, false);
@@ -425,16 +449,76 @@ export default function TokenPreviewSinglePtFrame() {
 
   const exportPNG = () => {
     const c = document.createElement('canvas');
-    renderCardSync(c, state, withBleed);
+    renderCardSync(c, state, exportBleed);
+
+    let finalCanvas = c;
+    if (exportCropMarks) {
+       const MARGIN = 30; // spazio per i segni di taglio
+       const outer = document.createElement('canvas');
+       outer.width = c.width + MARGIN * 2;
+       outer.height = c.height + MARGIN * 2;
+       const octx = outer.getContext('2d');
+       octx.fillStyle = '#ffffff';
+       octx.fillRect(0, 0, outer.width, outer.height);
+       
+       octx.strokeStyle = '#000000';
+       octx.lineWidth = 1;
+       const drawMark = (x1, y1, x2, y2) => { octx.beginPath(); octx.moveTo(x1, y1); octx.lineTo(x2, y2); octx.stroke(); };
+       
+       const cL = MARGIN; const cR = MARGIN + c.width;
+       const cT = MARGIN; const cB = MARGIN + c.height;
+
+       drawMark(cL, 0, cL, MARGIN - 5); drawMark(0, cT, MARGIN - 5, cT);
+       drawMark(cR, 0, cR, MARGIN - 5); drawMark(cR + 5, cT, outer.width, cT);
+       drawMark(cL, cB + 5, cL, outer.height); drawMark(0, cB, MARGIN - 5, cB);
+       drawMark(cR, cB + 5, cR, outer.height); drawMark(cR + 5, cB, outer.width, cB);
+
+       octx.drawImage(c, MARGIN, MARGIN);
+       finalCanvas = outer;
+    }
+
     const out = document.createElement('canvas');
-    out.width = c.width * pngScale; out.height = c.height * pngScale;
+    out.width = finalCanvas.width * pngScale; out.height = finalCanvas.height * pngScale;
     const octx = out.getContext('2d');
     octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality = 'high';
-    octx.drawImage(c, 0, 0, out.width, out.height);
+    octx.drawImage(finalCanvas, 0, 0, out.width, out.height);
     const a = document.createElement('a');
     a.href = out.toDataURL('image/png');
-    a.download = `${(state.name || 'token').replace(/\s+/g,'_')}_${pngScale}x.png`;
+    a.download = `${(state.name || 'token').replace(/\s+/g,'_')}${exportBleed ? '_bleed' : ''}${exportCropMarks ? '_crop' : ''}.png`;
     a.click();
+  };
+
+  const saveProject = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+    const a = document.createElement('a');
+    a.href = dataStr;
+    a.download = `token_project_${(state.name || 'token').replace(/\s+/g,'_')}.json`;
+    a.click();
+  };
+
+  const loadProject = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const loaded = JSON.parse(ev.target.result);
+        applyState({ ...DEFAULT_STATE, ...loaded });
+      } catch (err) {
+        alert("File JSON non valido.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = null; // reset input
+  };
+
+  const resetFooterAlign = () => {
+    applyState({
+      ...state,
+      infoLeft: { ...state.infoLeft, x: 18, y: 12 },
+      artistStyle: { ...state.artistStyle, x: 18, y: 26 },
+      copyright: { ...state.copyright, x: 18, y: 12 }
+    });
   };
 
   const baseScale = isMobile ? Math.min((window.innerWidth - 20) / CW, (window.innerHeight - 200) / CH) : Math.min(0.9, (window.innerWidth - 450) / CW);
@@ -542,8 +626,18 @@ export default function TokenPreviewSinglePtFrame() {
               <div className="sidebar-panel-title">⚔️ Forza / Costituzione</div>
               <div className="control-group">
                 <div className="control-row">
-                  <div className="control-field"><span className="control-label">Forza</span><input type="text" className="control-input" value={state.pt.power} onChange={e => applyState({ ...state, pt: { ...state.pt, power: e.target.value } })} /></div>
-                  <div className="control-field"><span className="control-label">Costituzione</span><input type="text" className="control-input" value={state.pt.toughness} onChange={e => applyState({ ...state, pt: { ...state.pt, toughness: e.target.value } })} /></div>
+                  <div className="control-field">
+                    <span className="control-label">Forza</span>
+                    <input type="text" className="control-input" value={state.pt.power} onChange={e => applyState({ ...state, pt: { ...state.pt, power: e.target.value } })} />
+                  </div>
+                  <div className="control-field">
+                    <span className="control-label">Costituzione</span>
+                    <input type="text" className="control-input" value={state.pt.toughness} onChange={e => applyState({ ...state, pt: { ...state.pt, toughness: e.target.value } })} />
+                  </div>
+                </div>
+                <div className="control-field mb-2">
+                  <span className="control-label">Colore Testo P/T</span>
+                  <input type="color" className="control-color" style={{ width: '100%', height: '36px', padding: '2px', borderRadius: '6px' }} value={state.ptStyle.color} onChange={e => update('ptStyle', { color: e.target.value })} />
                 </div>
                 <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} className="custom-checkbox"/> Mostra P/T Box</label>
                 
@@ -565,15 +659,35 @@ export default function TokenPreviewSinglePtFrame() {
               <div className="sidebar-panel-title">📝 Modifica Testi</div>
               <div className="control-group">
                 <div className="control-field mb-4">
-                  <span className="control-label">Nome Carta <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('name')}>Mirino 🎯</span></span>
-                  <input type="text" className="control-input" value={state.name} onChange={e => applyState({ ...state, name: e.target.value })} onClick={() => setActiveLayer('name')} />
+                  <span className="control-label">
+                    Nome Carta 
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="color" title="Colore Nome" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.nameStyle.color} onChange={e => update('nameStyle', { color: e.target.value })} />
+                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('name')}>🎯</span>
+                    </div>
+                  </span>
+                  <input type="text" className="control-input" value={state.name} onChange={e => applyState({ ...state, name: e.target.value })} onClick={() => setActiveLayer('name')} list="token-names" />
+                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showName !== false} onChange={e => applyState({ ...state, showName: e.target.checked })} className="custom-checkbox"/> Mostra Nome Carta</label>
                 </div>
                 <div className="control-field mb-4">
-                  <span className="control-label">Tipo <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('type')}>Mirino 🎯</span></span>
-                  <input type="text" className="control-input" value={state.type} onChange={e => applyState({ ...state, type: e.target.value })} onClick={() => setActiveLayer('type')} />
+                  <span className="control-label">
+                    Tipo 
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="color" title="Colore Tipo" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.typeStyle.color} onChange={e => update('typeStyle', { color: e.target.value })} />
+                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('type')}>🎯</span>
+                    </div>
+                  </span>
+                  <input type="text" className="control-input" value={state.type} onChange={e => applyState({ ...state, type: e.target.value })} onClick={() => setActiveLayer('type')} list="token-types" />
+                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showType !== false} onChange={e => applyState({ ...state, showType: e.target.checked })} className="custom-checkbox"/> Mostra Tipo</label>
                 </div>
                 <div className="control-field">
-                  <span className="control-label">Regole (usa {'{G}'} per simboli) <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('ability')}>Mirino 🎯</span></span>
+                  <span className="control-label">
+                    Regole 
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="color" title="Colore Regole" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.abilityStyle.color} onChange={e => update('abilityStyle', { color: e.target.value })} />
+                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('ability')}>🎯</span>
+                    </div>
+                  </span>
                   <textarea className="control-input control-textarea" value={state.ability} onChange={e => applyState({ ...state, ability: e.target.value })} onClick={() => setActiveLayer('ability')} />
                   <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showAbility} onChange={e => applyState({ ...state, showAbility: e.target.checked })} className="custom-checkbox"/> Mostra regole</label>
                 </div>
@@ -587,16 +701,38 @@ export default function TokenPreviewSinglePtFrame() {
               <div className="sidebar-panel-title">⚙️ Impostazioni & Esporta</div>
               <div className="control-group">
                 <div className="control-field mb-4">
-                  <span className="control-label">Info Footer (Sx)</span>
+                  <span className="control-label">Testo Extra (Sx) <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('infoLeft')}>🎯</span></span>
                   <input type="text" className="control-input" value={state.infoLeft.text} onChange={e => update('infoLeft', { text: e.target.value })} />
+                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showInfoLeft !== false} onChange={e => applyState({ ...state, showInfoLeft: e.target.checked })} className="custom-checkbox"/> Mostra</label>
                 </div>
                 <div className="control-field mb-4">
-                  <span className="control-label">Artista</span>
-                  <input type="text" className="control-input" value={state.infoLeft.artist} onChange={e => update('infoLeft', { artist: e.target.value })} />
+                  <span className="control-label">Artista <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('artist')}>🎯</span></span>
+                  <input type="text" className="control-input" value={state.artist} onChange={e => applyState({ ...state, artist: e.target.value })} />
+                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showArtist !== false} onChange={e => applyState({ ...state, showArtist: e.target.checked })} className="custom-checkbox"/> Mostra</label>
                 </div>
+                <div className="control-field mb-4">
+                  <span className="control-label">Copyright <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('copyright')}>🎯</span></span>
+                  <input type="text" className="control-input" value={state.copyright.text} onChange={e => update('copyright', { text: e.target.value })} />
+                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showCopyright !== false} onChange={e => applyState({ ...state, showCopyright: e.target.checked })} className="custom-checkbox"/> Mostra</label>
+                </div>
+                <button className="btn btn-ghost w-full mt-2 text-xs" onClick={resetFooterAlign}>🔄 Allinea come Originale</button>
                 <hr className="my-4 border-[var(--border)]" />
-                <button className="btn btn-primary w-full" onClick={exportPNG}>⬇ Scarica PNG</button>
-                <button className="btn btn-ghost w-full mt-2" onClick={() => applyState(DEFAULT_STATE)}>Reset Iniziale</button>
+                <div className="control-field mb-2">
+                  <label className="checkbox-label"><input type="checkbox" checked={exportBleed} onChange={e => setExportBleed(e.target.checked)} className="custom-checkbox"/> Aggiungi 3mm Bleed</label>
+                </div>
+                <div className="control-field mb-4">
+                  <label className="checkbox-label"><input type="checkbox" checked={exportCropMarks} onChange={e => setExportCropMarks(e.target.checked)} className="custom-checkbox"/> Aggiungi Segni di Taglio</label>
+                </div>
+                <button className="btn btn-primary w-full" onClick={exportPNG}>⬇ Scarica PNG per Stampa</button>
+                
+                <hr className="my-4 border-[var(--border)]" />
+                <div className="sidebar-panel-title">💾 Gestione Progetto</div>
+                <button className="btn btn-ghost w-full mb-2" style={{ background: 'var(--surf-off)' }} onClick={saveProject}>💾 Salva Progetto (JSON)</button>
+                <label className="btn btn-ghost w-full" style={{ background: 'var(--surf-off)', textAlign: 'center', cursor: 'pointer' }}>
+                  📂 Carica Progetto (JSON)
+                  <input type="file" accept=".json" style={{ display: 'none' }} onChange={loadProject} />
+                </label>
+                <button className="btn btn-ghost w-full mt-4 text-error" onClick={() => applyState(DEFAULT_STATE)}>🗑️ Reset Iniziale</button>
               </div>
             </>
           )}
@@ -645,6 +781,9 @@ export default function TokenPreviewSinglePtFrame() {
                 {activeLayer === 'type' && <input type="color" className="control-color" value={state.typeStyle.color} onChange={e => update('typeStyle', { color: e.target.value })} title="Colore Tipo" />}
                 {activeLayer === 'ability' && <input type="color" className="control-color" value={state.abilityStyle.color} onChange={e => update('abilityStyle', { color: e.target.value })} title="Colore Regole" />}
                 {activeLayer === 'pt' && <input type="color" className="control-color" value={state.ptStyle.color} onChange={e => update('ptStyle', { color: e.target.value })} title="Colore PT" />}
+                {activeLayer === 'infoLeft' && <input type="color" className="control-color" value={state.infoLeft.color} onChange={e => update('infoLeft', { color: e.target.value })} title="Colore Extra" />}
+                {activeLayer === 'artist' && <input type="color" className="control-color" value={state.artistStyle.color} onChange={e => update('artistStyle', { color: e.target.value })} title="Colore Artista" />}
+                {activeLayer === 'copyright' && <input type="color" className="control-color" value={state.copyright.color} onChange={e => update('copyright', { color: e.target.value })} title="Colore Copyright" />}
                 <div style={{ width: 1, background: 'var(--border)', margin: '0 4px' }}></div>
                 {activeLayer === 'name' && (
                   <>
@@ -692,9 +831,9 @@ export default function TokenPreviewSinglePtFrame() {
                 {Object.entries(boxes).map(([k, b]) => (
                   <div 
                     key={k}
-                    onMouseDown={e => beginDrag(k === 'footer' ? 'footer' : k, e)}
-                    onTouchStart={e => beginDrag(k === 'footer' ? 'footer' : k, e)}
-                    onClick={(e) => { e.stopPropagation(); setActiveLayer(k); if(k==='name'||k==='type'||k==='ability') setActiveTab('text'); else if (k==='pt') setActiveTab('pt'); }}
+                    onMouseDown={e => beginDrag(k, e)}
+                    onTouchStart={e => beginDrag(k, e)}
+                    onClick={(e) => { e.stopPropagation(); setActiveLayer(k); if(k==='name'||k==='type'||k==='ability') setActiveTab('text'); else if (k==='pt') setActiveTab('pt'); else if (k==='infoLeft'||k==='artist'||k==='copyright') setActiveTab('settings'); }}
                     style={{ position: 'absolute', left: b.x * pScale, top: b.y * pScale, width: b.w * pScale, height: b.h * pScale, cursor: 'move' }} 
                   />
                 ))}
@@ -706,6 +845,34 @@ export default function TokenPreviewSinglePtFrame() {
           </div>
         </main>
       )}
+
+      {/* Datalists for Token Suggestions */}
+      <datalist id="token-names">
+        <option value="Goblin" />
+        <option value="Zombie" />
+        <option value="Elf Warrior" />
+        <option value="Treasure" />
+        <option value="Clue" />
+        <option value="Food" />
+        <option value="Blood" />
+        <option value="Angel" />
+        <option value="Dragon" />
+        <option value="Beast" />
+        <option value="Construct" />
+      </datalist>
+      <datalist id="token-types">
+        <option value="Token Creature — Goblin" />
+        <option value="Token Creature — Zombie" />
+        <option value="Token Creature — Elf Warrior" />
+        <option value="Token Artifact — Treasure" />
+        <option value="Token Artifact — Clue" />
+        <option value="Token Artifact — Food" />
+        <option value="Token Artifact — Blood" />
+        <option value="Token Creature — Angel" />
+        <option value="Token Creature — Dragon" />
+        <option value="Token Creature — Beast" />
+        <option value="Token Artifact Creature — Construct" />
+      </datalist>
     </div>
   );
 }
