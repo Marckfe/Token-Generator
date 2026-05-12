@@ -34,9 +34,9 @@ export default function MTGProxyCreator() {
               { id: "proxy", icon: "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7", label: "Proxy Stampa" },
               { id: "token", icon: "M12 5v14M5 12h14", label: "Token Creator" },
             ].map(n => (
-              <button 
-                key={n.id} 
-                className={`nav-btn ${tab === n.id ? "active" : ""}`} 
+              <button
+                key={n.id}
+                className={`nav-btn ${tab === n.id ? "active" : ""}`}
                 onClick={() => setTab(n.id)}
               >
                 <Icon d={n.icon} size={16} />
@@ -56,8 +56,8 @@ export default function MTGProxyCreator() {
         <div className="mobile-layout">
           <div className="mobile-tabs">
             {[{ id: "proxy", label: "🖨 Stampa" }, { id: "token", label: "🃏 Token" }].map(t => (
-              <button 
-                key={t.id} 
+              <button
+                key={t.id}
                 onClick={() => setTab(t.id)}
                 className={`mobile-tab-btn ${tab === t.id ? "active" : ""}`}
               >

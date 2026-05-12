@@ -324,6 +324,20 @@ export default function TokenPreviewSinglePtFrame() {
     applyState(next);
   }, [state, applyState]);
 
+  const undo = () => {
+    if (historyIdx > 0) {
+      setHistoryIdx(i => i - 1);
+      setState(history[historyIdx - 1]);
+    }
+  };
+
+  const redo = () => {
+    if (historyIdx < history.length - 1) {
+      setHistoryIdx(i => i + 1);
+      setState(history[historyIdx + 1]);
+    }
+  };
+
   // DRAG LOGIC WITH SMART SNAPPING
   const beginDrag = (kind, e) => {
     e.preventDefault(); e.stopPropagation();
