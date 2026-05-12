@@ -27,9 +27,14 @@ export default function DeckChecker() {
       .map(line => line.trim())
       .filter(line => line.length > 0)
       .map(line => {
-        const match = line.match(/^(\d+)x?\s+(.+)$/i);
-        if (match) return { qty: parseInt(match[1], 10), name: match[2] };
-        return { qty: 1, name: line };
+        // Strip set codes like "(OTP) 8" or "(MH3) 241"
+        let cleanLine = line.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
+        // Convert single slashes to double slashes for split cards if needed
+        cleanLine = cleanLine.replace(/\s+\/\s+/g, ' // ');
+        
+        const match = cleanLine.match(/^(\d+)x?\s+(.+)$/i);
+        if (match) return { qty: parseInt(match[1], 10), name: match[2].trim() };
+        return { qty: 1, name: cleanLine.trim() };
       });
   };
 
