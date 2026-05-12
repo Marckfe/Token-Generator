@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 
+// ─── ASSET IMPORTS ────────────────────────────────────────────────────────────
 const ALL_FRAME_SETS = import.meta.glob(
   "/src/assets/frames/masterframes/*/*.{png,jpg,jpeg,webp,svg}",
   { eager: true, import: "default" }
@@ -21,12 +22,17 @@ const framePT = import.meta.glob("/src/assets/frames/pt/*.{png,jpg,jpeg,webp,svg
 const PT_FRAMES = Object.entries(framePT).map(([p, url]) => ({ name: p.split("/").pop().replace(/\.[a-z]+$/, ""), url }));
 const SYMBOLS = import.meta.glob("/src/assets/simbol/*.{svg,png,jpg,jpeg,webp}", { eager: true, import: "default" });
 
+// ─── COSTANTI CARTA ───────────────────────────────────────────────────────────
 const CW = 620, CH = 890;
-const BLEED = 21;
+const BLEED = 21; // ~3mm bleed tipografico
+const DISPLAY_W = 460;
+const DISPLAY_H = Math.round(CH * DISPLAY_W / CW);
+const SCALE = CW / DISPLAY_W;
+
 const FT = "Beleren, MatrixSC, Cinzel, Georgia, serif";
 const FB = "MPlantin, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
-const HISTORY_LIMIT = 40;
 
+// ─── UTILITY ──────────────────────────────────────────────────────────────────
 function loadImg(src) {
   return new Promise((res, rej) => {
     if (!src) return rej(new Error("no src"));
@@ -37,6 +43,7 @@ function loadImg(src) {
     img.src = src;
   });
 }
+
 function symbolUrl(sym) {
   const key = Object.keys(SYMBOLS).find(p => {
     const fn = p.split("/").pop().replace(/\.[^.]+$/, "");
@@ -44,18 +51,19 @@ function symbolUrl(sym) {
   });
   return key ? SYMBOLS[key] : null;
 }
+
 function parseMana(text) {
   const rx = /\{([^}]+)\}/g;
-  const parts = [];
-  let last = 0, m;
-  while ((m = rx.exec(text || "")) !== null) {
+  const parts = []; let last = 0, m;
+  while ((m = rx.exec(text)) !== null) {
     if (m.index > last) parts.push({ type: "txt", v: text.slice(last, m.index) });
     parts.push({ type: "sym", v: m[1].trim() });
     last = rx.lastIndex;
   }
-  if (last < (text || "").length) parts.push({ type: "txt", v: text.slice(last) });
+  if (last < text.length) parts.push({ type: "txt", v: text.slice(last) });
   return parts;
 }
+
 async function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
   const parts = parseMana(text);
   const symSize = fontSize * 1.1;
@@ -84,125 +92,105 @@ async function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
           ctx.drawImage(img, curX, y, symSize, symSize);
           curX += symSize + 1;
         } catch {
-          const token = `{${p.v}}`;
-          ctx.fillText(token, curX, y);
-          curX += ctx.measureText(token).width;
+          ctx.fillText(`{${p.v}}`, curX, y);
+          curX += ctx.measureText(`{${p.v}}`).width;
         }
       } else {
-        const token = `{${p.v}}`;
-        ctx.fillText(token, curX, y);
-        curX += ctx.measureText(token).width;
+        ctx.fillText(`{${p.v}}`, curX, y);
+        curX += ctx.measureText(`{${p.v}}`).width;
       }
     }
   }
   return y;
 }
-function measureTextWidth(text, fontSize, family = FT, weight = "bold") {
-  const c = document.createElement("canvas");
-  const ctx = c.getContext("2d");
-  ctx.font = `${weight} ${fontSize}px ${family}`;
-  return ctx.measureText(text || "").width;
-}
-function cloneState(s) { return JSON.parse(JSON.stringify(s)); }
-function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 
-function fitTextBox(text, startSize, minSize, width, linesLimit = 12) {
-  const lines = String(text || "").split("\n");
-  let size = startSize;
-  while (size > minSize) {
-    let ok = true;
-    for (const line of lines) {
-      if (measureTextWidth(line.replace(/\{[^}]+\}/g, "MM"), size, FB, "normal") > width) {
-        ok = false; break;
-      }
-    }
-    if (ok && lines.length <= linesLimit) return size;
-    size -= 1;
-  }
-  return minSize;
-}
-
+// ─── RENDER CANVAS ────────────────────────────────────────────────────────────
 async function renderCard(canvas, state, withBleed = false) {
-  const { artUrl, artTransform, frame, ptFrame, name, nameStyle, type, typeStyle, ability, abilityStyle, showAbility, pt, ptStyle, showPT, infoLeft, showInfoLeft, showArtist, copyright, showCopyright } = state;
-  const B = withBleed ? BLEED : 0;
-  const TW = CW + B * 2;
-  const TH = CH + B * 2;
-  canvas.width = TW;
+  const {
+    artUrl, frame, ptFrame,
+    name, nameStyle,
+    type, typeStyle,
+    ability, abilityStyle, showAbility,
+    pt, ptStyle, showPT,
+    infoLeft, showInfoLeft, showArtist,
+    copyright, showCopyright,
+  } = state;
+
+  const B  = withBleed ? BLEED : 0;   // offset bleed
+  const TW = CW + B * 2;              // canvas totale width
+  const TH = CH + B * 2;              // canvas totale height
+
+  canvas.width  = TW;
   canvas.height = TH;
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, TW, TH);
 
+  // ── ARTWORK: occupa tutto il canvas (incluso bleed) ─────────────────────
   if (artUrl) {
     try {
       const img = await loadImg(artUrl);
-      const zoom = artTransform?.zoom || 1;
-      const offsetX = artTransform?.x || 0;
-      const offsetY = artTransform?.y || 0;
-      const drawW = TW * zoom;
-      const drawH = TH * zoom;
-      const dx = (TW - drawW) / 2 + offsetX;
-      const dy = (TH - drawH) / 2 + offsetY;
-      ctx.drawImage(img, dx, dy, drawW, drawH);
+      ctx.drawImage(img, 0, 0, TW, TH);
     } catch {}
   }
 
+  // ── TUTTO IL RESTO: spostato di B pixel (BLEED offset) ──────────────────
   ctx.save();
   ctx.translate(B, B);
 
-  if (frame?.url) {
-    try {
-      const img = await loadImg(frame.url);
-      ctx.drawImage(img, 0, 0, CW, CH);
-    } catch {}
+  if (frame) {
+    try { const img = await loadImg(frame.url); ctx.drawImage(img, 0, 0, CW, CH); } catch {}
   }
 
-  const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1) : nameStyle.fontSize;
   ctx.save();
-  ctx.font = `bold ${fittedNameSize}px ${FT}`;
+  ctx.font = `bold ${nameStyle.fontSize}px ${FT}`;
   ctx.fillStyle = nameStyle.color;
   ctx.textBaseline = "middle";
   ctx.textAlign = nameStyle.align || "center";
-  const nameX = nameStyle.align === "left" ? nameStyle.x + 10 : nameStyle.align === "right" ? nameStyle.x + CW - 10 : nameStyle.x + CW / 2;
-  ctx.fillText((name || "TOKEN").toUpperCase(), nameX, nameStyle.y);
+  const nameBoxW = CW;
+  const nameX = nameStyle.align === "left"  ? nameStyle.x + 10
+              : nameStyle.align === "right" ? nameStyle.x + nameBoxW - 10
+              : nameStyle.x + nameBoxW / 2;
+  ctx.letterSpacing = "1px";
+  ctx.fillText(name.toUpperCase(), nameX, nameStyle.y);
   ctx.restore();
 
-  const fittedTypeSize = state.autoFitType ? fitTextBox(type || "Token", typeStyle.fontSize, 14, CW - typeStyle.x - 40, 1) : typeStyle.fontSize;
   ctx.save();
-  ctx.font = `bold ${fittedTypeSize}px ${FT}`;
+  ctx.font = `bold ${typeStyle.fontSize}px ${FT}`;
   ctx.fillStyle = typeStyle.color;
   ctx.textBaseline = "middle";
-  ctx.textAlign = typeStyle.align || "left";
-  ctx.fillText(type || "Token", typeStyle.x, typeStyle.y);
+  ctx.textAlign = "left";
+  ctx.fillText(type, typeStyle.x, typeStyle.y);
   ctx.restore();
 
   if (showAbility && ability) {
-    const size = state.autoFitRules ? fitTextBox(ability, abilityStyle.fontSize, 14, abilityStyle.width || (CW - abilityStyle.x * 2), 10) : abilityStyle.fontSize;
-    const lines = String(ability).split("\n");
+    const lines = ability.split("\n");
     let curY = abilityStyle.y;
     for (const line of lines) {
-      curY = await drawManaText(ctx, line, abilityStyle.x, curY, size, abilityStyle.color, FB, abilityStyle.width || (CW - abilityStyle.x * 2));
-      curY += Math.max(2, abilityStyle.lineGap || 4);
+      curY = await drawManaText(
+        ctx, line, abilityStyle.x, curY,
+        abilityStyle.fontSize, abilityStyle.color,
+        FB, CW - abilityStyle.x * 2
+      );
     }
   }
 
-  if (showPT && ptFrame?.url) {
-    try {
-      const img = await loadImg(ptFrame.url);
-      ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height);
-    } catch {}
+  if (showPT && ptFrame) {
+    try { const img = await loadImg(ptFrame.url); ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height); } catch {}
     ctx.save();
     ctx.font = `bold ${ptStyle.fontSize}px ${FT}`;
     ctx.fillStyle = ptStyle.color;
     ctx.textBaseline = "middle";
-    const pw = ctx.measureText(pt?.power || "0").width;
-    const sw = ctx.measureText("/").width;
-    const tw = pw + sw + ctx.measureText(pt?.toughness || "0").width;
+    ctx.textAlign = "center";
+    const slash = "/";
+    const pw = ctx.measureText(pt.power   || "0").width;
+    const sw = ctx.measureText(slash).width;
+    const tw = pw + sw + ctx.measureText(pt.toughness || "0").width;
     const ptCX = ptStyle.frameX + ptStyle.width / 2 + (ptStyle.powerOffsetX || 0);
     const ptCY = ptStyle.frameY + ptStyle.height / 2;
     ctx.textAlign = "left";
-    ctx.fillText(pt?.power || "0", ptCX - tw / 2, ptCY);
-    ctx.fillText("/", ptCX - tw / 2 + pw, ptCY);
-    ctx.fillText(pt?.toughness || "0", ptCX - tw / 2 + pw + sw, ptCY);
+    ctx.fillText(pt.power     || "0", ptCX - tw / 2, ptCY);
+    ctx.fillText(slash,                ptCX - tw / 2 + pw, ptCY);
+    ctx.fillText(pt.toughness || "0", ptCX - tw / 2 + pw + sw, ptCY);
     ctx.restore();
   }
 
@@ -212,412 +200,931 @@ async function renderCard(canvas, state, withBleed = false) {
     ctx.fillStyle = infoLeft.color || "#1a1a1a";
     ctx.textBaseline = "bottom";
     ctx.textAlign = "left";
-    ctx.fillText(infoLeft.text || "", infoLeft.x || 18, CH - (infoLeft.y || 12));
+    ctx.fillText(infoLeft.text || "", infoLeft.x, CH - (infoLeft.y || 10));
     ctx.restore();
   }
+
   if (showArtist && infoLeft?.artist) {
     ctx.save();
     ctx.font = `${infoLeft.fontSize || 11}px ${FT}`;
     ctx.fillStyle = infoLeft.color || "#1a1a1a";
     ctx.textBaseline = "bottom";
     ctx.textAlign = "left";
-    ctx.fillText(`Illus. ${infoLeft.artist}`, infoLeft.x || 18, CH - (infoLeft.y || 12) + (infoLeft.fontSize || 11) + 2);
+    ctx.fillText(`Illus. ${infoLeft.artist}`, infoLeft.x, CH - (infoLeft.y || 10) + (infoLeft.fontSize || 11) + 2);
     ctx.restore();
   }
+
   if (showCopyright && copyright) {
     ctx.save();
     ctx.font = `${copyright.fontSize || 9}px ${FT}`;
-    ctx.fillStyle = copyright.color || "#111";
+    ctx.fillStyle = copyright.color;
     ctx.textBaseline = "bottom";
     ctx.textAlign = "right";
-    ctx.fillText(`™ & © ${copyright.year || new Date().getFullYear()} Wizards of the Coast`, CW - (copyright.x || 18), CH - (copyright.y || 12));
+    ctx.fillText(`™ & © ${copyright.year} Wizards of the Coast`, CW - copyright.x, CH - copyright.y);
     ctx.restore();
   }
-  ctx.restore();
+
+  ctx.restore(); // fine translate(B, B)
 }
 
-function useScreenInfo() {
-  const [info, setInfo] = useState({ w: typeof window !== "undefined" ? window.innerWidth : 1440, h: typeof window !== "undefined" ? window.innerHeight : 900 });
-  useEffect(() => {
-    const onResize = () => setInfo({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-  return { ...info, mobile: info.w < 900 };
-}
 
-const Input = React.forwardRef(function Input(props, ref) {
-  return <input ref={ref} {...props} style={{ width:"100%", background:"#11100f", color:"#ece9e4", border:"1px solid #393836", borderRadius:8, padding:"9px 10px", fontSize:13, outline:"none", ...(props.style||{}) }} />;
-});
-function Textarea(props) { return <textarea {...props} style={{ width:"100%", background:"#11100f", color:"#ece9e4", border:"1px solid #393836", borderRadius:8, padding:"9px 10px", fontSize:13, outline:"none", resize:"both", minHeight:120, ...(props.style||{}) }} />; }
-function Select(props) { return <select {...props} style={{ width:"100%", background:"#11100f", color:"#ece9e4", border:"1px solid #393836", borderRadius:8, padding:"9px 10px", fontSize:13, outline:"none", ...(props.style||{}) }} />; }
-function Field({ label, children }) { return <label style={{ display:"grid", gap:6, fontSize:12, color:"#b8b5b1" }}><span>{label}</span>{children}</label>; }
-function Row({ children }) { return <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))", gap:8 }}>{children}</div>; }
-function LayerChip({ active, label, onClick }) { return <button onClick={onClick} style={{ padding:"8px 10px", borderRadius:999, border:`1px solid ${active ? '#4f98a3' : '#393836'}`, background: active ? 'rgba(79,152,163,.15)' : '#201f1d', color: active ? '#7dd3dc' : '#c7c4bf', fontSize:12, cursor:'pointer' }}>{label}</button>; }
-function Section({ title, right, children, defaultOpen = true }) {
-  const [open, setOpen] = useState(defaultOpen);
+// ─── DRAG BOX ─────────────────────────────────────────────────────────────────
+function DragBox({ label, style, onUpdate, color, children, scaleFactor }) {
+  const drag      = useRef(false);
+  const start     = useRef({});
+  const onUpdateR = useRef(onUpdate);
+  const moveRef   = useRef(null);
+  const upRef     = useRef(null);
+
+  // Mantieni sempre il ref aggiornato all'ultima versione di onUpdate
+  useEffect(() => { onUpdateR.current = onUpdate; }, [onUpdate]);
+
+  // scaleFactor: quanto 1px display vale in coordinate logiche
+  // Su desktop = 1 (i DragBox sono già in display-px, onUpdate converte)
+  // Su mobile viene passato esplicitamente
+  const SF = scaleFactor ?? 1;
+
+  const dispX = style.x;
+  const dispY = style.y;
+
+  const getXY = (e) => {
+    const t = e.touches?.[0] ?? e.changedTouches?.[0];
+    return t ? { clientX: t.clientX, clientY: t.clientY }
+             : { clientX: e.clientX, clientY: e.clientY };
+  };
+
+  const onDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    drag.current = true;
+    const { clientX, clientY } = getXY(e);
+    start.current = { mx: clientX, my: clientY, sx: style.x, sy: style.y };
+
+    moveRef.current = (ev) => {
+      if (!drag.current) return;
+      ev.preventDefault();
+      const { clientX: cx, clientY: cy } = getXY(ev);
+      const dx = cx - start.current.mx;
+      const dy = cy - start.current.my;
+      onUpdateR.current({
+        x: Math.round(start.current.sx + dx),
+        y: Math.round(start.current.sy + dy),
+      });
+    };
+
+    upRef.current = () => {
+      drag.current = false;
+      window.removeEventListener("mousemove", moveRef.current);
+      window.removeEventListener("mouseup",   upRef.current);
+      window.removeEventListener("touchmove", moveRef.current);
+      window.removeEventListener("touchend",  upRef.current);
+    };
+
+    window.addEventListener("mousemove", moveRef.current);
+    window.addEventListener("mouseup",   upRef.current);
+    window.addEventListener("touchmove", moveRef.current, { passive: false });
+    window.addEventListener("touchend",  upRef.current);
+  };
+
   return (
-    <div style={{ border:"1px solid #393836", borderRadius:12, overflow:"hidden", background:"#1c1b19" }}>
-      <button onClick={() => setOpen(v => !v)} style={{ width:"100%", padding:"11px 14px", background:"#252420", border:"none", color:"#e7e5e4", display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
-        <strong style={{ fontSize:13 }}>{title}</strong><span style={{ marginLeft:"auto", fontSize:11, opacity:.8 }}>{right}</span><span style={{ fontSize:11, opacity:.7 }}>{open ? "▲" : "▼"}</span>
-      </button>
-      {open && <div style={{ padding:12, display:"grid", gap:10 }}>{children}</div>}
+    <div
+      onMouseDown={onDown}
+      onTouchStart={onDown}
+      title={`Trascina: ${label}`}
+      style={{
+        position: "absolute", left: dispX, top: dispY,
+        cursor: "move", touchAction: "none",
+        border: `2px dashed ${color}`, background: `${color}22`,
+        borderRadius: 6, padding: "6px 10px",
+        userSelect: "none", zIndex: 20,
+        minWidth: 44, minHeight: 44,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: `0 2px 8px ${color}44`,
+      }}>
+      <span style={{
+        position: "absolute", top: -20, left: 0, fontSize: 10,
+        background: "rgba(0,0,0,.9)", color, padding: "2px 7px",
+        borderRadius: 4, whiteSpace: "nowrap", pointerEvents: "none",
+        fontWeight: 800, letterSpacing: ".03em",
+      }}>{label}</span>
+      {children}
     </div>
   );
 }
 
-function getGuideMetrics(state) {
-  const nameSize = state.autoFitName ? fitTextBox((state.name || "TOKEN").toUpperCase(), state.nameStyle.fontSize, 16, CW - 90, 1) : state.nameStyle.fontSize;
-  const typeSize = state.autoFitType ? fitTextBox(state.type || "Token", state.typeStyle.fontSize, 14, CW - state.typeStyle.x - 40, 1) : state.typeStyle.fontSize;
-  const abilitySize = state.autoFitRules ? fitTextBox(state.ability || "", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10) : state.abilityStyle.fontSize;
-  const typeWidth = measureTextWidth(state.type || "Token", typeSize, FT, "bold");
-  const nameWidth = measureTextWidth((state.name || "TOKEN").toUpperCase(), nameSize, FT, "bold");
-  const abilityLines = Math.max(1, String(state.ability || '').split('\n').length || 1);
-  const abilityHeight = Math.max(54, abilityLines * (abilitySize * 1.45) + Math.max(8, state.abilityStyle.lineGap || 4) * (abilityLines - 1) + 12);
-  const nameCenterX = state.nameStyle.align === 'left' ? state.nameStyle.x + 10 + nameWidth/2 : state.nameStyle.align === 'right' ? state.nameStyle.x + CW - 10 - nameWidth/2 : state.nameStyle.x + CW/2;
-  return {
-    name: { x: clamp(nameCenterX - nameWidth/2 - 10, 12, CW-12), y: state.nameStyle.y - Math.round(nameSize * 0.62), w: clamp(nameWidth + 20, 80, CW-24), h: Math.max(24, Math.round(nameSize * 1.18)), c: '#38bdf8' },
-    type: { x: state.typeStyle.x - 4, y: state.typeStyle.y - Math.round(typeSize * 0.58), w: Math.max(100, typeWidth + 14), h: Math.max(22, Math.round(typeSize * 1.15)), c: '#22c55e' },
-    ability: { x: state.abilityStyle.x - 4, y: state.abilityStyle.y - 4, w: state.abilityStyle.width || (CW - state.abilityStyle.x * 2), h: abilityHeight, c: '#f59e0b' },
-    pt: { x: state.ptStyle.frameX + 6, y: state.ptStyle.frameY + 6, w: Math.max(20, state.ptStyle.width - 12), h: Math.max(20, state.ptStyle.height - 12), c: '#f472b6' },
-    footer: { x: Math.max(10, (state.infoLeft?.x || 18) - 4), y: CH - (state.infoLeft?.y || 12) - Math.max(12, state.infoLeft?.fontSize || 11), w: CW - Math.max(10, (state.infoLeft?.x || 18) - 4) - Math.max(10, (state.copyright?.x || 18) - 4), h: Math.max(14, (state.infoLeft?.fontSize || 11) + 6), c: '#a78bfa' },
-  };
+// ─── STILI PANNELLO ───────────────────────────────────────────────────────────
+const P = { background: "#1a1917", color: "#cdccca", fontFamily: "system-ui,sans-serif", fontSize: 13 };
+const BD = "#2e2d2b", G = "#4f98a3", SURFACE = "#201f1d";
+
+function Lbl({ children }) {
+  return <div style={{ fontSize: 11, color: "#797876", marginBottom: 3, textTransform: "uppercase", letterSpacing: ".05em" }}>{children}</div>;
 }
-function GuideOverlay({ activeLayer, state, scale }) {
-  const boxes = getGuideMetrics(state);
+function TF({ value, onChange, placeholder, disabled, type = "text" }) {
+  // Stato completamente locale — NON aggiorna lo stato globale ad ogni tasto
+  // Lo stato globale viene aggiornato solo onBlur (quando esci dal campo)
+  // Questo evita qualsiasi re-render del padre durante la digitazione
+  const [local, setLocal] = React.useState(value);
+  const focused = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!focused.current) setLocal(value);
+  }, [value]);
+
   return (
-    <div style={{ position:'absolute', inset:0, pointerEvents:'none' }}>
-      <div style={{ position:'absolute', left:0, top:0, width:CW*scale, height:CH*scale, border:'1px dashed rgba(255,255,255,.2)' }} />
-      {Object.entries(boxes).map(([k, b]) => (
-        <div key={k} style={{ position:'absolute', left:b.x*scale, top:b.y*scale, width:b.w*scale, height:b.h*scale, border:`${activeLayer===k ? 2 : 1}px dashed ${b.c}`, background: activeLayer===k ? `${b.c}20` : 'transparent', borderRadius:6 }} />
+    <input
+      type={type}
+      value={local}
+      placeholder={placeholder}
+      disabled={disabled}
+      onFocus={() => { focused.current = true; }}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={() => { focused.current = false; onChange(local); }}
+      style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
+        borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box",
+        outline: "none", marginBottom: 6, opacity: disabled ? 0.4 : 1 }} />
+  );
+}
+function TFArea({ value, onChange, placeholder, disabled, rows = 3 }) {
+  const [local, setLocal] = React.useState(value);
+  const focused = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!focused.current) setLocal(value);
+  }, [value]);
+
+  return (
+    <textarea
+      value={local}
+      placeholder={placeholder}
+      disabled={disabled}
+      rows={rows}
+      onFocus={() => { focused.current = true; }}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={() => { focused.current = false; onChange(local); }}
+      style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
+        borderRadius: 5, padding: "5px 8px", fontSize: 13, boxSizing: "border-box",
+        outline: "none", resize: "vertical", marginBottom: 6,
+        opacity: disabled ? 0.4 : 1, fontFamily: "system-ui,sans-serif" }} />
+  );
+}
+function Sld({ label, value, onChange, min, max, step = 0.5 }) {
+  const trackRef = useRef(null);
+  const dragging = useRef(false);
+
+  const calcValue = (clientX) => {
+    const rect = trackRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const raw = min + ratio * (max - min);
+    // Arrotonda allo step
+    const stepped = Math.round(raw / step) * step;
+    return Math.max(min, Math.min(max, parseFloat(stepped.toFixed(6))));
+  };
+
+  const onTouchStart = (e) => {
+    e.stopPropagation();
+    dragging.current = true;
+    onChange(calcValue(e.touches[0].clientX));
+
+    const onMove = (ev) => {
+      ev.preventDefault();
+      if (!dragging.current) return;
+      onChange(calcValue(ev.touches[0].clientX));
+    };
+    const onEnd = () => {
+      dragging.current = false;
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+    };
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onEnd);
+  };
+
+  const pct = ((Number(value) - min) / (max - min)) * 100;
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#797876", marginBottom: 4 }}>
+        <span>{label}</span>
+        <span style={{ color: G, fontWeight: 700 }}>{Number(value).toFixed(1)}</span>
+      </div>
+      {/* Track custom touch-friendly */}
+      <div ref={trackRef} onTouchStart={onTouchStart}
+        style={{ position: "relative", height: 28, display: "flex", alignItems: "center",
+          cursor: "pointer", touchAction: "none" }}>
+        {/* Binario */}
+        <div style={{ position: "absolute", left: 0, right: 0, height: 4,
+          background: "#393836", borderRadius: 999 }} />
+        {/* Fill */}
+        <div style={{ position: "absolute", left: 0, width: `${pct}%`, height: 4,
+          background: G, borderRadius: 999 }} />
+        {/* Thumb */}
+        <div style={{ position: "absolute", left: `${pct}%`, transform: "translateX(-50%)",
+          width: 20, height: 20, borderRadius: "50%",
+          background: G, boxShadow: "0 0 0 3px rgba(79,152,163,.35)",
+          zIndex: 2, pointerEvents: "none" }} />
+        {/* Input range nativo per mouse/keyboard — invisibile ma funzionale */}
+        <input type="range" min={min} max={max} step={step} value={Number(value)}
+          onChange={e => onChange(Number(e.target.value))}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%",
+            opacity: 0, cursor: "pointer", margin: 0,
+            WebkitAppearance: "none" }} />
+      </div>
+    </div>
+  );
+}
+
+function Row({ children }) {
+  return <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>{children}</div>;
+}
+function Btn({ children, onClick, color = G, small, disabled, style: extraStyle }) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+      style={{ background: color, color: "#fff", border: "none", borderRadius: 5,
+        padding: small ? "3px 8px" : "6px 14px", fontSize: small ? 11 : 13,
+        cursor: disabled ? "not-allowed" : "pointer", fontWeight: 600, whiteSpace: "nowrap",
+        opacity: disabled ? 0.5 : 1, ...extraStyle }}>
+      {children}
+    </button>
+  );
+}
+function Section({ title, children }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ marginBottom: 8, border: `1px solid ${BD}`, borderRadius: 6, overflow: "hidden" }}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{ background: SURFACE, padding: "7px 12px", cursor: "pointer",
+          fontWeight: 600, fontSize: 12, display: "flex", justifyContent: "space-between", color: "#aaa" }}>
+        <span>{title}</span><span>{open ? "▲" : "▼"}</span>
+      </div>
+      {open && <div style={{ padding: "10px 12px" }}>{children}</div>}
+    </div>
+  );
+}
+function AlignBtns({ value, onChange }) {
+  return (
+    <Row>
+      {["left", "center", "right"].map(a => (
+        <button key={a} onClick={() => onChange(a)}
+          style={{ flex: 1, background: value === a ? G : "#252420",
+            color: value === a ? "#000" : "#797876", border: `1px solid ${BD}`,
+            borderRadius: 4, padding: "3px 0", fontSize: 12, cursor: "pointer" }}>
+          {a === "left" ? "◀" : a === "center" ? "◆" : "▶"}
+        </button>
       ))}
-    </div>
+    </Row>
   );
 }
-
-function PreviewCard({ mobile, canvasRef, previewScale, showGuides, activeLayer, state, applyState, setActiveLayer }) {
-  const dragRef = useRef(null);
-  const beginDrag = (kind, e) => {
-    e.preventDefault(); e.stopPropagation();
-    const t = e.touches?.[0] || e;
-    dragRef.current = { kind, startX:t.clientX, startY:t.clientY, snapshot: cloneState(state) };
-    const move = ev => {
-      if (!dragRef.current) return;
-      const p = ev.touches?.[0] || ev;
-      const dx = (p.clientX - dragRef.current.startX) / previewScale;
-      const dy = (p.clientY - dragRef.current.startY) / previewScale;
-      const snap = dragRef.current.snapshot;
-      let next = cloneState(snap);
-      if (kind === 'art') next.artTransform = { ...next.artTransform, x: Math.round(snap.artTransform.x + dx), y: Math.round(snap.artTransform.y + dy) };
-      if (kind === 'name') next.nameStyle = { ...next.nameStyle, x: Math.round(snap.nameStyle.x + dx), y: Math.round(snap.nameStyle.y + dy) };
-      if (kind === 'type') next.typeStyle = { ...next.typeStyle, x: Math.round(snap.typeStyle.x + dx), y: Math.round(snap.typeStyle.y + dy) };
-      if (kind === 'ability') next.abilityStyle = { ...next.abilityStyle, x: Math.round(snap.abilityStyle.x + dx), y: Math.round(snap.abilityStyle.y + dy) };
-      if (kind === 'pt') next.ptStyle = { ...next.ptStyle, frameX: Math.round(snap.ptStyle.frameX + dx), frameY: Math.round(snap.ptStyle.frameY + dy) };
-      if (kind === 'footer') next.infoLeft = { ...next.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||12) - dy) };
-      applyState(next, false);
-    };
-    const up = () => {
-      if (dragRef.current) applyState(cloneState(dragRef.current.snapshot), true, kind);
-      dragRef.current = null;
-      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
-      window.removeEventListener('touchmove', move); window.removeEventListener('touchend', up);
-    };
-    window.addEventListener('mousemove', move);
-    window.addEventListener('mouseup', up);
-    window.addEventListener('touchmove', move, { passive:false });
-    window.addEventListener('touchend', up);
-  };
-  const boxes = getGuideMetrics(state);
+function CP({ label, value, onChange }) {
   return (
-    <div style={{ position: mobile ? 'relative' : 'sticky', top:12 }}>
-      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
-        {['art','name','type','ability','pt','footer'].map(key => <LayerChip key={key} active={activeLayer===key} label={{art:'Artwork',name:'Name',type:'Type',ability:'Text',pt:'P/T',footer:'Footer'}[key]} onClick={() => setActiveLayer(key)} />)}
-      </div>
-      <div style={{ position:'relative', overflow:'auto', background:'#141311', border:'1px solid #393836', borderRadius:16, padding: mobile ? 8 : 14, minHeight: mobile ? 'auto' : 520 }}>
-        <div style={{ position:'relative', width:CW*previewScale, height:CH*previewScale, margin:'0 auto', boxShadow:'0 12px 30px rgba(0,0,0,.35)' }}>
-          <canvas ref={canvasRef} style={{ width:CW*previewScale, height:CH*previewScale, display:'block', borderRadius:18, background:'#0d0d0d' }} />
-          {showGuides && <GuideOverlay activeLayer={activeLayer} state={state} scale={previewScale} />}
-          <button onMouseDown={e => { setActiveLayer('art'); beginDrag('art', e); }} onTouchStart={e => { setActiveLayer('art'); beginDrag('art', e); }} style={{ position:'absolute', inset:0, border:'none', background:'transparent', cursor:'grab' }} />
-          {Object.entries(boxes).map(([k,b]) => <div key={k} onMouseDown={e => beginDrag(k==='footer'?'footer':k, e)} onTouchStart={e => beginDrag(k==='footer'?'footer':k, e)} onClick={() => setActiveLayer(k)} style={{ position:'absolute', left:b.x*previewScale, top:b.y*previewScale, width:b.w*previewScale, height:b.h*previewScale, cursor:'move' }} />)}
-        </div>
+    <div style={{ marginBottom: 8 }}>
+      <Lbl>{label}</Lbl>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input type="color" value={value} onChange={e => onChange(e.target.value)}
+          style={{ width: 44, height: 36, border: `1px solid ${BD}`, borderRadius: 6,
+            background: "none", cursor: "pointer", padding: 2, flexShrink: 0 }} />
+        <input type="text" value={value} onChange={e => onChange(e.target.value)}
+          style={{ flex: 1, background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
+            borderRadius: 4, padding: "5px 8px", fontSize: 13, outline: "none", minWidth: 0 }} />
       </div>
     </div>
   );
 }
 
-function getDefaultFrame() { const firstSet = Object.keys(FRAME_MAP)[0]; return firstSet ? FRAME_MAP[firstSet][0] : null; }
-function getDefaultPtFrame() { return PT_FRAMES[0] || null; }
-const DEFAULT_STATE = {
-  artUrl: "",
-  artTransform: { zoom: 1, x: 0, y: 0 },
-  frameSet: Object.keys(FRAME_MAP)[0] || "",
-  frame: getDefaultFrame(),
-  ptFrame: getDefaultPtFrame(),
-  name: "Goblin",
-  autoFitName: true,
-  autoFitType: true,
-  autoFitRules: false,
-  nameStyle: { x: 0, y: 54, fontSize: 28, color: "#111111", align: "center" },
-  type: "Token Creature — Goblin",
-  typeStyle: { x: 44, y: 602, fontSize: 24, color: "#111111", align: "left" },
-  ability: "Haste",
-  abilityStyle: { x: 44, y: 644, width: 532, fontSize: 24, color: "#111111", lineGap: 4 },
-  showAbility: true,
-  pt: { power: "1", toughness: "1" },
-  ptStyle: { frameX: 457, frameY: 789, width: 126, height: 54, fontSize: 28, color: "#111111", powerOffsetX: 0 },
-  showPT: true,
-  infoLeft: { text: "SET • EN", artist: "Artist", x: 18, y: 12, color: "#111111", fontSize: 11 },
-  showInfoLeft: true,
-  showArtist: true,
-  copyright: { year: new Date().getFullYear(), x: 18, y: 12, color: "#111111", fontSize: 9 },
-  showCopyright: true,
-};
+// ─── COMPONENTE PRINCIPALE ────────────────────────────────────────────────────
+export default function TokenEditor() {
+  const canvasRef  = useRef();
+  const artInput   = useRef();
+  const stateInput = useRef();
 
-export default function TokenPreviewSinglePtFrame() {
-  const screen = useScreenInfo();
-  const [state, setState] = useState(DEFAULT_STATE);
-  const [history, setHistory] = useState([cloneState(DEFAULT_STATE)]);
-  const [historyIdx, setHistoryIdx] = useState(0);
-  const [activeLayer, setActiveLayer] = useState('art');
-  const [showGuides, setShowGuides] = useState(true);
-  const [withBleed, setWithBleed] = useState(false);
-  const [pngScale, setPngScale] = useState(4);
-  const [previewZoom, setPreviewZoom] = useState(100);
-  const [mobilePanel, setMobilePanel] = useState('preview');
-  const canvasRef = useRef(null);
-  const artInputRef = useRef(null);
+  // ── stati carta ──────────────────────────────────────────────────────────────
+  const [artUrl,        setArtUrl]       = useState("");
+  const [frameIdx,      setFrameIdx]     = useState(0);
+  const [frameSet,      setFrameSet]     = useState(Object.keys(FRAME_MAP)[0] || "");
+  const [ptFrameIdx,    setPtFrameIdx]   = useState(0);
 
-  const basePreviewScale = screen.mobile ? Math.min((screen.w - 32) / CW, (screen.h * 0.58) / CH) : Math.min(0.9, (screen.w - 560) / CW);
-  const previewScale = Math.max(0.34, basePreviewScale * (previewZoom / 100));
+  const [name,          setName]         = useState("CONSTRUCT");
+  const [nameStyle,     setNameStyle]    = useState({ x: 0, y: 75, fontSize: 29, color: "#181818", align: "center" });
 
-  const pushHistory = useCallback((next) => {
-    setHistory(prev => {
-      const base = prev.slice(0, historyIdx + 1);
-      return [...base, cloneState(next)].slice(-HISTORY_LIMIT);
+  const [type,          setType]         = useState("Token Artifact Creature — Construct");
+  const [typeStyle,     setTypeStyle]    = useState({ x: 53, y: 730, fontSize: 24, color: "#181818" });
+
+  const [ability,       setAbility]      = useState("This creature gets +1/+1 for each artifact you control.\n{T}: Add {G} or {R}.");
+  const [abilityStyle,  setAbilityStyle] = useState({ x: 43, y: 760, fontSize: 15.5, color: "#181818" });
+  const [showAbility,   setShowAbility]  = useState(true);
+
+  const [pt,            setPt]           = useState({ power: "0", toughness: "0" });
+  const [ptStyle,       setPtStyle]      = useState({ x: 503, y: 775, frameX: 498, frameY: 778, width: 89, height: 58, fontSize: 34, color: "#181818", powerOffsetX: 0 });
+  const [showPT,        setShowPT]       = useState(true);
+
+  const [infoLeft,      setInfoLeft]     = useState({ x: 9, y: 21, fontSize: 13, year: "2025", rarity: "T", setCode: "MTG", lang: "EN", artist: "Jn Avon" });
+  const [showInfoLeft,  setShowInfoLeft] = useState(true);
+  const [showArtist,    setShowArtist]   = useState(true);
+
+  const [copyright,     setCopyright]    = useState({ x: 24, y: 21, fontSize: 13, year: "2025", color: "#b2b2b2" });
+  const [showCopyright, setShowCopyright]= useState(true);
+
+  const [downloading,   setDownloading]  = useState(false);
+  const [showGrid,      setShowGrid]     = useState(true);
+
+  const frame   = (FRAME_MAP[frameSet] || [])[frameIdx];
+  const ptFrame = PT_FRAMES[ptFrameIdx];
+
+  // ── FIX DOPPIA CARTA: ref sempre aggiornato allo stato corrente ───────────
+  // In questo modo handleDownload legge sempre i valori freschi
+  // senza innescare un nuovo render o richiamare useEffect
+  const stateRef = useRef({});
+  const [activeTab, setActiveTab] = useState("frame");
+  stateRef.current = { artUrl, frame, ptFrame, name, nameStyle, type, typeStyle, ability, abilityStyle, showAbility, pt, ptStyle, showPT, infoLeft, showInfoLeft, showArtist, copyright, showCopyright };
+
+  // ── useEffect: ridisegna SOLO quando i dati della carta cambiano ──────────
+  // Non dipende da `downloading` → nessun re-render spurio durante l'export
+  // Usa ref per tenere sempre i dati aggiornati senza ri-triggerare l'effect
+  const cardDataRef = useRef({});
+  cardDataRef.current = {
+    artUrl, frame, ptFrame,
+    name, nameStyle,
+    type, typeStyle,
+    ability, abilityStyle, showAbility,
+    pt, ptStyle, showPT,
+    infoLeft, showInfoLeft, showArtist,
+    copyright, showCopyright,
+  };
+
+  // Ridisegna il canvas ogni volta che qualcosa cambia — senza debounce
+  // cardDataRef.current è già aggiornato prima di questo punto
+  useEffect(() => {
+    if (downloading) return;
+    const c = canvasRef.current;
+    if (!c) return;
+    let raf;
+    raf = requestAnimationFrame(() => {
+      c.width  = CW;
+      c.height = CH;
+      c.style.width  = DISPLAY_W + "px";
+      c.style.height = DISPLAY_H + "px";
+      renderCard(c, cardDataRef.current);
     });
-    setHistoryIdx(i => Math.min(HISTORY_LIMIT - 1, i + 1));
-  }, [historyIdx]);
+    return () => cancelAnimationFrame(raf);
+  }, [
+    downloading,
+    artUrl, frame, ptFrame,
+    nameStyle, typeStyle, abilityStyle, showAbility,
+    ptStyle, showPT,
+    infoLeft, showInfoLeft, showArtist,
+    copyright, showCopyright,
+  ]);
 
-  const applyState = useCallback((next, commit = true) => {
-    setState(next);
-    if (commit) pushHistory(next);
-  }, [pushHistory]);
+  // I testi (name, type, ability, pt) vengono aggiornati nel canvas
+  // solo quando l'utente finisce di digitare (onBlur) — vedi TF e TFArea
+  // Questo evita re-render ad ogni keystroke che rubano il focus
 
-  const update = useCallback((key, patch) => {
-    const next = { ...state, [key]: { ...state[key], ...patch } };
-    applyState(next);
-  }, [state, applyState]);
+  // ── Download: usa stateRef.current — ZERO re-render, ZERO doppia carta ────
+  const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const snap = {
+        artUrl, frame, ptFrame,
+        name, nameStyle, type, typeStyle,
+        ability, abilityStyle, showAbility,
+        pt, ptStyle, showPT,
+        infoLeft, showInfoLeft, showArtist,
+        copyright, showCopyright,
+      };
+      const S = 4;
 
-  useEffect(() => { if (canvasRef.current) renderCard(canvasRef.current, state, false); }, [state]);
+      // Canvas con bleed integrato: artwork su tutto, frame+testi offset di BLEED
+      const printCanvas = document.createElement("canvas");
+      await renderCard(printCanvas, snap, true); // withBleed=true
 
-  const onArtFile = e => {
+      // Scala 4x
+      const EW = printCanvas.width  * S;
+      const EH = printCanvas.height * S;
+      const exportCanvas = document.createElement("canvas");
+      exportCanvas.width  = EW;
+      exportCanvas.height = EH;
+      const ctx = exportCanvas.getContext("2d");
+      ctx.drawImage(printCanvas, 0, 0, printCanvas.width, printCanvas.height, 0, 0, EW, EH);
+
+      // Crop marks dentro il bleed (a BLEED*S dal bordo)
+      const bx = BLEED * S, by = BLEED * S;
+      const cw = CW * S, ch = CH * S;
+      const MARK = 10 * S, GAP = 3 * S;
+      ctx.save();
+      ctx.strokeStyle = "#444";
+      ctx.lineWidth = S * 0.5;
+      ctx.lineCap = "square";
+      for (const [px, py] of [[bx,by],[bx+cw,by],[bx,by+ch],[bx+cw,by+ch]]) {
+        const sx = px === bx ? -1 : 1, sy = py === by ? -1 : 1;
+        ctx.beginPath(); ctx.moveTo(px+sx*GAP, py); ctx.lineTo(px+sx*(GAP+MARK), py); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(px, py+sy*GAP); ctx.lineTo(px, py+sy*(GAP+MARK)); ctx.stroke();
+      }
+      ctx.restore();
+
+      const link = document.createElement("a");
+      link.download = `${(snap.name || "token").replace(/[^a-z0-9_]/gi, "_")}_PRINT.png`;
+      link.href = exportCanvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      console.error("Errore export:", err);
+      alert("Errore export: " + err.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  // ── FIX JSON: salva TUTTI i campi inclusi testi, artUrl, frame per nome ───
+  const handleSaveState = () => {
+    const snap = stateRef.current;
+    const snapshot = {
+      _version: 3,
+      // frame identificati per nome — non per indice
+      frameSet,
+      frameName:    snap.frame?.name   ?? null,
+      ptFrameName:  snap.ptFrame?.name ?? null,
+      // artwork come dataURL (se presente)
+      artUrl:       snap.artUrl,
+      // TUTTI i testi
+      name:         snap.name,
+      type:         snap.type,
+      ability:      snap.ability,
+      pt:           snap.pt,
+      // stili
+      nameStyle:    snap.nameStyle,
+      typeStyle:    snap.typeStyle,
+      abilityStyle: snap.abilityStyle,
+      ptStyle:      snap.ptStyle,
+      // visibilità
+      showAbility:  snap.showAbility,
+      showPT:       snap.showPT,
+      showInfoLeft: snap.showInfoLeft,
+      showArtist:   snap.showArtist,
+      showCopyright:snap.showCopyright,
+      // info & copyright
+      infoLeft:     snap.infoLeft,
+      copyright:    snap.copyright,
+      // ui
+      showGrid,
+    };
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(snap.name || "token").replace(/[^a-z0-9_]/gi, "_")}_state.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  // ── FIX JSON: carica TUTTI i campi — testi + posizioni + frame per nome ───
+  const handleLoadState = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
-    reader.readAsDataURL(file);
-  };
-  const onFrameSetChange = setName => {
-    const frames = FRAME_MAP[setName] || [];
-    applyState({ ...state, frameSet: setName, frame: frames[0] || null });
-  };
-  const nudge = (layer, dx, dy) => {
-    let next = cloneState(state);
-    if (layer === 'art') next.artTransform = { ...next.artTransform, x: next.artTransform.x + dx, y: next.artTransform.y + dy };
-    if (layer === 'name') next.nameStyle = { ...next.nameStyle, x: next.nameStyle.x + dx, y: next.nameStyle.y + dy };
-    if (layer === 'type') next.typeStyle = { ...next.typeStyle, x: next.typeStyle.x + dx, y: next.typeStyle.y + dy };
-    if (layer === 'ability') next.abilityStyle = { ...next.abilityStyle, x: next.abilityStyle.x + dx, y: next.abilityStyle.y + dy };
-    if (layer === 'pt') next.ptStyle = { ...next.ptStyle, frameX: next.ptStyle.frameX + dx, frameY: next.ptStyle.frameY + dy };
-    if (layer === 'footer') next.infoLeft = { ...next.infoLeft, x: next.infoLeft.x + dx, y: next.infoLeft.y - dy };
-    applyState(next);
-  };
-
-  useEffect(() => {
-    const onKey = e => {
-      if (!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) return;
-      const step = e.shiftKey ? 10 : 1;
-      e.preventDefault();
-      if (e.key === 'ArrowUp') nudge(activeLayer, 0, -step);
-      if (e.key === 'ArrowDown') nudge(activeLayer, 0, step);
-      if (e.key === 'ArrowLeft') nudge(activeLayer, -step, 0);
-      if (e.key === 'ArrowRight') nudge(activeLayer, step, 0);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [activeLayer, state]);
-
-  const exportPNG = async () => {
-    const c = document.createElement('canvas');
-    await renderCard(c, state, withBleed);
-    const out = document.createElement('canvas');
-    out.width = c.width * pngScale;
-    out.height = c.height * pngScale;
-    const octx = out.getContext('2d');
-    octx.imageSmoothingEnabled = true;
-    octx.imageSmoothingQuality = 'high';
-    octx.drawImage(c, 0, 0, out.width, out.height);
-    const a = document.createElement('a');
-    a.href = out.toDataURL('image/png');
-    a.download = `${(state.name || 'token').replace(/\s+/g,'_')}_${pngScale}x.png`;
-    a.click();
-  };
-  const exportPreset = () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${(state.name || 'token').replace(/\s+/g,'_')}.json`;
-    a.click();
-  };
-  const importPreset = e => {
-    const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader();
-    r.onload = ev => {
+    reader.onload = (ev) => {
       try {
-        const parsed = JSON.parse(ev.target.result);
-        const next = { ...DEFAULT_STATE, ...parsed, artTransform:{ ...DEFAULT_STATE.artTransform, ...(parsed.artTransform||{}) }, infoLeft:{ ...DEFAULT_STATE.infoLeft, ...(parsed.infoLeft||{}) }, copyright:{ ...DEFAULT_STATE.copyright, ...(parsed.copyright||{}) } };
-        applyState(next);
-      } catch {}
+        const s = JSON.parse(ev.target.result);
+
+        // ── frame: cerca per nome (v3), fallback indice (v1/v2) ───────────
+        if (s.frameSet !== undefined) {
+          setFrameSet(s.frameSet);
+          if (s.frameName && FRAME_MAP[s.frameSet]) {
+            const idx = FRAME_MAP[s.frameSet].findIndex(f => f.name === s.frameName);
+            setFrameIdx(idx >= 0 ? idx : 0);
+          } else if (s.frameIdx !== undefined) {
+            setFrameIdx(s.frameIdx);
+          }
+        }
+        if (s.ptFrameName) {
+          const idx = PT_FRAMES.findIndex(f => f.name === s.ptFrameName);
+          setPtFrameIdx(idx >= 0 ? idx : 0);
+        } else if (s.ptFrameIdx !== undefined) {
+          setPtFrameIdx(s.ptFrameIdx);
+        }
+
+        // ── artwork ────────────────────────────────────────────────────────
+        if (s.artUrl !== undefined) setArtUrl(s.artUrl);
+
+        // ── TESTI ─────────────────────────────────────────────────────────
+        if (s.name    !== undefined) setName(s.name);
+        if (s.type    !== undefined) setType(s.type);
+        if (s.ability !== undefined) setAbility(s.ability);
+        if (s.pt      !== undefined) setPt(s.pt);
+
+        // ── stili posizione ──────────────────────────────────────────────────────
+        const toNum = (obj, key) => obj && obj[key] !== undefined ? Number(obj[key]) : undefined;
+        if (s.nameStyle    !== undefined) setNameStyle(    prev => ({ ...prev, ...s.nameStyle,    fontSize: toNum(s.nameStyle,    'fontSize') ?? prev.fontSize }));
+        if (s.typeStyle    !== undefined) setTypeStyle(    prev => ({ ...prev, ...s.typeStyle,    fontSize: toNum(s.typeStyle,    'fontSize') ?? prev.fontSize }));
+        if (s.abilityStyle !== undefined) setAbilityStyle( prev => ({ ...prev, ...s.abilityStyle, fontSize: toNum(s.abilityStyle, 'fontSize') ?? prev.fontSize }));
+        if (s.ptStyle      !== undefined) setPtStyle(      prev => ({ ...prev, ...s.ptStyle,      fontSize: toNum(s.ptStyle,      'fontSize') ?? prev.fontSize }));
+        if (s.showAbility   !== undefined) setShowAbility(s.showAbility);
+        if (s.showPT        !== undefined) setShowPT(s.showPT);
+        if (s.showInfoLeft  !== undefined) setShowInfoLeft(s.showInfoLeft);
+        if (s.showArtist    !== undefined) setShowArtist(s.showArtist);
+        if (s.showCopyright !== undefined) setShowCopyright(s.showCopyright);
+
+        // ── info & copyright ──────────────────────────────────────────────
+        if (s.infoLeft  !== undefined) setInfoLeft(  prev => ({ ...prev, ...s.infoLeft  }));
+        if (s.copyright !== undefined) setCopyright( prev => ({ ...prev, ...s.copyright }));
+
+        // ── ui ────────────────────────────────────────────────────────────
+        if (s.showGrid !== undefined) setShowGrid(s.showGrid);
+
+      } catch (err) {
+        alert("File non valido: " + err.message);
+      }
     };
-    r.readAsText(f); e.target.value = '';
-  };
-  const resetAll = () => {
-    const next = { ...DEFAULT_STATE, artUrl:'', artTransform:{ zoom:1, x:0, y:0 }, copyright:{ ...DEFAULT_STATE.copyright, year:new Date().getFullYear() } };
-    applyState(next);
-    if (artInputRef.current) artInputRef.current.value = '';
-  };
-  const undo = () => {
-    if (historyIdx === 0) return;
-    const prev = cloneState(history[historyIdx - 1]);
-    setState(prev); setHistoryIdx(historyIdx - 1);
-    if (artInputRef.current && !prev.artUrl) artInputRef.current.value = '';
-  };
-  const redo = () => {
-    if (historyIdx >= history.length - 1) return;
-    const next = cloneState(history[historyIdx + 1]);
-    setState(next); setHistoryIdx(historyIdx + 1);
+    reader.readAsText(file);
+    e.target.value = null;
   };
 
-  const frameSetNames = Object.keys(FRAME_MAP);
-  const currentSetFrames = FRAME_MAP[state.frameSet] || [];
-  const editorPanel = (
-    <div style={{ display:'grid', gap:12, alignSelf:'start' }}>
-      <Section title='Artwork' right='crop + move'>
-        <Field label='Immagine'><Input ref={artInputRef} type='file' accept='image/*' onChange={onArtFile} /></Field>
-        <Row>
-          <Field label='Zoom'><Input type='range' min='0.8' max='2.2' step='0.01' value={state.artTransform.zoom} onChange={e => update('artTransform', { zoom:Number(e.target.value) })} /></Field>
-          <Field label='X'><Input type='number' value={state.artTransform.x} onChange={e => update('artTransform', { x:Number(e.target.value) })} /></Field>
-          <Field label='Y'><Input type='number' value={state.artTransform.y} onChange={e => update('artTransform', { y:Number(e.target.value) })} /></Field>
-        </Row>
-      </Section>
+  const allFrameKeys = Object.keys(FRAME_MAP);
 
-      <Section title='Frame' right={state.frame?.name || 'selezione'}>
-        <Row>
-          <Field label='Set'><Select value={state.frameSet} onChange={e => onFrameSetChange(e.target.value)}>{frameSetNames.map(n => <option key={n} value={n}>{n}</option>)}</Select></Field>
-          <Field label='Frame'><Select value={state.frame?.name || ''} onChange={e => applyState({ ...state, frame: currentSetFrames.find(f => f.name===e.target.value) || null })}>{currentSetFrames.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}</Select></Field>
-          <Field label='PT Frame'><Select value={state.ptFrame?.name || ''} onChange={e => applyState({ ...state, ptFrame: PT_FRAMES.find(f => f.name===e.target.value) || null })}>{PT_FRAMES.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}</Select></Field>
-        </Row>
-      </Section>
+  // ── responsive: detecta mobile via CSS media query simulata ──────────────
+  const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 700);
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+  React.useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 700);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
 
-      <Section title='Text' right={activeLayer}>
-        <Field label='Nome'><Input value={state.name} onChange={e => applyState({ ...state, name:e.target.value })} /></Field>
-        <Row>
-          <Field label='Auto fit'><input type='checkbox' checked={state.autoFitName} onChange={e => applyState({ ...state, autoFitName:e.target.checked })} /></Field>
-          <Field label='Name size'><Input type='number' value={state.nameStyle.fontSize} onChange={e => update('nameStyle', { fontSize:Number(e.target.value) })} /></Field>
-          <Field label='Name Y'><Input type='number' value={state.nameStyle.y} onChange={e => update('nameStyle', { y:Number(e.target.value) })} /></Field>
-          <Field label='Name color'><Input type='color' value={state.nameStyle.color} onChange={e => update('nameStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
-          <Field label='Align'><Select value={state.nameStyle.align} onChange={e => update('nameStyle', { align:e.target.value })}><option value='left'>left</option><option value='center'>center</option><option value='right'>right</option></Select></Field>
-        </Row>
-        <Field label='Type line'><Input value={state.type} onChange={e => applyState({ ...state, type:e.target.value })} /></Field>
-        <Row>
-          <Field label='Auto fit'><input type='checkbox' checked={state.autoFitType} onChange={e => applyState({ ...state, autoFitType:e.target.checked })} /></Field>
-          <Field label='Type size'><Input type='number' value={state.typeStyle.fontSize} onChange={e => update('typeStyle', { fontSize:Number(e.target.value) })} /></Field>
-          <Field label='Type X'><Input type='number' value={state.typeStyle.x} onChange={e => update('typeStyle', { x:Number(e.target.value) })} /></Field>
-          <Field label='Type Y'><Input type='number' value={state.typeStyle.y} onChange={e => update('typeStyle', { y:Number(e.target.value) })} /></Field>
-          <Field label='Type color'><Input type='color' value={state.typeStyle.color} onChange={e => update('typeStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
-        </Row>
-        <Field label='Rules text'><Textarea rows={6} value={state.ability} onChange={e => applyState({ ...state, ability:e.target.value })} /></Field>
-        <Row>
-          <Field label='Show text'><input type='checkbox' checked={state.showAbility} onChange={e => applyState({ ...state, showAbility:e.target.checked })} /></Field>
-          <Field label='Auto fit'><input type='checkbox' checked={state.autoFitRules} onChange={e => applyState({ ...state, autoFitRules:e.target.checked })} /></Field>
-          <Field label='Text size'><Input type='number' value={state.abilityStyle.fontSize} onChange={e => update('abilityStyle', { fontSize:Number(e.target.value) })} /></Field>
-          <Field label='Text width'><Input type='number' value={state.abilityStyle.width} onChange={e => update('abilityStyle', { width:Number(e.target.value) })} /></Field>
-          <Field label='Text X'><Input type='number' value={state.abilityStyle.x} onChange={e => update('abilityStyle', { x:Number(e.target.value) })} /></Field>
-          <Field label='Text Y'><Input type='number' value={state.abilityStyle.y} onChange={e => update('abilityStyle', { y:Number(e.target.value) })} /></Field>
-          <Field label='Text color'><Input type='color' value={state.abilityStyle.color} onChange={e => update('abilityStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
-        </Row>
-      </Section>
+  const tabs = [
+    { id: "frame",   label: "🖼", full: "Frame" },
+    { id: "testo",   label: "✏️", full: "Testo" },
+    { id: "ability", label: "⚡", full: "Abilità" },
+    { id: "pt",      label: "⚔️", full: "P/T" },
+    { id: "info",    label: "ℹ️", full: "Info" },
+    { id: "pos",     label: "📐", full: "Pos." },
+  ];
 
-      <Section title='P/T + Footer' right='details'>
-        <Row>
-          <Field label='Power'><Input value={state.pt.power} onChange={e => applyState({ ...state, pt:{ ...state.pt, power:e.target.value } })} /></Field>
-          <Field label='Toughness'><Input value={state.pt.toughness} onChange={e => applyState({ ...state, pt:{ ...state.pt, toughness:e.target.value } })} /></Field>
-          <Field label='Show PT'><input type='checkbox' checked={state.showPT} onChange={e => applyState({ ...state, showPT:e.target.checked })} /></Field>
-        </Row>
-        <Row>
-          <Field label='PT X'><Input type='number' value={state.ptStyle.frameX} onChange={e => update('ptStyle', { frameX:Number(e.target.value) })} /></Field>
-          <Field label='PT Y'><Input type='number' value={state.ptStyle.frameY} onChange={e => update('ptStyle', { frameY:Number(e.target.value) })} /></Field>
-          <Field label='PT W'><Input type='number' value={state.ptStyle.width} onChange={e => update('ptStyle', { width:Number(e.target.value) })} /></Field>
-          <Field label='PT H'><Input type='number' value={state.ptStyle.height} onChange={e => update('ptStyle', { height:Number(e.target.value) })} /></Field>
-          <Field label='PT size'><Input type='number' value={state.ptStyle.fontSize} onChange={e => update('ptStyle', { fontSize:Number(e.target.value) })} /></Field>
-          <Field label='PT color'><Input type='color' value={state.ptStyle.color} onChange={e => update('ptStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
-        </Row>
-        <Row>
-          <Field label='Info left'><Input value={state.infoLeft.text} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, text:e.target.value } })} /></Field>
-          <Field label='Artist'><Input value={state.infoLeft.artist} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, artist:e.target.value } })} /></Field>
-          <Field label='Year'><Input value={state.copyright.year} onChange={e => applyState({ ...state, copyright:{ ...state.copyright, year:e.target.value } })} /></Field>
-          <Field label='Footer color'><Input type='color' value={state.infoLeft.color} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, color:e.target.value }, copyright:{ ...state.copyright, color:e.target.value } })} style={{ padding:4, height:42 }} /></Field>
-          <Field label='Footer X'><Input type='number' value={state.infoLeft.x} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, x:Number(e.target.value) } })} /></Field>
-          <Field label='Footer Y'><Input type='number' value={state.infoLeft.y} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, y:Number(e.target.value) } })} /></Field>
-          <Field label='Footer size'><Input type='number' value={state.infoLeft.fontSize} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, fontSize:Number(e.target.value) }, copyright:{ ...state.copyright, fontSize:Math.max(8, Number(e.target.value)-2) } })} /></Field>
-          <Field label='Copyright Y'><Input type='number' value={state.copyright.y} onChange={e => applyState({ ...state, copyright:{ ...state.copyright, y:Number(e.target.value) } })} /></Field>
-        </Row>
-      </Section>
+  const PanelContent = () => (
+    <div style={{ padding: 12, flex: 1, overflowY: "auto", maxHeight: isMobile ? "60vh" : undefined }}>
 
-      <Section title='Tools' right='workflow'>
-        <Row>
-          <Field label='Preview zoom'><Select value={previewZoom} onChange={e => setPreviewZoom(Number(e.target.value))}><option value='75'>75%</option><option value='100'>100%</option><option value='125'>125%</option><option value='150'>150%</option></Select></Field>
-          <Field label='PNG scale'><Select value={pngScale} onChange={e => setPngScale(Number(e.target.value))}><option value='1'>1x</option><option value='2'>2x</option><option value='4'>4x</option><option value='8'>8x</option></Select></Field>
-          <Field label='Guides'><input type='checkbox' checked={showGuides} onChange={e => setShowGuides(e.target.checked)} /></Field>
-          <Field label='Bleed export'><input type='checkbox' checked={withBleed} onChange={e => setWithBleed(e.target.checked)} /></Field>
-        </Row>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-          <button onClick={() => nudge(activeLayer, 0, -1)} style={btnSecondary}>↑</button>
-          <button onClick={() => nudge(activeLayer, -1, 0)} style={btnSecondary}>←</button>
-          <button onClick={() => nudge(activeLayer, 1, 0)} style={btnSecondary}>→</button>
-          <button onClick={() => nudge(activeLayer, 0, 1)} style={btnSecondary}>↓</button>
-          <button onClick={undo} style={btnSecondary}>Undo</button>
-          <button onClick={redo} style={btnSecondary}>Redo</button>
-          <button onClick={resetAll} style={btnDanger}>Reset</button>
-          <button onClick={exportPNG} style={btnPrimary}>Esporta PNG</button>
-          <button onClick={exportPreset} style={btnSecondary}>Export preset</button>
-          <label style={btnSecondary}><span>Import preset</span><input type='file' accept='application/json' style={{display:'none'}} onChange={importPreset} /></label>
+      <div style={{ display: activeTab === "frame" ? "block" : "none" }}>
+
+        <div>
+          <Lbl>Set Frame</Lbl>
+          <select value={frameSet} onChange={e => { setFrameSet(e.target.value); setFrameIdx(0); }}
+            style={{ width: "100%", background: "#252420", color: "#cdccca", border: `1px solid ${BD}`,
+              borderRadius: 5, padding: "6px 8px", marginBottom: 10, fontSize: 13 }}>
+            {allFrameKeys.map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <Lbl>Frame carta</Lbl>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+            {(FRAME_MAP[frameSet] || []).map((f, i) => (
+              <img key={f.url} src={f.url} alt={f.name} title={f.name} onClick={() => setFrameIdx(i)}
+                style={{ width: 52, height: 74, objectFit: "cover", borderRadius: 4, cursor: "pointer",
+                  border: i === frameIdx ? `2px solid ${G}` : `2px solid transparent`,
+                  opacity: i === frameIdx ? 1 : 0.55 }} />
+            ))}
+          </div>
+          <Lbl>Frame P/T</Lbl>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+            {PT_FRAMES.map((f, i) => (
+              <img key={f.url} src={f.url} alt={f.name} title={f.name} onClick={() => setPtFrameIdx(i)}
+                style={{ width: 52, height: 36, objectFit: "cover", borderRadius: 4, cursor: "pointer",
+                  border: i === ptFrameIdx ? `2px solid ${G}` : `2px solid transparent`,
+                  opacity: i === ptFrameIdx ? 1 : 0.55 }} />
+            ))}
+          </div>
+          <Lbl>Artwork</Lbl>
+          <Btn onClick={() => artInput.current.click()} color="#6366f1" style={{ width: "100%", marginBottom: 6 }}>
+            📁 Carica immagine
+          </Btn>
+          <input ref={artInput} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+            const f = e.target.files?.[0]; if (!f) return;
+            const r = new FileReader(); r.onloadend = () => setArtUrl(r.result); r.readAsDataURL(f);
+            e.target.value = null;
+          }} />
+          {artUrl && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <img src={artUrl} alt="art" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 4 }} />
+              <Btn small onClick={() => setArtUrl("")} color="#7a1e1e">✕ Rimuovi</Btn>
+            </div>
+          )}
         </div>
-        <div style={{ fontSize:12, color:'#9d9891' }}>Su mobile apri la preview dedicata. Trascina i box direttamente sulla carta; con Shift + frecce sposti di 10px.</div>
-      </Section>
+      
+        </div>
+
+      <div style={{ display: activeTab === "testo" ? "block" : "none" }}>
+
+        <div>
+          <Lbl>Nome carta</Lbl>
+          <TF value={name} onChange={setName} placeholder="Es. CONSTRUCT" />
+          <Lbl>Allineamento nome</Lbl>
+          <AlignBtns value={nameStyle.align || "center"} onChange={v => setNameStyle(s => ({ ...s, align: v }))} />
+          <Sld label="Font size nome" value={nameStyle.fontSize} onChange={v => setNameStyle(s => ({ ...s, fontSize: v }))} min={10} max={50} />
+          <CP label="Colore nome" value={nameStyle.color} onChange={v => setNameStyle(s => ({ ...s, color: v }))} />
+          <div style={{ height: 1, background: BD, margin: "10px 0" }} />
+          <Lbl>Tipo carta</Lbl>
+          <TF value={type} onChange={setType} placeholder="Es. Token Artifact Creature" />
+          <Sld label="Font size tipo" value={typeStyle.fontSize} onChange={v => setTypeStyle(s => ({ ...s, fontSize: v }))} min={10} max={40} />
+          <CP label="Colore tipo" value={typeStyle.color} onChange={v => setTypeStyle(s => ({ ...s, color: v }))} />
+        </div>
+      
+        </div>
+
+      <div style={{ display: activeTab === "ability" ? "block" : "none" }}>
+
+        <div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+            cursor: "pointer", fontSize: 13, color: showAbility ? "#cdccca" : "#4a4948" }}>
+            <input type="checkbox" checked={showAbility} onChange={e => setShowAbility(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: G }} />
+            Mostra testo abilità
+          </label>
+          <TFArea value={ability} onChange={setAbility}
+            placeholder={"Es. Flying\nWhen this enters…\nUsa {T} {W} {G} {2} ecc."}
+            disabled={!showAbility} rows={5} />
+          <Sld label="Font size" value={Number(abilityStyle.fontSize)} onChange={v => setAbilityStyle(s => ({ ...s, fontSize: Number(v) }))} min={8} max={30} />
+          <CP label="Colore testo" value={abilityStyle.color} onChange={v => setAbilityStyle(s => ({ ...s, color: v }))} />
+        </div>
+      
+        </div>
+
+      <div style={{ display: activeTab === "pt" ? "block" : "none" }}>
+
+        <div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+            cursor: "pointer", fontSize: 13, color: showPT ? "#cdccca" : "#4a4948" }}>
+            <input type="checkbox" checked={showPT} onChange={e => setShowPT(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: G }} />
+            Mostra P/T
+          </label>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>Power</Lbl><TF value={pt.power} onChange={v => setPt(p => ({ ...p, power: v }))} disabled={!showPT} /></div>
+            <div style={{ flex: 1 }}><Lbl>Toughness</Lbl><TF value={pt.toughness} onChange={v => setPt(p => ({ ...p, toughness: v }))} disabled={!showPT} /></div>
+          </Row>
+          <Sld label="Font size" value={ptStyle.fontSize} onChange={v => setPtStyle(s => ({ ...s, fontSize: v }))} min={14} max={60} />
+          <CP label="Colore" value={ptStyle.color} onChange={v => setPtStyle(s => ({ ...s, color: v }))} />
+        </div>
+      
+        </div>
+
+      <div style={{ display: activeTab === "info" ? "block" : "none" }}>
+
+        <div>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>Rarità</Lbl><TF value={infoLeft.rarity} onChange={v => setInfoLeft(s => ({ ...s, rarity: v }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Set</Lbl><TF value={infoLeft.setCode} onChange={v => setInfoLeft(s => ({ ...s, setCode: v }))} /></div>
+          </Row>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>Anno</Lbl><TF value={infoLeft.year} onChange={v => setInfoLeft(s => ({ ...s, year: v }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Lingua</Lbl><TF value={infoLeft.lang} onChange={v => setInfoLeft(s => ({ ...s, lang: v }))} /></div>
+          </Row>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer", fontSize: 13 }}>
+            <input type="checkbox" checked={showInfoLeft} onChange={e => setShowInfoLeft(e.target.checked)} style={{ accentColor: G }} />
+            Mostra info bassa
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer", fontSize: 13 }}>
+            <input type="checkbox" checked={showArtist} onChange={e => setShowArtist(e.target.checked)} style={{ accentColor: G }} />
+            Mostra artista
+          </label>
+          <Lbl>Artista</Lbl>
+          <TF value={infoLeft.artist || ""} onChange={v => setInfoLeft(s => ({ ...s, artist: v }))} disabled={!showArtist} placeholder="Nome artista…" />
+          <div style={{ height: 1, background: BD, margin: "10px 0" }} />
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer", fontSize: 13 }}>
+            <input type="checkbox" checked={showCopyright} onChange={e => setShowCopyright(e.target.checked)} style={{ accentColor: G }} />
+            Mostra copyright
+          </label>
+          <Lbl>Anno copyright</Lbl>
+          <TF value={copyright.year} onChange={v => setCopyright(s => ({ ...s, year: v }))} disabled={!showCopyright} />
+        </div>
+      
+        </div>
+
+      <div style={{ display: activeTab === "pos" ? "block" : "none" }}>
+
+        <div>
+          <Lbl>Nome — posizione</Lbl>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={nameStyle.x} onChange={v => setNameStyle(s => ({ ...s, x: Number(v) }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={nameStyle.y} onChange={v => setNameStyle(s => ({ ...s, y: Number(v) }))} /></div>
+          </Row>
+          <Lbl>Tipo — posizione</Lbl>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={typeStyle.x} onChange={v => setTypeStyle(s => ({ ...s, x: Number(v) }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={typeStyle.y} onChange={v => setTypeStyle(s => ({ ...s, y: Number(v) }))} /></div>
+          </Row>
+          <Lbl>Abilità — posizione</Lbl>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={abilityStyle.x} onChange={v => setAbilityStyle(s => ({ ...s, x: Number(v) }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={abilityStyle.y} onChange={v => setAbilityStyle(s => ({ ...s, y: Number(v) }))} /></div>
+          </Row>
+          <Lbl>P/T frame — posizione</Lbl>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>X</Lbl><TF type="number" value={ptStyle.frameX} onChange={v => setPtStyle(s => ({ ...s, frameX: Number(v), x: Number(v) }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>Y</Lbl><TF type="number" value={ptStyle.frameY} onChange={v => setPtStyle(s => ({ ...s, frameY: Number(v), y: Number(v) }))} /></div>
+          </Row>
+          <Row>
+            <div style={{ flex: 1 }}><Lbl>W</Lbl><TF type="number" value={ptStyle.width} onChange={v => setPtStyle(s => ({ ...s, width: Number(v) }))} /></div>
+            <div style={{ flex: 1 }}><Lbl>H</Lbl><TF type="number" value={ptStyle.height} onChange={v => setPtStyle(s => ({ ...s, height: Number(v) }))} /></div>
+          </Row>
+          <div style={{ height: 1, background: BD, margin: "10px 0" }} />
+          <button onClick={() => setShowGrid(g => !g)}
+            style={{ width: "100%", background: showGrid ? G : "#252420", color: showGrid ? "#000" : "#797876",
+              border: `1px solid ${BD}`, borderRadius: 5, padding: "7px", fontSize: 12,
+              cursor: "pointer", fontWeight: 600, marginBottom: 6 }}>
+            {showGrid ? "✅ Box drag ON" : "📐 Box drag OFF"}
+          </button>
+          <p style={{ fontSize: 11, color: "#4a4948", margin: 0 }}>
+            Attiva i box colorati sulla preview per trascinare gli elementi.
+          </p>
+        </div>
+      
+        </div>
+    </div>
+  );
+
+  // ── TAB BAR (condivisa tra mobile e desktop) ─────────────────────────────
+  const TabBar = ({ horizontal }) => (
+    <div style={{ display: "flex", flexDirection: horizontal ? "row" : "row",
+      background: "#151413", borderTop: horizontal ? `1px solid ${BD}` : undefined,
+      borderBottom: !horizontal ? `1px solid ${BD}` : undefined,
+      flexWrap: "nowrap", overflowX: "auto" }}>
+      {tabs.map(t => (
+        <button key={t.id}
+          onClick={() => { setActiveTab(t.id); if (isMobile) setDrawerOpen(true); }}
+          style={{ flex: "1 0 auto", padding: horizontal ? "10px 4px" : "8px 4px",
+            fontSize: horizontal ? 20 : 11, fontWeight: 600,
+            background: activeTab === t.id && (!isMobile || drawerOpen) ? SURFACE : "transparent",
+            color: activeTab === t.id && (!isMobile || drawerOpen) ? G : "#797876",
+            border: "none",
+            borderTop: horizontal && activeTab === t.id && drawerOpen ? `2px solid ${G}` : horizontal ? "2px solid transparent" : "none",
+            borderBottom: !horizontal && activeTab === t.id ? `2px solid ${G}` : !horizontal ? "2px solid transparent" : "none",
+            cursor: "pointer", whiteSpace: "nowrap", minWidth: 44 }}>
+          <div>{t.label}</div>
+          {!horizontal && <div style={{ fontSize: 9, marginTop: 1 }}>{t.full}</div>}
+        </button>
+      ))}
     </div>
   );
 
   return (
-    <div style={{ minHeight:'100vh', background:'#131211', color:'#ece9e4', padding: screen.mobile ? 8 : 12 }}>
-      <div style={{ maxWidth:1500, margin:'0 auto' }}>
-        {screen.mobile && (
-          <div style={{ display:'flex', gap:8, marginBottom:10, position:'sticky', top:0, zIndex:20, background:'#131211', paddingBottom:8 }}>
-            <button onClick={() => setMobilePanel('preview')} style={mobilePanel==='preview' ? btnPrimary : btnSecondary}>Preview</button>
-            <button onClick={() => setMobilePanel('controls')} style={mobilePanel==='controls' ? btnPrimary : btnSecondary}>Controlli</button>
-          </div>
-        )}
+    <div style={{ ...P, display: "flex", flexDirection: "column", minHeight: "100vh",
+      minHeight: "100dvh", background: "#111" }}>
 
-        <div style={{ display:'grid', gridTemplateColumns: screen.mobile ? '1fr' : 'minmax(340px,460px) minmax(0,1fr)', gap:12, alignItems:'start' }}>
-          {(!screen.mobile || mobilePanel === 'controls') && editorPanel}
-          {(!screen.mobile || mobilePanel === 'preview') && (
-            <PreviewCard mobile={screen.mobile} canvasRef={canvasRef} previewScale={previewScale} showGuides={showGuides} activeLayer={activeLayer} state={state} applyState={applyState} setActiveLayer={setActiveLayer} />
-          )}
+      {/* ── TOPBAR ── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: "#1a1917", borderBottom: `1px solid ${BD}`,
+        padding: "8px 12px", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
+        <span style={{ fontWeight: 700, fontSize: 15, color: G, letterSpacing: ".05em" }}>🃏 Token Generator</span>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <Btn small onClick={handleSaveState} color="#1e3a2f" style={{ border: `1px solid ${G}`, color: G }}>💾 Salva</Btn>
+          <Btn small onClick={() => stateInput.current.click()} color="#1e3a2f" style={{ border: `1px solid ${G}`, color: G }}>📂 Carica</Btn>
+          <input ref={stateInput} type="file" accept=".json" style={{ display: "none" }} onChange={handleLoadState} />
+          <Btn small onClick={handleDownload} disabled={downloading}
+            color={downloading ? "#333" : "#c9a227"}
+            style={{ color: downloading ? "#666" : "#000", fontWeight: 700 }}>
+            {downloading ? "⏳…" : "⬇ PNG 4×"}
+          </Btn>
         </div>
       </div>
+
+      {/* ── LAYOUT DESKTOP ── */}
+      {!isMobile && (
+        <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+          {/* Pannello sinistro */}
+          <div style={{ width: 280, minWidth: 260, background: "#1a1917",
+            borderRight: `1px solid ${BD}`, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <TabBar horizontal={false} />
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              <PanelContent />
+            </div>
+          </div>
+          {/* Preview */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+            justifyContent: "flex-start", padding: "20px 10px", gap: 16, overflowY: "auto", background: "#0e0e0e" }}>
+            <div style={{ position: "relative", width: DISPLAY_W, height: DISPLAY_H,
+              borderRadius: 14, overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,.8)", flexShrink: 0 }}>
+              <canvas ref={canvasRef} style={{ display: "block", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14 }} />
+              {showGrid && (
+                <>
+                  <DragBox label="NOME"
+                    style={{ x: nameStyle.x / SCALE, y: nameStyle.y / SCALE }} color="#c9a227"
+                    onUpdate={d => setNameStyle(s => ({ ...s, x: Math.round(d.x * SCALE), y: Math.round(d.y * SCALE) }))}>
+                    <span style={{ fontSize: 9, color: "#c9a227", whiteSpace: "nowrap" }}>{name.toUpperCase()}</span>
+                  </DragBox>
+                  <DragBox label="TIPO"
+                    style={{ x: typeStyle.x / SCALE, y: typeStyle.y / SCALE }} color="#60a5fa"
+                    onUpdate={d => setTypeStyle(s => ({ ...s, x: Math.round(d.x * SCALE), y: Math.round(d.y * SCALE) }))}>
+                    <span style={{ fontSize: 9, color: "#60a5fa", whiteSpace: "nowrap" }}>{type.slice(0, 28)}</span>
+                  </DragBox>
+                  {showAbility && (
+                    <DragBox label="ABILITÀ"
+                      style={{ x: abilityStyle.x / SCALE, y: abilityStyle.y / SCALE }} color="#4ade80"
+                      onUpdate={d => setAbilityStyle(s => ({ ...s, x: Math.round(d.x * SCALE), y: Math.round(d.y * SCALE) }))}>
+                      <span style={{ fontSize: 9, color: "#4ade80", whiteSpace: "nowrap" }}>Abilità…</span>
+                    </DragBox>
+                  )}
+                  {showPT && (
+                    <DragBox label="P/T"
+                      style={{ x: ptStyle.frameX / SCALE, y: ptStyle.frameY / SCALE }} color="#f87171"
+                      onUpdate={d => setPtStyle(s => ({ ...s,
+                        frameX: Math.round(d.x * SCALE), frameY: Math.round(d.y * SCALE),
+                        x: Math.round(d.x * SCALE), y: Math.round(d.y * SCALE) }))}>
+                      <span style={{ fontSize: 9, color: "#f87171" }}>{pt.power}/{pt.toughness}</span>
+                    </DragBox>
+                  )}
+                </>
+              )}
+            </div>
+            <p style={{ fontSize: 11, color: "#3a3938", margin: 0 }}>
+              Preview {DISPLAY_W}×{DISPLAY_H}px — Export 4× ({CW * 4}×{CH * 4}px)
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── LAYOUT MOBILE ── */}
+      {isMobile && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+          {/* Preview scrollabile */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+            justifyContent: "flex-start", padding: "12px 8px", gap: 10, overflowY: "auto",
+            background: "#0e0e0e", paddingBottom: drawerOpen ? "0" : "70px" }}>
+            {/* Scala la carta per stare nel viewport mobile */}
+            {(() => {
+              const vw = Math.min(window.innerWidth - 16, 460);
+              const scale = vw / DISPLAY_W;
+              const scaledH = Math.round(DISPLAY_H * scale);
+              return (
+                <div style={{ position: "relative",
+                  width: vw, height: scaledH,
+                  borderRadius: 14, overflow: "visible",
+                  boxShadow: "0 8px 40px rgba(0,0,0,.8)", flexShrink: 0 }}>
+                  {/* canvas scalato con clip */}
+                  <div style={{ position: "absolute", top: 0, left: 0,
+                    width: vw, height: scaledH,
+                    borderRadius: 14, overflow: "hidden", zIndex: 1 }}>
+                    <div style={{ transform: `scale(${scale})`, transformOrigin: "top left",
+                      width: DISPLAY_W, height: DISPLAY_H }}>
+                      <canvas ref={canvasRef} style={{ display: "block", width: DISPLAY_W, height: DISPLAY_H, borderRadius: 14 }} />
+                    </div>
+                  </div>
+                  {/* DragBox overlay in coordinate già scalate */}
+                  {showGrid && (
+                    <div style={{ position: "absolute", top: 0, left: 0, width: vw, height: scaledH, zIndex: 20 }}>
+                      <DragBox label="NOME"
+                        style={{ x: nameStyle.x * scale / SCALE, y: nameStyle.y * scale / SCALE }} color="#c9a227"
+                        onUpdate={d => setNameStyle(s => ({ ...s, x: Math.round(d.x * SCALE / scale), y: Math.round(d.y * SCALE / scale) }))}>
+                        <span style={{ fontSize: 9, color: "#c9a227", whiteSpace: "nowrap" }}>{name.toUpperCase()}</span>
+                      </DragBox>
+                      <DragBox label="TIPO"
+                        style={{ x: typeStyle.x * scale / SCALE, y: typeStyle.y * scale / SCALE }} color="#60a5fa"
+                        onUpdate={d => setTypeStyle(s => ({ ...s, x: Math.round(d.x * SCALE / scale), y: Math.round(d.y * SCALE / scale) }))}>
+                        <span style={{ fontSize: 9, color: "#60a5fa", whiteSpace: "nowrap" }}>{type.slice(0, 28)}</span>
+                      </DragBox>
+                      {showAbility && (
+                        <DragBox label="ABILITÀ"
+                          style={{ x: abilityStyle.x * scale / SCALE, y: abilityStyle.y * scale / SCALE }} color="#4ade80"
+                          onUpdate={d => setAbilityStyle(s => ({ ...s, x: Math.round(d.x * SCALE / scale), y: Math.round(d.y * SCALE / scale) }))}>
+                          <span style={{ fontSize: 9, color: "#4ade80", whiteSpace: "nowrap" }}>Abilità…</span>
+                        </DragBox>
+                      )}
+                      {showPT && (
+                        <DragBox label="P/T"
+                          style={{ x: ptStyle.frameX * scale / SCALE, y: ptStyle.frameY * scale / SCALE }} color="#f87171"
+                          onUpdate={d => setPtStyle(s => ({ ...s,
+                            frameX: Math.round(d.x * SCALE / scale), frameY: Math.round(d.y * SCALE / scale),
+                            x: Math.round(d.x * SCALE / scale), y: Math.round(d.y * SCALE / scale) }))}>
+                          <span style={{ fontSize: 9, color: "#f87171" }}>{pt.power}/{pt.toughness}</span>
+                        </DragBox>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Drawer bottom */}
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+            background: "#1a1917", borderTop: `1px solid ${BD}`,
+            maxHeight: drawerOpen ? "65vh" : "56px",
+            transition: "max-height .3s cubic-bezier(.4,0,.2,1)",
+            display: "flex", flexDirection: "column", overflow: "hidden",
+            boxShadow: "0 -4px 24px rgba(0,0,0,.6)" }}>
+
+            {/* Handle + TabBar */}
+            <div style={{ flexShrink: 0 }}>
+              {/* Handle bar */}
+              <div onClick={() => setDrawerOpen(o => !o)}
+                style={{ display: "flex", justifyContent: "center", padding: "6px 0", cursor: "pointer" }}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: drawerOpen ? G : "#3a3938" }} />
+              </div>
+              <TabBar horizontal={true} />
+            </div>
+
+            {/* Contenuto drawer */}
+            {drawerOpen && (
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                <PanelContent />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-const btnPrimary = { padding:'10px 14px', borderRadius:10, border:'1px solid #4f98a3', background:'#4f98a3', color:'#0f1111', fontWeight:700, cursor:'pointer' };
-const btnSecondary = { padding:'10px 14px', borderRadius:10, border:'1px solid #393836', background:'#201f1d', color:'#ece9e4', fontWeight:700, cursor:'pointer' };
-const btnDanger = { padding:'10px 14px', borderRadius:10, border:'1px solid #7f1d1d', background:'#3b1212', color:'#fecaca', fontWeight:700, cursor:'pointer' };

@@ -523,7 +523,12 @@ export default function MTGDeckValidatorPanel() {
 
           <label style={{ display:"grid", gap:6, color:"var(--muted,#bdbdbd)", fontSize:".8rem" }}>
             <span>Decklist (usa 'Sideboard:' per separare)</span>
-            <textarea rows={16} value={decklist} onChange={e => setDecklist(e.target.value)} style={{ ...iStyle, resize:"vertical" }} placeholder={"1 Brainstorm (CNS) 91\n1 Ponder\n1 Force of Will\n\nSideboard:\n1 Hydroblast"} />
+            <textarea rows={16} value={decklist} onChange={e => setDecklist(e.target.value)} style={{ ...iStyle, resize:"vertical" }} placeholder={"1 Brainstorm (CNS) 91
+1 Ponder
+1 Force of Will
+
+Sideboard:
+1 Hydroblast"} />
           </label>
 
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
