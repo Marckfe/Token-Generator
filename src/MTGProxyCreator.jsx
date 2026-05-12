@@ -162,7 +162,9 @@ function parseDecklist(text) {
     const m2 = t.match(/^(.+?)\s+x(\d+)$/i);
     if (m1) { count = parseInt(m1[1], 10); name = m1[2]; }
     else if (m2) { name = m2[1]; count = parseInt(m2[2], 10); }
-    name = name.split(" [")[0].trim();
+    name = name.split(" [")[0]
+      .replace(/\s*\([A-Z0-9]{2,6}\)\s*\d*$/i, "")
+      .trim();
     (isSide ? side : main).push({ name, count });
   }
   return { main, side };
@@ -490,7 +492,7 @@ function DeckValidatorPanel() {
         <Card title="Validazione deck">
           <Field label="Formato">
             <select value={format} onChange={e => setFormat(e.target.value)} style={iStyle}>
-              {FORMATS.map(f => <option key={f} value={f}>{f.toUpperCase()}</option>)}
+              {[["standard","Standard"],["pioneer","Pioneer"],["modern","Modern"],["legacy","Legacy"],["vintage","Vintage"],["commander","Commander"],["duel","Duel Commander"],["pauper","Pauper"],["premodern","Premodern"]].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </Field>
 
