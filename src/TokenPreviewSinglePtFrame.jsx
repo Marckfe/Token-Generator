@@ -138,6 +138,15 @@ function renderCardSync(canvas, state, withBleed = false) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, TW, TH);
 
+  // Checkerboard background for transparency/missing art
+  const size = 20;
+  for (let y = 0; y < TH; y += size) {
+    for (let x = 0; x < TW; x += size) {
+      ctx.fillStyle = (Math.floor(x / size) + Math.floor(y / size)) % 2 === 0 ? "#f8f8f8" : "#ffffff";
+      ctx.fillRect(x, y, size, size);
+    }
+  }
+
   if (artUrl) {
     const img = getCachedImage(artUrl);
     if (img) {
