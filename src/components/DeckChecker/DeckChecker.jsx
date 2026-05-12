@@ -24,11 +24,14 @@ export default function DeckChecker() {
     if (val.length >= 3) {
       searchTimeout.current = setTimeout(async () => {
         try {
-          const res = await fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(val)}`);
+          // Usiamo search invece di autocomplete per filtrare solo i comandanti legali
+          const res = await fetch(`https://api.scryfall.com/cards/search?q=is:commander+(f:duel+or+f:commander)+${encodeURIComponent(val)}`);
           const data = await res.json();
-          setCmdSuggestions(data.data || []);
+          if (data.data) {
+            setCmdSuggestions(data.data.map(c => c.name));
+          }
         } catch (e) {}
-      }, 300);
+      }, 400);
     }
   };
 
