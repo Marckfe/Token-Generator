@@ -178,30 +178,35 @@ export default function BulkImportPanel({ onAddCards, toast }) {
                     ) : (
                       <div className="bulk-thumb-placeholder">{entry.status === "not_found" ? "❓" : "⚠️"}</div>
                     )}
-                    <div className="bulk-info">
-                      <div className="bulk-title">{(entry.selectedPrint || entry.card)?.name || entry.name}</div>
-                      {entry.status === "found" && (
-                        <div className="bulk-meta">
-                          {(entry.selectedPrint || entry.card)?.set_name} · {(entry.selectedPrint || entry.card)?.artist} · <span className="text-accent">{entry.prints.length} stampe</span>
-                        </div>
-                      )}
-                      {entry.status === "not_found" && <div className="text-error text-xs mt-1">Carta non trovata</div>}
-                    </div>
                     
+                    <div className="bulk-overlay">
+                      {entry.status === "found" && (
+                        <input type="number" min={1} max={20} value={entry.qty} onChange={e => updateQty(i, e.target.value)} className="form-input" style={{ width: '40px', padding: '2px', textAlign: 'center', height: '24px', fontSize: '12px' }} />
+                      )}
+                      {entry.status === "found" && (
+                        <button onClick={() => toggleExclude(i)} className="btn-icon" style={{ background: 'var(--surf)', padding: '2px 6px', borderRadius: '4px', fontSize: '12px' }}>
+                          {entry.excluded ? "↩" : "✕"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bulk-info">
+                    <div className="bulk-title">{(entry.selectedPrint || entry.card)?.name || entry.name}</div>
                     {entry.status === "found" && (
-                      <button onClick={() => handleExpandArt(i, entry.name)} className={`btn-outline-accent text-xs ${isArtOpen ? 'active' : ''}`}>
+                      <div className="bulk-meta">
+                        {(entry.selectedPrint || entry.card)?.set_name} · <span className="text-accent">{entry.prints.length} var.</span>
+                      </div>
+                    )}
+                    {entry.status === "not_found" && <div className="text-error text-xs mt-1">Non trovata</div>}
+                  </div>
+                  
+                  {entry.status === "found" && (
+                    <div className="bulk-actions">
+                      <button onClick={() => handleExpandArt(i, entry.name)} className={`btn-outline-accent text-xs ${isArtOpen ? 'active' : ''}`} style={{ width: '100%' }}>
                         🎨 {isArtOpen ? "Chiudi" : "Scegli art"}
                       </button>
-                    )}
-                    {entry.status === "found" && (
-                      <input type="number" min={1} max={20} value={entry.qty} onChange={e => updateQty(i, e.target.value)} className="form-input qty-input" />
-                    )}
-                    {entry.status === "found" && (
-                      <button onClick={() => toggleExclude(i)} className="btn-icon">
-                        {entry.excluded ? "↩" : "✕"}
-                      </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {isArtOpen && entry.prints.length > 0 && (
                     <div className="bulk-art-picker">

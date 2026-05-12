@@ -268,30 +268,52 @@ input, select, textarea { font: inherit; color: inherit; outline: none; }
 
 /* Bulk Import Details */
 .bulk-status-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: var(--r-md); }
-.bulk-list-container { display: flex; flex-direction: column; gap: 8px; max-height: 480px; overflow-y: auto; padding-right: 6px; }
+.bulk-list-container { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); 
+  gap: 12px; 
+  max-height: 60vh; 
+  overflow-y: auto; 
+  padding: 10px; 
+}
 .bulk-item-wrapper {
   border-radius: var(--r-md); overflow: hidden; transition: opacity 0.2s;
-  border: 1px solid var(--border);
+  border: 2px solid transparent;
+  display: flex; flex-direction: column;
+  background: var(--surface); position: relative;
 }
-.bulk-item-wrapper.excluded { opacity: 0.5; border-color: var(--border); }
-.bulk-item-wrapper.found { border-color: rgba(109, 170, 69, 0.4); }
-.bulk-item-wrapper.not-found { border-color: rgba(248, 113, 113, 0.4); }
+.bulk-item-wrapper.excluded { opacity: 0.4; filter: grayscale(1); border-color: var(--border); }
+.bulk-item-wrapper.found { border-color: rgba(109, 170, 69, 0.6); }
+.bulk-item-wrapper.not-found { border-color: rgba(248, 113, 113, 0.6); }
 
 .bulk-row {
-  display: flex; align-items: center; gap: 12px; padding: 8px 12px;
-  background: var(--surface); transition: var(--tr);
+  display: flex; flex-direction: column; height: 100%; position: relative; cursor: pointer;
 }
 .bulk-row.found { background: rgba(109, 170, 69, 0.05); }
 .bulk-row.not-found { background: rgba(248, 113, 113, 0.05); }
-.bulk-thumb { width: 36px; height: 50px; object-fit: cover; border-radius: 4px; flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+
+.bulk-thumb { width: 100%; aspect-ratio: 63/88; object-fit: cover; display: block; }
 .bulk-thumb-placeholder {
-  width: 36px; height: 50px; background: var(--border); border-radius: 4px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+  width: 100%; aspect-ratio: 63/88; background: var(--border); 
+  display: flex; align-items: center; justify-content: center; font-size: 2.5rem; color: var(--error);
 }
-.bulk-info { flex: 1; min-width: 0; }
-.bulk-title { font-weight: 600; font-size: 0.9rem; color: var(--text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bulk-meta { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
-.bulk-art-picker { padding: 14px; background: var(--bg); border-top: 1px solid var(--border); }
+
+.bulk-overlay {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,0.85); padding: 6px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+
+.bulk-info { padding: 8px; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.bulk-title { font-weight: 600; font-size: 0.8rem; color: var(--text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bulk-meta { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
+
+.bulk-actions {
+  display: flex; justify-content: center; padding: 6px; border-top: 1px solid var(--border); background: var(--bg);
+}
+
+.bulk-art-picker { padding: 14px; background: var(--bg); border-top: 1px solid var(--border); grid-column: 1 / -1; }
+
 
 /* Dropzone */
 .dropzone {
