@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import "./editor.css";
 
 const ALL_FRAME_SETS = import.meta.glob(
   "/src/assets/frames/masterframes/*/*.{png,jpg,jpeg,webp,svg}",
@@ -27,16 +28,32 @@ const FT = "Beleren, MatrixSC, Cinzel, Georgia, serif";
 const FB = "MPlantin, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
 const HISTORY_LIMIT = 40;
 
-function loadImg(src) {
-  return new Promise((res, rej) => {
-    if (!src) return rej(new Error("no src"));
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => res(img);
-    img.onerror = rej;
-    img.src = src;
-  });
+// --- IMAGE CACHE FOR 60FPS SYNCHRONOUS RENDERING ---
+const imageCache = new Map();
+let globalRenderCallback = null;
+
+function getCachedImage(src) {
+  if (!src) return null;
+  if (imageCache.has(src)) {
+    const cached = imageCache.get(src);
+    return cached instanceof Image ? cached : null; // returns image if loaded, null if still loading or error
+  }
+  
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  imageCache.set(src, "loading");
+  
+  img.onload = () => {
+    imageCache.set(src, img);
+    if (globalRenderCallback) globalRenderCallback();
+  };
+  img.onerror = () => {
+    imageCache.set(src, null);
+  };
+  img.src = src;
+  return null;
 }
+
 function symbolUrl(sym) {
   const key = Object.keys(SYMBOLS).find(p => {
     const fn = p.split("/").pop().replace(/\.[^.]+$/, "");
@@ -44,6 +61,7 @@ function symbolUrl(sym) {
   });
   return key ? SYMBOLS[key] : null;
 }
+
 function parseMana(text) {
   const rx = /\{([^}]+)\}/g;
   const parts = [];
@@ -56,13 +74,15 @@ function parseMana(text) {
   if (last < (text || "").length) parts.push({ type: "txt", v: text.slice(last) });
   return parts;
 }
-async function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
+
+function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
   const parts = parseMana(text);
   const symSize = fontSize * 1.1;
   ctx.font = `${fontSize}px ${font}`;
   ctx.fillStyle = color;
   ctx.textBaseline = "top";
   let curX = x;
+  
   for (const p of parts) {
     if (p.type === "txt") {
       const words = p.v.split(" ");
@@ -79,11 +99,12 @@ async function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
     } else {
       const url = symbolUrl(p.v);
       if (url) {
-        try {
-          const img = await loadImg(url);
+        const img = getCachedImage(url);
+        if (img) {
           ctx.drawImage(img, curX, y, symSize, symSize);
           curX += symSize + 1;
-        } catch {
+        } else {
+          // If image is loading, draw placeholder text
           const token = `{${p.v}}`;
           ctx.fillText(token, curX, y);
           curX += ctx.measureText(token).width;
@@ -97,14 +118,13 @@ async function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
   }
   return y;
 }
+
 function measureTextWidth(text, fontSize, family = FT, weight = "bold") {
   const c = document.createElement("canvas");
   const ctx = c.getContext("2d");
   ctx.font = `${weight} ${fontSize}px ${family}`;
   return ctx.measureText(text || "").width;
 }
-function cloneState(s) { return JSON.parse(JSON.stringify(s)); }
-function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 
 function fitTextBox(text, startSize, minSize, width, linesLimit = 12) {
   const lines = String(text || "").split("\n");
@@ -122,7 +142,12 @@ function fitTextBox(text, startSize, minSize, width, linesLimit = 12) {
   return minSize;
 }
 
-async function renderCard(canvas, state, withBleed = false) {
+function cloneState(s) { return JSON.parse(JSON.stringify(s)); }
+function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
+
+// --- SYNCHRONOUS RENDER CARD ---
+function renderCardSync(canvas, state, withBleed = false) {
+  if (!canvas) return;
   const { artUrl, artTransform, frame, ptFrame, name, nameStyle, type, typeStyle, ability, abilityStyle, showAbility, pt, ptStyle, showPT, infoLeft, showInfoLeft, showArtist, copyright, showCopyright } = state;
   const B = withBleed ? BLEED : 0;
   const TW = CW + B * 2;
@@ -133,8 +158,8 @@ async function renderCard(canvas, state, withBleed = false) {
   ctx.clearRect(0, 0, TW, TH);
 
   if (artUrl) {
-    try {
-      const img = await loadImg(artUrl);
+    const img = getCachedImage(artUrl);
+    if (img) {
       const zoom = artTransform?.zoom || 1;
       const offsetX = artTransform?.x || 0;
       const offsetY = artTransform?.y || 0;
@@ -143,17 +168,15 @@ async function renderCard(canvas, state, withBleed = false) {
       const dx = (TW - drawW) / 2 + offsetX;
       const dy = (TH - drawH) / 2 + offsetY;
       ctx.drawImage(img, dx, dy, drawW, drawH);
-    } catch {}
+    }
   }
 
   ctx.save();
   ctx.translate(B, B);
 
   if (frame?.url) {
-    try {
-      const img = await loadImg(frame.url);
-      ctx.drawImage(img, 0, 0, CW, CH);
-    } catch {}
+    const img = getCachedImage(frame.url);
+    if (img) ctx.drawImage(img, 0, 0, CW, CH);
   }
 
   const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1) : nameStyle.fontSize;
@@ -180,16 +203,15 @@ async function renderCard(canvas, state, withBleed = false) {
     const lines = String(ability).split("\n");
     let curY = abilityStyle.y;
     for (const line of lines) {
-      curY = await drawManaText(ctx, line, abilityStyle.x, curY, size, abilityStyle.color, FB, abilityStyle.width || (CW - abilityStyle.x * 2));
+      curY = drawManaText(ctx, line, abilityStyle.x, curY, size, abilityStyle.color, FB, abilityStyle.width || (CW - abilityStyle.x * 2));
       curY += Math.max(2, abilityStyle.lineGap || 4);
     }
   }
 
   if (showPT && ptFrame?.url) {
-    try {
-      const img = await loadImg(ptFrame.url);
-      ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height);
-    } catch {}
+    const img = getCachedImage(ptFrame.url);
+    if (img) ctx.drawImage(img, ptStyle.frameX, ptStyle.frameY, ptStyle.width, ptStyle.height);
+    
     ctx.save();
     ctx.font = `bold ${ptStyle.fontSize}px ${FT}`;
     ctx.fillStyle = ptStyle.color;
@@ -236,36 +258,6 @@ async function renderCard(canvas, state, withBleed = false) {
   ctx.restore();
 }
 
-function useScreenInfo() {
-  const [info, setInfo] = useState({ w: typeof window !== "undefined" ? window.innerWidth : 1440, h: typeof window !== "undefined" ? window.innerHeight : 900 });
-  useEffect(() => {
-    const onResize = () => setInfo({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-  return { ...info, mobile: info.w < 900 };
-}
-
-const Input = React.forwardRef(function Input(props, ref) {
-  return <input ref={ref} {...props} style={{ width:"100%", background:"#11100f", color:"#ece9e4", border:"1px solid #393836", borderRadius:8, padding:"9px 10px", fontSize:13, outline:"none", ...(props.style||{}) }} />;
-});
-function Textarea(props) { return <textarea {...props} style={{ width:"100%", background:"#11100f", color:"#ece9e4", border:"1px solid #393836", borderRadius:8, padding:"9px 10px", fontSize:13, outline:"none", resize:"both", minHeight:120, ...(props.style||{}) }} />; }
-function Select(props) { return <select {...props} style={{ width:"100%", background:"#11100f", color:"#ece9e4", border:"1px solid #393836", borderRadius:8, padding:"9px 10px", fontSize:13, outline:"none", ...(props.style||{}) }} />; }
-function Field({ label, children }) { return <label style={{ display:"grid", gap:6, fontSize:12, color:"#b8b5b1" }}><span>{label}</span>{children}</label>; }
-function Row({ children }) { return <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))", gap:8 }}>{children}</div>; }
-function LayerChip({ active, label, onClick }) { return <button onClick={onClick} style={{ padding:"8px 10px", borderRadius:999, border:`1px solid ${active ? '#4f98a3' : '#393836'}`, background: active ? 'rgba(79,152,163,.15)' : '#201f1d', color: active ? '#7dd3dc' : '#c7c4bf', fontSize:12, cursor:'pointer' }}>{label}</button>; }
-function Section({ title, right, children, defaultOpen = true }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div style={{ border:"1px solid #393836", borderRadius:12, overflow:"hidden", background:"#1c1b19" }}>
-      <button onClick={() => setOpen(v => !v)} style={{ width:"100%", padding:"11px 14px", background:"#252420", border:"none", color:"#e7e5e4", display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
-        <strong style={{ fontSize:13 }}>{title}</strong><span style={{ marginLeft:"auto", fontSize:11, opacity:.8 }}>{right}</span><span style={{ fontSize:11, opacity:.7 }}>{open ? "▲" : "▼"}</span>
-      </button>
-      {open && <div style={{ padding:12, display:"grid", gap:10 }}>{children}</div>}
-    </div>
-  );
-}
-
 function getGuideMetrics(state) {
   const nameSize = state.autoFitName ? fitTextBox((state.name || "TOKEN").toUpperCase(), state.nameStyle.fontSize, 16, CW - 90, 1) : state.nameStyle.fontSize;
   const typeSize = state.autoFitType ? fitTextBox(state.type || "Token", state.typeStyle.fontSize, 14, CW - state.typeStyle.x - 40, 1) : state.typeStyle.fontSize;
@@ -275,6 +267,7 @@ function getGuideMetrics(state) {
   const abilityLines = Math.max(1, String(state.ability || '').split('\n').length || 1);
   const abilityHeight = Math.max(54, abilityLines * (abilitySize * 1.45) + Math.max(8, state.abilityStyle.lineGap || 4) * (abilityLines - 1) + 12);
   const nameCenterX = state.nameStyle.align === 'left' ? state.nameStyle.x + 10 + nameWidth/2 : state.nameStyle.align === 'right' ? state.nameStyle.x + CW - 10 - nameWidth/2 : state.nameStyle.x + CW/2;
+  
   return {
     name: { x: clamp(nameCenterX - nameWidth/2 - 10, 12, CW-12), y: state.nameStyle.y - Math.round(nameSize * 0.62), w: clamp(nameWidth + 20, 80, CW-24), h: Math.max(24, Math.round(nameSize * 1.18)), c: '#38bdf8' },
     type: { x: state.typeStyle.x - 4, y: state.typeStyle.y - Math.round(typeSize * 0.58), w: Math.max(100, typeWidth + 14), h: Math.max(22, Math.round(typeSize * 1.15)), c: '#22c55e' },
@@ -282,67 +275,6 @@ function getGuideMetrics(state) {
     pt: { x: state.ptStyle.frameX + 6, y: state.ptStyle.frameY + 6, w: Math.max(20, state.ptStyle.width - 12), h: Math.max(20, state.ptStyle.height - 12), c: '#f472b6' },
     footer: { x: Math.max(10, (state.infoLeft?.x || 18) - 4), y: CH - (state.infoLeft?.y || 12) - Math.max(12, state.infoLeft?.fontSize || 11), w: CW - Math.max(10, (state.infoLeft?.x || 18) - 4) - Math.max(10, (state.copyright?.x || 18) - 4), h: Math.max(14, (state.infoLeft?.fontSize || 11) + 6), c: '#a78bfa' },
   };
-}
-function GuideOverlay({ activeLayer, state, scale }) {
-  const boxes = getGuideMetrics(state);
-  return (
-    <div style={{ position:'absolute', inset:0, pointerEvents:'none' }}>
-      <div style={{ position:'absolute', left:0, top:0, width:CW*scale, height:CH*scale, border:'1px dashed rgba(255,255,255,.2)' }} />
-      {Object.entries(boxes).map(([k, b]) => (
-        <div key={k} style={{ position:'absolute', left:b.x*scale, top:b.y*scale, width:b.w*scale, height:b.h*scale, border:`${activeLayer===k ? 2 : 1}px dashed ${b.c}`, background: activeLayer===k ? `${b.c}20` : 'transparent', borderRadius:6 }} />
-      ))}
-    </div>
-  );
-}
-
-function PreviewCard({ mobile, canvasRef, previewScale, showGuides, activeLayer, state, applyState, setActiveLayer }) {
-  const dragRef = useRef(null);
-  const beginDrag = (kind, e) => {
-    e.preventDefault(); e.stopPropagation();
-    const t = e.touches?.[0] || e;
-    dragRef.current = { kind, startX:t.clientX, startY:t.clientY, snapshot: cloneState(state) };
-    const move = ev => {
-      if (!dragRef.current) return;
-      const p = ev.touches?.[0] || ev;
-      const dx = (p.clientX - dragRef.current.startX) / previewScale;
-      const dy = (p.clientY - dragRef.current.startY) / previewScale;
-      const snap = dragRef.current.snapshot;
-      let next = cloneState(snap);
-      if (kind === 'art') next.artTransform = { ...next.artTransform, x: Math.round(snap.artTransform.x + dx), y: Math.round(snap.artTransform.y + dy) };
-      if (kind === 'name') next.nameStyle = { ...next.nameStyle, x: Math.round(snap.nameStyle.x + dx), y: Math.round(snap.nameStyle.y + dy) };
-      if (kind === 'type') next.typeStyle = { ...next.typeStyle, x: Math.round(snap.typeStyle.x + dx), y: Math.round(snap.typeStyle.y + dy) };
-      if (kind === 'ability') next.abilityStyle = { ...next.abilityStyle, x: Math.round(snap.abilityStyle.x + dx), y: Math.round(snap.abilityStyle.y + dy) };
-      if (kind === 'pt') next.ptStyle = { ...next.ptStyle, frameX: Math.round(snap.ptStyle.frameX + dx), frameY: Math.round(snap.ptStyle.frameY + dy) };
-      if (kind === 'footer') next.infoLeft = { ...next.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||12) - dy) };
-      applyState(next, false);
-    };
-    const up = () => {
-      if (dragRef.current) applyState(cloneState(dragRef.current.snapshot), true, kind);
-      dragRef.current = null;
-      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
-      window.removeEventListener('touchmove', move); window.removeEventListener('touchend', up);
-    };
-    window.addEventListener('mousemove', move);
-    window.addEventListener('mouseup', up);
-    window.addEventListener('touchmove', move, { passive:false });
-    window.addEventListener('touchend', up);
-  };
-  const boxes = getGuideMetrics(state);
-  return (
-    <div style={{ position: mobile ? 'relative' : 'sticky', top:12 }}>
-      {!mobile && <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
-        {['art','name','type','ability','pt','footer'].map(key => <LayerChip key={key} active={activeLayer===key} label={{art:'Artwork',name:'Name',type:'Type',ability:'Text',pt:'P/T',footer:'Footer'}[key]} onClick={() => setActiveLayer(key)} />)}
-      </div>}
-      <div style={{ position:'relative', overflow: mobile ? 'hidden' : 'auto', background:'#141311', border:'1px solid #393836', borderRadius:16, padding: mobile ? 8 : 14, minHeight: mobile ? 'auto' : 520 }}>
-        <div style={{ position:'relative', width:CW*previewScale, height:CH*previewScale, margin:'0 auto', boxShadow:'0 12px 30px rgba(0,0,0,.35)', maxWidth:'100%' }}>
-          <canvas ref={canvasRef} style={{ width:CW*previewScale, height:CH*previewScale, display:'block', borderRadius:18, background:'#0d0d0d' }} />
-          {showGuides && <GuideOverlay activeLayer={activeLayer} state={state} scale={previewScale} />}
-          <button onMouseDown={e => { setActiveLayer('art'); beginDrag('art', e); }} onTouchStart={e => { setActiveLayer('art'); beginDrag('art', e); }} style={{ position:'absolute', inset:0, border:'none', background:'transparent', cursor:'grab' }} />
-          {Object.entries(boxes).map(([k,b]) => <div key={k} onMouseDown={e => beginDrag(k==='footer'?'footer':k, e)} onTouchStart={e => beginDrag(k==='footer'?'footer':k, e)} onClick={() => setActiveLayer(k)} style={{ position:'absolute', left:b.x*previewScale, top:b.y*previewScale, width:b.w*previewScale, height:b.h*previewScale, cursor:'move' }} />)}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function getDefaultFrame() { const firstSet = Object.keys(FRAME_MAP)[0]; return firstSet ? FRAME_MAP[firstSet][0] : null; }
@@ -374,7 +306,7 @@ const DEFAULT_STATE = {
 };
 
 export default function TokenPreviewSinglePtFrame() {
-  const screen = useScreenInfo();
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 900);
   const [state, setState] = useState(DEFAULT_STATE);
   const [history, setHistory] = useState([cloneState(DEFAULT_STATE)]);
   const [historyIdx, setHistoryIdx] = useState(0);
@@ -383,12 +315,29 @@ export default function TokenPreviewSinglePtFrame() {
   const [withBleed, setWithBleed] = useState(false);
   const [pngScale, setPngScale] = useState(4);
   const [previewZoom, setPreviewZoom] = useState(100);
-  const [mobilePanel, setMobilePanel] = useState('preview');
+  const [mobileTab, setMobileTab] = useState('preview');
+  
   const canvasRef = useRef(null);
   const artInputRef = useRef(null);
+  const dragRef = useRef(null);
 
-  const basePreviewScale = screen.mobile ? Math.min((screen.w - 24) / CW, ((screen.h - 170)) / CH) : Math.min(0.9, (screen.w - 560) / CW);
-  const previewScale = screen.mobile ? Math.max(0.46, basePreviewScale) : Math.max(0.34, basePreviewScale * (previewZoom / 100));
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 900);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const triggerRender = useCallback(() => {
+    if (canvasRef.current) {
+      renderCardSync(canvasRef.current, state, false);
+    }
+  }, [state]);
+
+  useEffect(() => {
+    globalRenderCallback = triggerRender;
+    triggerRender();
+    return () => { globalRenderCallback = null; };
+  }, [triggerRender]);
 
   const pushHistory = useCallback((next) => {
     setHistory(prev => {
@@ -408,19 +357,50 @@ export default function TokenPreviewSinglePtFrame() {
     applyState(next);
   }, [state, applyState]);
 
-  useEffect(() => { if (canvasRef.current) renderCard(canvasRef.current, state, false); }, [state]);
+  // DRAG LOGIC
+  const beginDrag = (kind, e) => {
+    e.preventDefault(); e.stopPropagation();
+    const t = e.touches?.[0] || e;
+    dragRef.current = { kind, startX: t.clientX, startY: t.clientY, snapshot: cloneState(state) };
+    setActiveLayer(kind);
+    
+    const move = ev => {
+      if (!dragRef.current) return;
+      // We use requestAnimationFrame implicitly by relying on React state updates 
+      // which are fast because of synchronous canvas drawing.
+      const p = ev.touches?.[0] || ev;
+      const baseScale = isMobile ? Math.min((window.innerWidth - 20) / CW, (window.innerHeight - 200) / CH) : Math.min(0.9, (window.innerWidth - 450) / CW);
+      const pScale = isMobile ? Math.max(0.46, baseScale) : Math.max(0.34, baseScale * (previewZoom / 100));
+      
+      const dx = (p.clientX - dragRef.current.startX) / pScale;
+      const dy = (p.clientY - dragRef.current.startY) / pScale;
+      
+      const snap = dragRef.current.snapshot;
+      let next = cloneState(snap);
+      
+      if (kind === 'art') next.artTransform = { ...next.artTransform, x: Math.round(snap.artTransform.x + dx), y: Math.round(snap.artTransform.y + dy) };
+      if (kind === 'name') next.nameStyle = { ...next.nameStyle, x: Math.round(snap.nameStyle.x + dx), y: Math.round(snap.nameStyle.y + dy) };
+      if (kind === 'type') next.typeStyle = { ...next.typeStyle, x: Math.round(snap.typeStyle.x + dx), y: Math.round(snap.typeStyle.y + dy) };
+      if (kind === 'ability') next.abilityStyle = { ...next.abilityStyle, x: Math.round(snap.abilityStyle.x + dx), y: Math.round(snap.abilityStyle.y + dy) };
+      if (kind === 'pt') next.ptStyle = { ...next.ptStyle, frameX: Math.round(snap.ptStyle.frameX + dx), frameY: Math.round(snap.ptStyle.frameY + dy) };
+      if (kind === 'footer') next.infoLeft = { ...next.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||12) - dy) };
+      
+      applyState(next, false);
+    };
+    
+    const up = () => {
+      if (dragRef.current) applyState(cloneState(state), true);
+      dragRef.current = null;
+      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+      window.removeEventListener('touchmove', move); window.removeEventListener('touchend', up);
+    };
+    
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', up);
+  };
 
-  const onArtFile = e => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
-    reader.readAsDataURL(file);
-  };
-  const onFrameSetChange = setName => {
-    const frames = FRAME_MAP[setName] || [];
-    applyState({ ...state, frameSet: setName, frame: frames[0] || null });
-  };
   const nudge = (layer, dx, dy) => {
     let next = cloneState(state);
     if (layer === 'art') next.artTransform = { ...next.artTransform, x: next.artTransform.x + dx, y: next.artTransform.y + dy };
@@ -435,6 +415,8 @@ export default function TokenPreviewSinglePtFrame() {
   useEffect(() => {
     const onKey = e => {
       if (!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) return;
+      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+      
       const step = e.shiftKey ? 10 : 1;
       e.preventDefault();
       if (e.key === 'ArrowUp') nudge(activeLayer, 0, -step);
@@ -446,9 +428,23 @@ export default function TokenPreviewSinglePtFrame() {
     return () => window.removeEventListener('keydown', onKey);
   }, [activeLayer, state]);
 
-  const exportPNG = async () => {
+  // Actions
+  const onArtFile = e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
+    reader.readAsDataURL(file);
+  };
+  
+  const onFrameSetChange = setName => {
+    const frames = FRAME_MAP[setName] || [];
+    applyState({ ...state, frameSet: setName, frame: frames[0] || null });
+  };
+  
+  const exportPNG = () => {
     const c = document.createElement('canvas');
-    await renderCard(c, state, withBleed);
+    renderCardSync(c, state, withBleed);
     const out = document.createElement('canvas');
     out.width = c.width * pngScale;
     out.height = c.height * pngScale;
@@ -461,35 +457,17 @@ export default function TokenPreviewSinglePtFrame() {
     a.download = `${(state.name || 'token').replace(/\s+/g,'_')}_${pngScale}x.png`;
     a.click();
   };
-  const exportPreset = () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${(state.name || 'token').replace(/\s+/g,'_')}.json`;
-    a.click();
-  };
-  const importPreset = e => {
-    const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader();
-    r.onload = ev => {
-      try {
-        const parsed = JSON.parse(ev.target.result);
-        const next = { ...DEFAULT_STATE, ...parsed, artTransform:{ ...DEFAULT_STATE.artTransform, ...(parsed.artTransform||{}) }, infoLeft:{ ...DEFAULT_STATE.infoLeft, ...(parsed.infoLeft||{}) }, copyright:{ ...DEFAULT_STATE.copyright, ...(parsed.copyright||{}) } };
-        applyState(next);
-      } catch {}
-    };
-    r.readAsText(f); e.target.value = '';
-  };
+  
   const resetAll = () => {
     const next = { ...DEFAULT_STATE, artUrl:'', artTransform:{ zoom:1, x:0, y:0 }, copyright:{ ...DEFAULT_STATE.copyright, year:new Date().getFullYear() } };
     applyState(next);
     if (artInputRef.current) artInputRef.current.value = '';
   };
+  
   const undo = () => {
     if (historyIdx === 0) return;
     const prev = cloneState(history[historyIdx - 1]);
     setState(prev); setHistoryIdx(historyIdx - 1);
-    if (artInputRef.current && !prev.artUrl) artInputRef.current.value = '';
   };
   const redo = () => {
     if (historyIdx >= history.length - 1) return;
@@ -497,128 +475,196 @@ export default function TokenPreviewSinglePtFrame() {
     setState(next); setHistoryIdx(historyIdx + 1);
   };
 
-  const frameSetNames = Object.keys(FRAME_MAP);
-  const currentSetFrames = FRAME_MAP[state.frameSet] || [];
-  const editorPanel = (
-    <div style={{ display:'grid', gap:12, alignSelf:'start' }}>
-      <Section title='Artwork' right='crop + move'>
-        <Field label='Immagine'><Input ref={artInputRef} type='file' accept='image/*' onChange={onArtFile} /></Field>
-        <Row>
-          <Field label='Zoom'><Input type='range' min='0.8' max='2.2' step='0.01' value={state.artTransform.zoom} onChange={e => update('artTransform', { zoom:Number(e.target.value) })} /></Field>
-          <Field label='X'><Input type='number' value={state.artTransform.x} onChange={e => update('artTransform', { x:Number(e.target.value) })} /></Field>
-          <Field label='Y'><Input type='number' value={state.artTransform.y} onChange={e => update('artTransform', { y:Number(e.target.value) })} /></Field>
-        </Row>
-      </Section>
-
-      <Section title='Frame' right={state.frame?.name || 'selezione'}>
-        <Row>
-          <Field label='Set'><Select value={state.frameSet} onChange={e => onFrameSetChange(e.target.value)}>{frameSetNames.map(n => <option key={n} value={n}>{n}</option>)}</Select></Field>
-          <Field label='Frame'><Select value={state.frame?.name || ''} onChange={e => applyState({ ...state, frame: currentSetFrames.find(f => f.name===e.target.value) || null })}>{currentSetFrames.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}</Select></Field>
-          <Field label='PT Frame'><Select value={state.ptFrame?.name || ''} onChange={e => applyState({ ...state, ptFrame: PT_FRAMES.find(f => f.name===e.target.value) || null })}>{PT_FRAMES.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}</Select></Field>
-        </Row>
-      </Section>
-
-      <Section title='Text' right={activeLayer}>
-        <Field label='Nome'><Input value={state.name} onChange={e => applyState({ ...state, name:e.target.value })} /></Field>
-        <Row>
-          <Field label='Auto fit'><input type='checkbox' checked={state.autoFitName} onChange={e => applyState({ ...state, autoFitName:e.target.checked })} /></Field>
-          <Field label='Name size'><Input type='number' value={state.nameStyle.fontSize} onChange={e => update('nameStyle', { fontSize:Number(e.target.value) })} /></Field>
-          <Field label='Name Y'><Input type='number' value={state.nameStyle.y} onChange={e => update('nameStyle', { y:Number(e.target.value) })} /></Field>
-          <Field label='Name color'><Input type='color' value={state.nameStyle.color} onChange={e => update('nameStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
-          <Field label='Align'><Select value={state.nameStyle.align} onChange={e => update('nameStyle', { align:e.target.value })}><option value='left'>left</option><option value='center'>center</option><option value='right'>right</option></Select></Field>
-        </Row>
-        <Field label='Type line'><Input value={state.type} onChange={e => applyState({ ...state, type:e.target.value })} /></Field>
-        <Row>
-          <Field label='Auto fit'><input type='checkbox' checked={state.autoFitType} onChange={e => applyState({ ...state, autoFitType:e.target.checked })} /></Field>
-          <Field label='Type size'><Input type='number' value={state.typeStyle.fontSize} onChange={e => update('typeStyle', { fontSize:Number(e.target.value) })} /></Field>
-          <Field label='Type X'><Input type='number' value={state.typeStyle.x} onChange={e => update('typeStyle', { x:Number(e.target.value) })} /></Field>
-          <Field label='Type Y'><Input type='number' value={state.typeStyle.y} onChange={e => update('typeStyle', { y:Number(e.target.value) })} /></Field>
-          <Field label='Type color'><Input type='color' value={state.typeStyle.color} onChange={e => update('typeStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
-        </Row>
-        <Field label='Rules text'><Textarea rows={6} value={state.ability} onChange={e => applyState({ ...state, ability:e.target.value })} /></Field>
-        <Row>
-          <Field label='Show text'><input type='checkbox' checked={state.showAbility} onChange={e => applyState({ ...state, showAbility:e.target.checked })} /></Field>
-          <Field label='Auto fit'><input type='checkbox' checked={state.autoFitRules} onChange={e => applyState({ ...state, autoFitRules:e.target.checked })} /></Field>
-          <Field label='Text size'><Input type='number' value={state.abilityStyle.fontSize} onChange={e => update('abilityStyle', { fontSize:Number(e.target.value) })} /></Field>
-          <Field label='Text width'><Input type='number' value={state.abilityStyle.width} onChange={e => update('abilityStyle', { width:Number(e.target.value) })} /></Field>
-          <Field label='Text X'><Input type='number' value={state.abilityStyle.x} onChange={e => update('abilityStyle', { x:Number(e.target.value) })} /></Field>
-          <Field label='Text Y'><Input type='number' value={state.abilityStyle.y} onChange={e => update('abilityStyle', { y:Number(e.target.value) })} /></Field>
-          <Field label='Text color'><Input type='color' value={state.abilityStyle.color} onChange={e => update('abilityStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
-        </Row>
-      </Section>
-
-      <Section title='P/T + Footer' right='details'>
-        <Row>
-          <Field label='Power'><Input value={state.pt.power} onChange={e => applyState({ ...state, pt:{ ...state.pt, power:e.target.value } })} /></Field>
-          <Field label='Toughness'><Input value={state.pt.toughness} onChange={e => applyState({ ...state, pt:{ ...state.pt, toughness:e.target.value } })} /></Field>
-          <Field label='Show PT'><input type='checkbox' checked={state.showPT} onChange={e => applyState({ ...state, showPT:e.target.checked })} /></Field>
-        </Row>
-        <Row>
-          <Field label='PT X'><Input type='number' value={state.ptStyle.frameX} onChange={e => update('ptStyle', { frameX:Number(e.target.value) })} /></Field>
-          <Field label='PT Y'><Input type='number' value={state.ptStyle.frameY} onChange={e => update('ptStyle', { frameY:Number(e.target.value) })} /></Field>
-          <Field label='PT W'><Input type='number' value={state.ptStyle.width} onChange={e => update('ptStyle', { width:Number(e.target.value) })} /></Field>
-          <Field label='PT H'><Input type='number' value={state.ptStyle.height} onChange={e => update('ptStyle', { height:Number(e.target.value) })} /></Field>
-          <Field label='PT size'><Input type='number' value={state.ptStyle.fontSize} onChange={e => update('ptStyle', { fontSize:Number(e.target.value) })} /></Field>
-          <Field label='PT color'><Input type='color' value={state.ptStyle.color} onChange={e => update('ptStyle', { color:e.target.value })} style={{ padding:4, height:42 }} /></Field>
-        </Row>
-        <Row>
-          <Field label='Info left'><Input value={state.infoLeft.text} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, text:e.target.value } })} /></Field>
-          <Field label='Artist'><Input value={state.infoLeft.artist} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, artist:e.target.value } })} /></Field>
-          <Field label='Year'><Input value={state.copyright.year} onChange={e => applyState({ ...state, copyright:{ ...state.copyright, year:e.target.value } })} /></Field>
-          <Field label='Footer color'><Input type='color' value={state.infoLeft.color} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, color:e.target.value }, copyright:{ ...state.copyright, color:e.target.value } })} style={{ padding:4, height:42 }} /></Field>
-          <Field label='Footer X'><Input type='number' value={state.infoLeft.x} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, x:Number(e.target.value) } })} /></Field>
-          <Field label='Footer Y'><Input type='number' value={state.infoLeft.y} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, y:Number(e.target.value) } })} /></Field>
-          <Field label='Footer size'><Input type='number' value={state.infoLeft.fontSize} onChange={e => applyState({ ...state, infoLeft:{ ...state.infoLeft, fontSize:Number(e.target.value) }, copyright:{ ...state.copyright, fontSize:Math.max(8, Number(e.target.value)-2) } })} /></Field>
-          <Field label='Copyright Y'><Input type='number' value={state.copyright.y} onChange={e => applyState({ ...state, copyright:{ ...state.copyright, y:Number(e.target.value) } })} /></Field>
-        </Row>
-      </Section>
-
-      {screen.mobile && <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>{['art','name','type','ability','pt','footer'].map(key => <LayerChip key={key} active={activeLayer===key} label={{art:'Artwork',name:'Name',type:'Type',ability:'Text',pt:'P/T',footer:'Footer'}[key]} onClick={() => setActiveLayer(key)} />)}</div>}
-      <Section title='Tools' right='workflow'>
-        <Row>
-          <Field label='Preview zoom'><Select value={previewZoom} onChange={e => setPreviewZoom(Number(e.target.value))}><option value='75'>75%</option><option value='100'>100%</option><option value='125'>125%</option><option value='150'>150%</option></Select></Field>
-          <Field label='PNG scale'><Select value={pngScale} onChange={e => setPngScale(Number(e.target.value))}><option value='1'>1x</option><option value='2'>2x</option><option value='4'>4x</option><option value='8'>8x</option></Select></Field>
-          <Field label='Guides'><input type='checkbox' checked={showGuides} onChange={e => setShowGuides(e.target.checked)} /></Field>
-          <Field label='Bleed export'><input type='checkbox' checked={withBleed} onChange={e => setWithBleed(e.target.checked)} /></Field>
-        </Row>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-          <button onClick={() => nudge(activeLayer, 0, -1)} style={btnSecondary}>↑</button>
-          <button onClick={() => nudge(activeLayer, -1, 0)} style={btnSecondary}>←</button>
-          <button onClick={() => nudge(activeLayer, 1, 0)} style={btnSecondary}>→</button>
-          <button onClick={() => nudge(activeLayer, 0, 1)} style={btnSecondary}>↓</button>
-          <button onClick={undo} style={btnSecondary}>Undo</button>
-          <button onClick={redo} style={btnSecondary}>Redo</button>
-          <button onClick={resetAll} style={btnDanger}>Reset</button>
-          <button onClick={exportPNG} style={btnPrimary}>Esporta PNG</button>
-          <button onClick={exportPreset} style={btnSecondary}>Export preset</button>
-          <label style={btnSecondary}><span>Import preset</span><input type='file' accept='application/json' style={{display:'none'}} onChange={importPreset} /></label>
-        </div>
-        <div style={{ fontSize:12, color:'#9d9891' }}>Su mobile apri la preview dedicata. Trascina i box direttamente sulla carta; con Shift + frecce sposti di 10px.</div>
-      </Section>
-    </div>
-  );
+  const baseScale = isMobile ? Math.min((window.innerWidth - 20) / CW, (window.innerHeight - 200) / CH) : Math.min(0.9, (window.innerWidth - 450) / CW);
+  const pScale = isMobile ? Math.max(0.46, baseScale) : Math.max(0.34, baseScale * (previewZoom / 100));
+  const boxes = getGuideMetrics(state);
 
   return (
-    <div style={{ minHeight:'100vh', background:'#131211', color:'#ece9e4', padding: screen.mobile ? 8 : 12 }}>
-      <div style={{ maxWidth:1500, margin:'0 auto' }}>
-        {screen.mobile && (
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10, position:'sticky', top:0, zIndex:20, background:'#131211', paddingBottom:8 }}>
-            <button onClick={() => setMobilePanel('preview')} style={mobilePanel==='preview' ? btnPrimary : btnSecondary}>Preview</button>
-            <button onClick={() => setMobilePanel('controls')} style={mobilePanel==='controls' ? btnPrimary : btnSecondary}>Controlli</button>
-          </div>
-        )}
-
-        <div style={{ display:'grid', gridTemplateColumns: screen.mobile ? '1fr' : 'minmax(340px,460px) minmax(0,1fr)', gap:12, alignItems:'start' }}>
-          {(!screen.mobile || mobilePanel === 'controls') && editorPanel}
-          {(!screen.mobile || mobilePanel === 'preview') && (
-            <PreviewCard mobile={screen.mobile} canvasRef={canvasRef} previewScale={previewScale} showGuides={showGuides} activeLayer={activeLayer} state={state} applyState={applyState} setActiveLayer={setActiveLayer} />
-          )}
+    <div className={`editor-layout ${isMobile ? 'mobile' : ''}`}>
+      {/* Mobile Tabs */}
+      {isMobile && (
+        <div className="mobile-editor-tabs">
+          <button className={`mobile-editor-tab ${mobileTab === 'preview' ? 'active' : ''}`} onClick={() => setMobileTab('preview')}>Anteprima</button>
+          <button className={`mobile-editor-tab ${mobileTab === 'controls' ? 'active' : ''}`} onClick={() => setMobileTab('controls')}>Strumenti</button>
         </div>
-      </div>
+      )}
+
+      {/* Sidebar Controls */}
+      {(!isMobile || mobileTab === 'controls') && (
+        <aside className="editor-sidebar">
+          {/* Layer Chips */}
+          <div className="layer-chips">
+            {['art','name','type','ability','pt','footer'].map(key => (
+              <button 
+                key={key} 
+                className={`layer-chip ${activeLayer === key ? 'active' : ''}`} 
+                onClick={() => setActiveLayer(key)}
+              >
+                {{art:'🎨 Artwork', name:'📝 Nome', type:'🏷️ Tipo', ability:'📜 Regole', pt:'⚔️ P/T', footer:'©️ Footer'}[key]}
+              </button>
+            ))}
+          </div>
+
+          <div className="control-group">
+            <div className="control-group-header">Artwork & Frame</div>
+            <div className="control-row">
+              <div className="control-field">
+                <span className="control-label">Immagine</span>
+                <input ref={artInputRef} type="file" accept="image/*" onChange={onArtFile} className="control-input" style={{ padding: '6px' }} />
+              </div>
+            </div>
+            <div className="control-row">
+              <div className="control-field">
+                <span className="control-label">Zoom ({state.artTransform.zoom}x)</span>
+                <input type="range" min="0.8" max="2.2" step="0.01" value={state.artTransform.zoom} onChange={e => update('artTransform', { zoom: Number(e.target.value) })} className="control-input" />
+              </div>
+            </div>
+            <div className="control-row">
+              <div className="control-field">
+                <span className="control-label">Set</span>
+                <select className="control-input control-select" value={state.frameSet} onChange={e => onFrameSetChange(e.target.value)}>
+                  {Object.keys(FRAME_MAP).map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div className="control-field">
+                <span className="control-label">Stile</span>
+                <select className="control-input control-select" value={state.frame?.name || ''} onChange={e => applyState({ ...state, frame: (FRAME_MAP[state.frameSet] || []).find(f => f.name === e.target.value) || null })}>
+                  {(FRAME_MAP[state.frameSet] || []).map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="control-group">
+            <div className="control-group-header">Testi Principali</div>
+            <div className="control-row">
+              <div className="control-field" style={{ flex: 2 }}>
+                <span className="control-label">Nome Carta</span>
+                <input type="text" className="control-input" value={state.name} onChange={e => applyState({ ...state, name: e.target.value })} />
+              </div>
+              <div className="control-field">
+                <span className="control-label">Size</span>
+                <input type="number" className="control-input" value={state.nameStyle.fontSize} onChange={e => update('nameStyle', { fontSize: Number(e.target.value) })} disabled={state.autoFitName} />
+              </div>
+            </div>
+            <div className="control-row">
+              <div className="control-field" style={{ flex: 2 }}>
+                <span className="control-label">Tipo</span>
+                <input type="text" className="control-input" value={state.type} onChange={e => applyState({ ...state, type: e.target.value })} />
+              </div>
+              <div className="control-field">
+                <span className="control-label">Size</span>
+                <input type="number" className="control-input" value={state.typeStyle.fontSize} onChange={e => update('typeStyle', { fontSize: Number(e.target.value) })} disabled={state.autoFitType} />
+              </div>
+            </div>
+          </div>
+
+          <div className="control-group">
+            <div className="control-group-header">Testo Regole</div>
+            <div className="control-field mb-2">
+              <span className="control-label">Testo (usa {'{G}'} per i simboli mana)</span>
+              <textarea className="control-input control-textarea" value={state.ability} onChange={e => applyState({ ...state, ability: e.target.value })} />
+            </div>
+            <div className="control-row">
+              <label className="checkbox-label" style={{ fontSize: '0.75rem' }}><input type="checkbox" checked={state.showAbility} onChange={e => applyState({ ...state, showAbility: e.target.checked })} className="custom-checkbox"/> Mostra</label>
+              <label className="checkbox-label" style={{ fontSize: '0.75rem' }}><input type="checkbox" checked={state.autoFitRules} onChange={e => applyState({ ...state, autoFitRules: e.target.checked })} className="custom-checkbox"/> Auto-fit</label>
+            </div>
+          </div>
+
+          <div className="control-group">
+            <div className="control-group-header">Forza/Costituzione & Frame P/T</div>
+            <div className="control-row">
+              <div className="control-field">
+                <span className="control-label">Forza</span>
+                <input type="text" className="control-input" value={state.pt.power} onChange={e => applyState({ ...state, pt: { ...state.pt, power: e.target.value } })} />
+              </div>
+              <div className="control-field">
+                <span className="control-label">Costituzione</span>
+                <input type="text" className="control-input" value={state.pt.toughness} onChange={e => applyState({ ...state, pt: { ...state.pt, toughness: e.target.value } })} />
+              </div>
+            </div>
+            <div className="control-row">
+              <div className="control-field">
+                <span className="control-label">Frame P/T</span>
+                <select className="control-input control-select" value={state.ptFrame?.name || ''} onChange={e => applyState({ ...state, ptFrame: PT_FRAMES.find(f => f.name === e.target.value) || null })}>
+                  {PT_FRAMES.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+                </select>
+              </div>
+              <label className="checkbox-label mt-3" style={{ fontSize: '0.75rem' }}><input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} className="custom-checkbox"/> Mostra</label>
+            </div>
+          </div>
+
+        </aside>
+      )}
+
+      {/* Main Workspace (Toolbar + Canvas) */}
+      {(!isMobile || mobileTab === 'preview') && (
+        <main className="editor-workspace">
+          {/* Top Toolbar */}
+          <div className="editor-toolbar">
+            <button className="btn btn-icon" onClick={undo} disabled={historyIdx === 0} title="Annulla">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>
+            </button>
+            <button className="btn btn-icon" onClick={redo} disabled={historyIdx >= history.length - 1} title="Ripeti">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/></svg>
+            </button>
+            <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 8px' }}></div>
+            
+            <label className="checkbox-label" style={{ fontSize: '0.8rem' }} title="Mostra guide tratteggiate">
+              <input type="checkbox" checked={showGuides} onChange={e => setShowGuides(e.target.checked)} className="custom-checkbox"/> Guide
+            </label>
+            
+            <div className="ml-auto flex" style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn btn-ghost text-xs" onClick={resetAll}>Reset</button>
+              <button className="btn btn-primary" onClick={exportPNG}>⬇ Esporta PNG</button>
+            </div>
+          </div>
+
+          {/* Canvas Area */}
+          <div className="editor-canvas-container">
+            <div className="canvas-wrapper" style={{ width: CW * pScale, height: CH * pScale }}>
+              <canvas 
+                ref={canvasRef} 
+                style={{ width: '100%', height: '100%', display: 'block', borderRadius: 16 * (pScale/0.5), background: '#0d0d0d' }} 
+              />
+              
+              {showGuides && (
+                <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+                  <div style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', border: '1px dashed rgba(255,255,255,.1)' }} />
+                  {Object.entries(boxes).map(([k, b]) => (
+                    <div 
+                      key={k} 
+                      className={`canvas-layer-guide ${activeLayer === k ? 'active' : ''}`}
+                      style={{ left: b.x * pScale, top: b.y * pScale, width: b.w * pScale, height: b.h * pScale, borderColor: b.c }} 
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Interaction Layer */}
+              <div 
+                style={{ position: 'absolute', inset: 0, cursor: activeLayer === 'art' ? 'grab' : 'default', zIndex: 50 }}
+                onMouseDown={e => beginDrag('art', e)}
+                onTouchStart={e => beginDrag('art', e)}
+              >
+                {/* Specific draggable handles for text boxes over the art layer */}
+                {Object.entries(boxes).map(([k, b]) => (
+                  <div 
+                    key={k}
+                    onMouseDown={e => beginDrag(k === 'footer' ? 'footer' : k, e)}
+                    onTouchStart={e => beginDrag(k === 'footer' ? 'footer' : k, e)}
+                    onClick={(e) => { e.stopPropagation(); setActiveLayer(k); }}
+                    style={{ position: 'absolute', left: b.x * pScale, top: b.y * pScale, width: b.w * pScale, height: b.h * pScale, cursor: 'move' }} 
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{ position: 'absolute', bottom: 10, right: 20, fontSize: 11, color: 'var(--faint)' }}>
+            Trascina sulla carta. Maiusc + Frecce = Muovi
+          </div>
+        </main>
+      )}
     </div>
   );
 }
-
-const btnPrimary = { padding:'10px 14px', borderRadius:10, border:'1px solid #4f98a3', background:'#4f98a3', color:'#0f1111', fontWeight:700, cursor:'pointer' };
-const btnSecondary = { padding:'10px 14px', borderRadius:10, border:'1px solid #393836', background:'#201f1d', color:'#ece9e4', fontWeight:700, cursor:'pointer' };
-const btnDanger = { padding:'10px 14px', borderRadius:10, border:'1px solid #7f1d1d', background:'#3b1212', color:'#fecaca', fontWeight:700, cursor:'pointer' };
