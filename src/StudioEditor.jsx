@@ -351,246 +351,250 @@ export default function StudioEditor() {
                 <button className="btn btn-ghost text-xs" onClick={exportCanvas}><Download size={14}/> Esporta</button>
              </div>
           )}
+          
           {selectedId ? (
-          <div className="control-group">
-            <div className="sidebar-panel-title flex justify-between items-center">
-              <span>Proprietà Livello</span>
-              <button onClick={() => setSelectedId(null)}>✕</button>
-            </div>
-            
-            <div className="control-field mb-4">
-              <span className="control-label">Posizione X / Y</span>
-              <div className="control-row">
-                <input type="number" value={activeLayer.x} onChange={e => updateLayer(selectedId, { x: parseInt(e.target.value) })} className="control-input" />
-                <input type="number" value={activeLayer.y} onChange={e => updateLayer(selectedId, { y: parseInt(e.target.value) })} className="control-input" />
+            <div className="control-group">
+              <div className="sidebar-panel-title flex justify-between items-center">
+                <span>Proprietà Livello</span>
+                <button onClick={() => setSelectedId(null)}>✕</button>
               </div>
-            </div>
-
-            <div className="control-field mb-4">
-              <span className="control-label">Dimensione L / A</span>
-              <div className="control-row">
-                <input type="number" value={activeLayer.width} onChange={e => updateLayer(selectedId, { width: parseInt(e.target.value) })} className="control-input" />
-                <input type="number" value={activeLayer.height} onChange={e => updateLayer(selectedId, { height: parseInt(e.target.value) })} className="control-input" />
+              
+              <div className="control-field mb-4">
+                <span className="control-label">Posizione X / Y</span>
+                <div className="control-row">
+                  <input type="number" value={activeLayer.x} onChange={e => updateLayer(selectedId, { x: parseInt(e.target.value) })} className="control-input" />
+                  <input type="number" value={activeLayer.y} onChange={e => updateLayer(selectedId, { y: parseInt(e.target.value) })} className="control-input" />
+                </div>
               </div>
-            </div>
 
-            <div className="control-field mb-4">
-              <span className="control-label">Rotazione ({activeLayer.rotate}°)</span>
-              <input type="range" min="0" max="360" value={activeLayer.rotate} onChange={e => updateLayer(selectedId, { rotate: parseInt(e.target.value) })} className="control-input" />
-            </div>
+              <div className="control-field mb-4">
+                <span className="control-label">Dimensione L / A</span>
+                <div className="control-row">
+                  <input type="number" value={activeLayer.width} onChange={e => updateLayer(selectedId, { width: parseInt(e.target.value) })} className="control-input" />
+                  <input type="number" value={activeLayer.height} onChange={e => updateLayer(selectedId, { height: parseInt(e.target.value) })} className="control-input" />
+                </div>
+              </div>
 
-            <div className="control-field mb-4">
-              <span className="control-label">Opacità ({Math.round(activeLayer.opacity * 100)}%)</span>
-              <input type="range" min="0" max="1" step="0.01" value={activeLayer.opacity} onChange={e => updateLayer(selectedId, { opacity: parseFloat(e.target.value) })} className="control-input" />
-            </div>
+              <div className="control-field mb-4">
+                <span className="control-label">Rotazione ({activeLayer.rotate}°)</span>
+                <input type="range" min="0" max="360" value={activeLayer.rotate} onChange={e => updateLayer(selectedId, { rotate: parseInt(e.target.value) })} className="control-input" />
+              </div>
 
-            {activeLayer.type === 'text' && (
-              <>
-                <div className="control-field mb-4">
-                  <span className="control-label">Contenuto Testo</span>
-                  <textarea className="control-input" value={activeLayer.content} onChange={e => updateLayer(selectedId, { content: e.target.value })} />
-                </div>
-                <div className="control-field mb-4">
-                  <span className="control-label">Font Size ({activeLayer.style.fontSize}px)</span>
-                  <input type="range" min="8" max="120" value={activeLayer.style.fontSize} onChange={e => updateStyle(selectedId, { fontSize: parseInt(e.target.value) })} className="control-input" />
-                </div>
-                <div className="control-field mb-4">
-                  <span className="control-label">Font Family</span>
-                  <select 
-                    className="control-input" 
-                    value={activeLayer.style.fontFamily} 
-                    onChange={e => updateStyle(selectedId, { fontFamily: e.target.value })}
-                  >
-                    {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                  </select>
-                </div>
-                <div className="control-field mb-4">
-                  <span className="control-label">Allineamento Testo</span>
-                  <div className="flex gap-2">
-                    {['left', 'center', 'right'].map(a => (
-                      <button 
-                        key={a} 
-                        className={`btn btn-ghost flex-1 py-1 text-xs ${activeLayer.style.textAlign === a ? 'active' : ''}`}
-                        onClick={() => updateStyle(selectedId, { textAlign: a })}
-                        style={{ background: activeLayer.style.textAlign === a ? 'var(--accent-hl)' : 'var(--surf-off)' }}
-                      >
-                        {a === 'left' ? 'Sx' : a === 'center' ? 'Centro' : 'Dx'}
-                      </button>
-                    ))}
+              <div className="control-field mb-4">
+                <span className="control-label">Opacità ({Math.round(activeLayer.opacity * 100)}%)</span>
+                <input type="range" min="0" max="1" step="0.01" value={activeLayer.opacity} onChange={e => updateLayer(selectedId, { opacity: parseFloat(e.target.value) })} className="control-input" />
+              </div>
+
+              {activeLayer.type === 'text' && (
+                <>
+                  <div className="control-field mb-4">
+                    <span className="control-label">Contenuto Testo</span>
+                    <textarea className="control-input" value={activeLayer.content} onChange={e => updateLayer(selectedId, { content: e.target.value })} />
                   </div>
-                </div>
-                <div className="control-field mb-4">
-                  <span className="control-label">Curvatura Arco ({activeLayer.style.bend}°)</span>
-                  <input type="range" min="-20" max="20" step="0.5" value={activeLayer.style.bend} onChange={e => updateStyle(selectedId, { bend: parseFloat(e.target.value) })} className="control-input" />
-                </div>
-                <div className="control-field mb-4">
-                  <span className="control-label">Inclinazione / Skew ({activeLayer.style.skew}°)</span>
-                  <input type="range" min="-45" max="45" value={activeLayer.style.skew} onChange={e => updateStyle(selectedId, { skew: parseInt(e.target.value) })} className="control-input" />
-                </div>
-                <div className="control-field mb-4">
-                  <span className="control-label">Spaziatura Lettere ({activeLayer.style.letterSpacing}px)</span>
-                  <input type="range" min="-5" max="20" value={activeLayer.style.letterSpacing} onChange={e => updateStyle(selectedId, { letterSpacing: parseInt(e.target.value) })} className="control-input" />
-                </div>
-                <div className="control-field mb-4">
-                  <span className="control-label">Colore Testo</span>
-                  <input type="color" value={activeLayer.style.color} onChange={e => updateStyle(selectedId, { color: e.target.value })} className="control-input" style={{ height: '40px', padding: '2px' }} />
-                </div>
-              </>
-            )}
+                  <div className="control-field mb-4">
+                    <span className="control-label">Font Size ({activeLayer.style.fontSize}px)</span>
+                    <input type="range" min="8" max="120" value={activeLayer.style.fontSize} onChange={e => updateStyle(selectedId, { fontSize: parseInt(e.target.value) })} className="control-input" />
+                  </div>
+                  <div className="control-field mb-4">
+                    <span className="control-label">Font Family</span>
+                    <select 
+                      className="control-input" 
+                      value={activeLayer.style.fontFamily} 
+                      onChange={e => updateStyle(selectedId, { fontFamily: e.target.value })}
+                    >
+                      {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="control-field mb-4">
+                    <span className="control-label">Allineamento Testo</span>
+                    <div className="flex gap-2">
+                      {['left', 'center', 'right'].map(a => (
+                        <button 
+                          key={a} 
+                          className={`btn btn-ghost flex-1 py-1 text-xs ${activeLayer.style.textAlign === a ? 'active' : ''}`}
+                          onClick={() => updateStyle(selectedId, { textAlign: a })}
+                          style={{ background: activeLayer.style.textAlign === a ? 'var(--accent-hl)' : 'var(--surf-off)' }}
+                        >
+                          {a === 'left' ? 'Sx' : a === 'center' ? 'Centro' : 'Dx'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="control-field mb-4">
+                    <span className="control-label">Curvatura Arco ({activeLayer.style.bend}°)</span>
+                    <input type="range" min="-20" max="20" step="0.5" value={activeLayer.style.bend} onChange={e => updateStyle(selectedId, { bend: parseFloat(e.target.value) })} className="control-input" />
+                  </div>
+                  <div className="control-field mb-4">
+                    <span className="control-label">Inclinazione / Skew ({activeLayer.style.skew}°)</span>
+                    <input type="range" min="-45" max="45" value={activeLayer.style.skew} onChange={e => updateStyle(selectedId, { skew: parseInt(e.target.value) })} className="control-input" />
+                  </div>
+                  <div className="control-field mb-4">
+                    <span className="control-label">Spaziatura Lettere ({activeLayer.style.letterSpacing}px)</span>
+                    <input type="range" min="-5" max="20" value={activeLayer.style.letterSpacing} onChange={e => updateStyle(selectedId, { letterSpacing: parseInt(e.target.value) })} className="control-input" />
+                  </div>
+                  <div className="control-field mb-4">
+                    <span className="control-label">Colore Testo</span>
+                    <input type="color" value={activeLayer.style.color} onChange={e => updateStyle(selectedId, { color: e.target.value })} className="control-input" style={{ height: '40px', padding: '2px' }} />
+                  </div>
+                </>
+              )}
 
-            <div className="flex gap-2 mt-6">
-              <button className="btn btn-ghost flex-1" onClick={() => moveLayer(selectedId, 'up')}><ArrowUp size={16}/> Su</button>
-              <button className="btn btn-ghost flex-1" onClick={() => moveLayer(selectedId, 'down')}><ArrowDown size={16}/> Giù</button>
+              <div className="flex gap-2 mt-6">
+                <button className="btn btn-ghost flex-1" onClick={() => moveLayer(selectedId, 'up')}><ArrowUp size={16}/> Su</button>
+                <button className="btn btn-ghost flex-1" onClick={() => moveLayer(selectedId, 'down')}><ArrowDown size={16}/> Giù</button>
+              </div>
+              <div className="flex gap-2 mt-2">
+                <button className="btn btn-ghost flex-1" onClick={() => duplicateLayer(selectedId)}><Copy size={16}/> Duplica</button>
+                <button className="btn btn-ghost flex-1 text-error" onClick={() => deleteLayer(selectedId)}><Trash2 size={16}/> Elimina</button>
+              </div>
             </div>
-            <div className="flex gap-2 mt-2">
-              <button className="btn btn-ghost flex-1" onClick={() => duplicateLayer(selectedId)}><Copy size={16}/> Duplica</button>
-              <button className="btn btn-ghost flex-1 text-error" onClick={() => deleteLayer(selectedId)}><Trash2 size={16}/> Elimina</button>
-            </div>
-          </div>
-        ) : (
-          <div className="control-group">
-            <div className="sidebar-panel-title">Progetto Studio</div>
-            <div className="control-field mb-6">
-              <span className="control-label">Artwork di Sfondo (Full Art)</span>
-              <label className="btn btn-primary w-full text-center cursor-pointer">
-                Carica Sfondo
-                <input type="file" hidden accept="image/*" onChange={handleBgUpload} />
-              </label>
-            </div>
+          ) : (
+            <div className="control-group">
+              <div className="sidebar-panel-title">Progetto Studio</div>
+              <div className="control-field mb-6">
+                <span className="control-label">Artwork di Sfondo (Full Art)</span>
+                <label className="btn btn-primary w-full text-center cursor-pointer">
+                  Carica Sfondo
+                  <input type="file" hidden accept="image/*" onChange={handleBgUpload} />
+                </label>
+              </div>
 
-            <div className="sidebar-panel-title mt-6" style={{ fontSize: '0.9rem' }}>Livelli ({layers.length})</div>
-            <div className="layers-list">
-              {layers.length === 0 && <div className="p-4 text-center text-muted text-sm">Nessun elemento aggiunto</div>}
-              {[...layers].reverse().map((l, idx) => {
-                const actualIndex = layers.length - 1 - idx;
-                return (
-                  <div 
-                    key={l.id} 
-                    className={`layer-item ${selectedId === l.id ? 'active' : ''}`}
-                    onClick={() => setSelectedId(l.id)}
-                    draggable
-                    onDragStart={(e) => handleLayerDragStart(e, actualIndex)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => handleLayerDrop(e, actualIndex)}
-                  >
-                    <div className="flex items-center gap-3 flex-1 overflow-hidden">
-                      <div className="drag-handle opacity-30 cursor-grab active:cursor-grabbing">
-                        <Move size={14} />
+              <div className="sidebar-panel-title mt-6" style={{ fontSize: '0.9rem' }}>Livelli ({layers.length})</div>
+              <div className="layers-list">
+                {layers.length === 0 && <div className="p-4 text-center text-muted text-sm">Nessun elemento aggiunto</div>}
+                {[...layers].reverse().map((l, idx) => {
+                  const actualIndex = layers.length - 1 - idx;
+                  return (
+                    <div 
+                      key={l.id} 
+                      className={`layer-item ${selectedId === l.id ? 'active' : ''}`}
+                      onClick={() => setSelectedId(l.id)}
+                      draggable
+                      onDragStart={(e) => handleLayerDragStart(e, actualIndex)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => handleLayerDrop(e, actualIndex)}
+                    >
+                      <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                        <div className="drag-handle opacity-30 cursor-grab active:cursor-grabbing">
+                          <Move size={14} />
+                        </div>
+                        {l.type === 'text' ? <Type size={14} className="flex-shrink-0" /> : <ImageIcon size={14} className="flex-shrink-0" />}
+                        <span className="truncate">{l.type === 'text' ? l.content : 'Immagine'}</span>
                       </div>
-                      {l.type === 'text' ? <Type size={14} className="flex-shrink-0" /> : <ImageIcon size={14} className="flex-shrink-0" />}
-                      <span className="truncate">{l.type === 'text' ? l.content : 'Immagine'}</span>
+                      <div className="layer-item-actions">
+                        <button onClick={(e) => { e.stopPropagation(); deleteLayer(l.id); }} className="hover:text-error transition-colors"><Trash2 size={14}/></button>
+                      </div>
                     </div>
-                    <div className="layer-item-actions">
-                      <button onClick={(e) => { e.stopPropagation(); deleteLayer(l.id); }} className="hover:text-error transition-colors"><Trash2 size={14}/></button>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
-      </aside>
+          )}
+        </aside>
+      )}
 
       {(!isMobile || activeTab === 'preview') && (
         <main className="editor-workspace">
           <div className="editor-toolbar justify-between px-6">
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-bold opacity-60 uppercase tracking-widest">Studio Mode</span>
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-bold opacity-60 uppercase tracking-widest">Studio Mode</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="btn btn-primary text-xs py-1 px-4" onClick={exportCanvas}><Download size={14} className="mr-2"/> Esporta PNG</button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="btn btn-primary text-xs py-1 px-4" onClick={exportCanvas}><Download size={14} className="mr-2"/> Esporta PNG</button>
-          </div>
-        </div>
 
-        <div className="editor-canvas-container">
-          <div style={{ 
-            width: CW * zoom, 
-            height: CH * zoom, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            position: 'relative'
-          }}>
-            <div 
-              ref={canvasRef}
-              className="canvas-wrapper studio-canvas"
-              style={{ 
-                width: CW, 
-                height: CH, 
-                transform: `scale(${zoom})`,
-                transformOrigin: 'center center',
-                background: bgArt ? `url(${bgArt}) center/cover no-repeat` : 'repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 50% / 40px 40px',
-                position: 'absolute',
-                overflow: 'hidden',
-                boxShadow: '0 50px 100px rgba(0,0,0,0.8)',
-                borderRadius: '26px'
-              }}
-              onClick={() => setSelectedId(null)}
-            >
-            {!bgArt && (
-              <div style={{ 
-                position: 'absolute', 
-                inset: 0, 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                textAlign: 'center',
-                padding: '0 40px',
-                color: 'var(--muted)',
-                fontWeight: 'bold',
-                opacity: 0.3,
-                textTransform: 'uppercase',
-                letterSpacing: '0.2em',
-                pointerEvents: 'none',
-                fontSize: '1.2rem'
-              }}>
-                Carica immagine principale
-              </div>
-            )}
-            
-            {layers.map((l) => (
-              <div
-                key={l.id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedId(l.id);
-                }}
-                onMouseDown={(e) => onMouseDown(l.id, e)}
-                onTouchStart={(e) => onMouseDown(l.id, e)}
-                style={{
+          <div className="editor-canvas-container">
+            <div style={{ 
+              width: CW * zoom, 
+              height: CH * zoom, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              position: 'relative'
+            }}>
+              <div 
+                ref={canvasRef}
+                className="canvas-wrapper studio-canvas"
+                style={{ 
+                  width: CW, 
+                  height: CH, 
+                  transform: `scale(${zoom})`,
+                  transformOrigin: 'center center',
+                  background: bgArt ? `url(${bgArt}) center/cover no-repeat` : 'repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 50% / 40px 40px',
                   position: 'absolute',
-                  left: l.x,
-                  top: l.y,
-                  width: l.width,
-                  height: l.height,
-                  transform: `rotate(${l.rotate}deg)`,
-                  opacity: l.opacity,
-                  cursor: isDragging && selectedId === l.id ? 'grabbing' : 'grab',
-                  border: selectedId === l.id ? '2px solid var(--accent)' : '2px solid transparent',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: layers.indexOf(l) + 1,
-                  userSelect: 'none',
-                  touchAction: 'none'
+                  overflow: 'hidden',
+                  boxShadow: '0 50px 100px rgba(0,0,0,0.8)',
+                  borderRadius: '26px'
                 }}
+                onClick={() => setSelectedId(null)}
               >
-                {l.type === 'image' ? (
-                  <img src={l.content} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
-                ) : (
-                  renderCurvedText(l)
+                {!bgArt && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    inset: 0, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    textAlign: 'center',
+                    padding: '0 40px',
+                    color: 'var(--muted)',
+                    fontWeight: 'bold',
+                    opacity: 0.3,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.2em',
+                    pointerEvents: 'none',
+                    fontSize: '1.2rem'
+                  }}>
+                    Carica immagine principale
+                  </div>
                 )}
-                {selectedId === l.id && (
-                  <div className="layer-resize-handle" onMouseDown={(e) => {
-                    e.stopPropagation();
-                    // Basic resize logic could be added here
-                  }}></div>
-                )}
+                
+                {layers.map((l) => (
+                  <div
+                    key={l.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedId(l.id);
+                    }}
+                    onMouseDown={(e) => onMouseDown(l.id, e)}
+                    onTouchStart={(e) => onMouseDown(l.id, e)}
+                    style={{
+                      position: 'absolute',
+                      left: l.x,
+                      top: l.y,
+                      width: l.width,
+                      height: l.height,
+                      transform: `rotate(${l.rotate}deg)`,
+                      opacity: l.opacity,
+                      cursor: isDragging && selectedId === l.id ? 'grabbing' : 'grab',
+                      border: selectedId === l.id ? '2px solid var(--accent)' : '2px solid transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: layers.indexOf(l) + 1,
+                      userSelect: 'none',
+                      touchAction: 'none'
+                    }}
+                  >
+                    {l.type === 'image' ? (
+                      <img src={l.content} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
+                    ) : (
+                      renderCurvedText(l)
+                    )}
+                    {selectedId === l.id && (
+                      <div className="layer-resize-handle" onMouseDown={(e) => {
+                        e.stopPropagation();
+                        // Basic resize logic could be added here
+                      }}></div>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      )}
     </div>
   );
 }
