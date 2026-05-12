@@ -317,7 +317,26 @@ export default function StudioEditor() {
             }}
             onClick={() => setSelectedId(null)}
           >
-            {!bgArt && <div className="absolute inset-0 flex items-center justify-center text-muted font-bold opacity-30 uppercase tracking-widest text-center px-12">Carica immagine principale</div>}
+            {!bgArt && (
+              <div style={{ 
+                position: 'absolute', 
+                inset: 0, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                textAlign: 'center',
+                padding: '0 40px',
+                color: 'var(--muted)',
+                fontWeight: 'bold',
+                opacity: 0.3,
+                textTransform: 'uppercase',
+                letterSpacing: '0.2em',
+                pointerEvents: 'none',
+                fontSize: '1.2rem'
+              }}>
+                Carica immagine principale
+              </div>
+            )}
             
             {layers.map((l) => (
               <div
