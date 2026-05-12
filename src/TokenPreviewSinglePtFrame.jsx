@@ -454,29 +454,19 @@ export default function TokenPreviewSinglePtFrame() {
     renderCardSync(c, state, exportBleed);
 
     let finalCanvas = c;
-    if (exportCropMarks) {
-       const MARGIN = 30; // spazio per i segni di taglio
-       const outer = document.createElement('canvas');
-       outer.width = c.width + MARGIN * 2;
-       outer.height = c.height + MARGIN * 2;
-       const octx = outer.getContext('2d');
-       octx.fillStyle = '#ffffff';
-       octx.fillRect(0, 0, outer.width, outer.height);
-       
-       octx.strokeStyle = '#000000';
+    if (exportCropMarks && exportBleed) {
+       const octx = c.getContext('2d');
+       octx.strokeStyle = '#ffffff';
        octx.lineWidth = 1;
        const drawMark = (x1, y1, x2, y2) => { octx.beginPath(); octx.moveTo(x1, y1); octx.lineTo(x2, y2); octx.stroke(); };
        
-       const cL = MARGIN; const cR = MARGIN + c.width;
-       const cT = MARGIN; const cB = MARGIN + c.height;
+       const b = 21; // BLEED_PX
+       const w = c.width; const h = c.height;
 
-       drawMark(cL, 0, cL, MARGIN - 5); drawMark(0, cT, MARGIN - 5, cT);
-       drawMark(cR, 0, cR, MARGIN - 5); drawMark(cR + 5, cT, outer.width, cT);
-       drawMark(cL, cB + 5, cL, outer.height); drawMark(0, cB, MARGIN - 5, cB);
-       drawMark(cR, cB + 5, cR, outer.height); drawMark(cR + 5, cB, outer.width, cB);
-
-       octx.drawImage(c, MARGIN, MARGIN);
-       finalCanvas = outer;
+       drawMark(0, b, b, b); drawMark(b, 0, b, b);
+       drawMark(w - b, 0, w - b, b); drawMark(w - b, b, w, b);
+       drawMark(0, h - b, b, h - b); drawMark(b, h - b, b, h);
+       drawMark(w - b, h, w - b, h - b); drawMark(w - b, h - b, w, h - b);
     }
 
     const out = document.createElement('canvas');
@@ -564,7 +554,28 @@ export default function TokenPreviewSinglePtFrame() {
 
       {/* SIDEBAR CONTEXTUAL PANELS */}
       {(!isMobile || activeTab !== 'preview') && (
-        <aside className="editor-sidebar">
+        <aside className="editor-sidebar" style={isMobile ? { width: '100vw', padding: '10px' } : {}}>
+          
+          {isMobile && (
+             <div className="mobile-subnav mb-4 flex gap-2 overflow-x-auto pb-2 border-b border-[var(--border)]" style={{ WebkitOverflowScrolling: 'touch' }}>
+               {[
+                 { id: 'frame', label: '🖼️ Frame' },
+                 { id: 'art', label: '🎨 Artwork' },
+                 { id: 'text', label: '📝 Testi' },
+                 { id: 'pt', label: '⚔️ Forza/Cost' },
+                 { id: 'settings', label: '⚙️ Impostazioni' }
+               ].map(t => (
+                 <button 
+                   key={t.id} 
+                   className={`px-3 py-1 text-sm rounded whitespace-nowrap font-semibold ${activeTab === t.id ? 'bg-[var(--primary)] text-[var(--bg)]' : 'bg-[var(--surf-off)] text-[var(--text)]'}`} 
+                   onClick={() => setActiveTab(t.id)}
+                 >
+                   {t.label}
+                 </button>
+               ))}
+             </div>
+          )}
+
           {/* TAB: ARTWORK */}
           {activeTab === 'art' && (
             <>

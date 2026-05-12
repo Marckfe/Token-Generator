@@ -1,0 +1,148 @@
+.deck-checker-container {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.deck-checker-sidebar {
+  width: 320px;
+  background: var(--surf);
+  border-right: 1px solid var(--border);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.deck-checker-main {
+  flex: 1;
+  padding: 40px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+}
+
+.result-card {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.result-card h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.2rem;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.result-card.legal {
+  border-top: 4px solid var(--success);
+}
+
+.result-card.banned {
+  border-top: 4px solid var(--error);
+}
+
+.deck-checker-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 600px;
+}
+
+.sheet-preview {
+  background: #ffffff;
+  color: #000000;
+  padding: 30px;
+  border-radius: 4px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  width: 100%;
+}
+
+.sheet-preview h3 {
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-family: Arial, sans-serif;
+  border-bottom: 2px solid #000;
+  padding-bottom: 10px;
+}
+
+.sheet-preview-content {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+
+.sheet-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px 30px;
+  margin-bottom: 30px;
+}
+
+.sheet-body {
+  display: flex;
+  justify-content: space-between;
+}
+
+.sheet-col {
+  width: 45%;
+}
+
+.sheet-title {
+  font-weight: bold;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.sheet-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-line {
+  display: flex;
+  align-items: flex-end;
+}
+
+.sheet-line span:first-child {
+  width: 25px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.line-text {
+  flex: 1;
+  border-bottom: 1px solid #000;
+  padding-left: 5px;
+}
+
+@media (max-width: 768px) {
+  .deck-checker-container {
+    flex-direction: column;
+  }
+  .deck-checker-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
