@@ -84,8 +84,15 @@ export default function BulkImportPanel({ onAddCards, toast }) {
     }
     setExpandedArt(idx);
     setModalLang(lang);
+    
+    // Se cambiamo lingua, resettiamo le stampe per mostrare il caricamento
     const entry = entries[idx];
-    if (entry.prints.length > 1 && lang === 'en' && entry.lang === 'en') return;
+    if (lang !== entry.lang) {
+      setEntries(prev => prev.map((e, i) => i === idx ? { ...e, prints: [], lang: lang } : e));
+    } else if (entry.prints.length > 1) {
+      return;
+    }
+
     setLoadMsg("Caricamento illustrazioni...");
     try {
       const all = await fetchAllPrints(name, lang);
@@ -132,6 +139,30 @@ export default function BulkImportPanel({ onAddCards, toast }) {
   const nfCount = entries.filter(e => e.status === "not_found").length;
   const totalCopies = entries.filter(e => e.status === "found" && !e.excluded).reduce((s, e) => s + e.qty, 0);
 
+  const translateAll = async () => {
+    setLoading(true);
+    setLoadMsg("Traduzione in corso...");
+    let completed = 0;
+    const foundEntries = entries.filter(e => e.status === 'found');
+    
+    // Process in parallel with limit
+    for (let i = 0; i < foundEntries.length; i += 5) {
+      const chunk = foundEntries.slice(i, i + 5);
+      await Promise.all(chunk.map(async (entry) => {
+        try {
+          const all = await fetchAllPrints(entry.name, 'it');
+          if (all.length > 0) {
+            setEntries(prev => prev.map(e => e.original === entry.original ? { ...e, prints: all, selectedPrint: all[0], card: all[0], lang: 'it' } : e));
+          }
+        } catch (e) {}
+        completed++;
+        setLoadMsg(`Traduco: ${completed}/${foundEntries.length}`);
+      }));
+    }
+    setLoading(false);
+    setLoadMsg("");
+  };
+
   return (
     <div className="panel-container">
       <div className="panel-header">
@@ -164,6 +195,16 @@ export default function BulkImportPanel({ onAddCards, toast }) {
           <div className="bulk-status-bar">
             <span className="text-success text-xs">✓ {foundCount} trovate</span>
             {nfCount > 0 && <span className="text-error text-xs">✗ {nfCount} non trovate</span>}
+            
+            <button 
+              onClick={translateAll} 
+              disabled={loading}
+              className="btn btn-ghost text-xs ml-4" 
+              style={{ color: '#6daa45', padding: '2px 8px', height: 'auto', border: '1px solid rgba(109,170,69,0.3)' }}
+            >
+              🇮🇹 Traduci tutto in ITA
+            </button>
+
             <span className="text-muted text-xs ml-auto">Clicca "Scegli art" per selezionare la stampa preferita</span>
           </div>
 
