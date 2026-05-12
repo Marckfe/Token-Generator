@@ -774,6 +774,9 @@ export default function MTGProxyCreator() {
       toast(`${results.length} carte aggiunte!`);
 =======
       toast(`${results.length} carte casuali aggiunte!`);
+<<<<<<< HEAD
+>>>>>>> parent of d2ca8fa (Update MTGProxyCreator.jsx)
+=======
 >>>>>>> parent of d2ca8fa (Update MTGProxyCreator.jsx)
     } catch (e) { toast("Errore Scryfall: " + e.message, "e"); }
     finally { setLoadRnd(false); }
