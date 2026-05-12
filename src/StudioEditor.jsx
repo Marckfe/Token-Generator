@@ -322,6 +322,10 @@ export default function StudioEditor() {
             {layers.map((l) => (
               <div
                 key={l.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedId(l.id);
+                }}
                 onMouseDown={(e) => onMouseDown(l.id, e)}
                 style={{
                   position: 'absolute',
