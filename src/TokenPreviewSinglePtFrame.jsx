@@ -570,8 +570,11 @@ export default function TokenPreviewSinglePtFrame() {
           <div className={`nav-item ${activeTab === 'text' ? 'active' : ''}`} onClick={() => setActiveTab('text')}>
             <Icon d="M4 7V4h16v3M9 20h6M12 4v16" /> Testi
           </div>
+          <div className={`nav-item ${activeTab === 'info' ? 'active' : ''}`} onClick={() => setActiveTab('info')}>
+            <Icon d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /> Crediti
+          </div>
           <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')} style={{ marginTop: 'auto' }}>
-            <Icon d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /> Export
+            <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /> Export
           </div>
         </nav>
       )}
@@ -594,7 +597,8 @@ export default function TokenPreviewSinglePtFrame() {
                  { id: 'art', label: '🎨 Artwork' },
                  { id: 'text', label: '📝 Testi' },
                  { id: 'pt', label: '⚔️ Forza/Cost' },
-                 { id: 'settings', label: '⚙️ Impostazioni' }
+                 { id: 'info', label: '📜 Crediti' },
+                 { id: 'settings', label: '⚙️ Esporta' }
                ].map(t => (
                  <button 
                    key={t.id} 
@@ -750,46 +754,52 @@ export default function TokenPreviewSinglePtFrame() {
             </>
           )}
 
+          {/* TAB: INFO / CREDITS */}
+          {activeTab === 'info' && (
+            <>
+              <div className="sidebar-panel-title">📜 Crediti & Footer</div>
+              <div className="control-group">
+                <ColorPickerField 
+                  label="Testo Extra (Sx)" 
+                  value={state.infoLeft.color} 
+                  onChange={v => update('infoLeft', { color: v })}
+                  onTarget={() => setActiveLayer('infoLeft')}
+                />
+                <input type="text" className="control-input mb-2" value={state.infoLeft.text} onChange={e => update('infoLeft', { text: e.target.value })} placeholder="Es. C10/C20" />
+                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showInfoLeft !== false} onChange={e => applyState({ ...state, showInfoLeft: e.target.checked })} className="custom-checkbox"/> Mostra Testo Extra</label>
+
+                <hr className="my-4 border-[var(--border)] opacity-30" />
+
+                <ColorPickerField 
+                  label="Artista" 
+                  value={state.artistStyle?.color || "#111111"} 
+                  onChange={v => update('artistStyle', { color: v })}
+                  onTarget={() => setActiveLayer('artist')}
+                />
+                <input type="text" className="control-input mb-2" value={state.artist} onChange={e => applyState({ ...state, artist: e.target.value })} placeholder="Nome Artista" />
+                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showArtist !== false} onChange={e => applyState({ ...state, showArtist: e.target.checked })} className="custom-checkbox"/> Mostra Artista</label>
+
+                <hr className="my-4 border-[var(--border)] opacity-30" />
+
+                <ColorPickerField 
+                  label="Copyright" 
+                  value={state.copyright.color} 
+                  onChange={v => update('copyright', { color: v })}
+                  onTarget={() => setActiveLayer('copyright')}
+                />
+                <input type="text" className="control-input mb-2" value={state.copyright.text} onChange={e => update('copyright', { text: e.target.value })} placeholder="TM & © 2024 Wizards" />
+                <label className="checkbox-label mb-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showCopyright !== false} onChange={e => applyState({ ...state, showCopyright: e.target.checked })} className="custom-checkbox"/> Mostra Copyright</label>
+
+                <button className="btn btn-ghost w-full mt-6 text-xs" style={{ background: 'var(--surf-off)' }} onClick={resetFooterAlign}>🔄 Ripristina Posizioni Footer</button>
+              </div>
+            </>
+          )}
+
           {/* TAB: SETTINGS */}
           {activeTab === 'settings' && (
             <>
-              <div className="sidebar-panel-title">⚙️ Impostazioni & Esporta</div>
+              <div className="sidebar-panel-title">⚙️ Esporta & Progetto</div>
               <div className="control-group">
-                <div className="control-field mb-4">
-                  <span className="control-label">
-                    Testo Extra (Sx) 
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <input type="color" title="Colore Extra" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.infoLeft.color} onChange={e => update('infoLeft', { color: e.target.value })} />
-                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('infoLeft')}>🎯</span>
-                    </div>
-                  </span>
-                  <input type="text" className="control-input" value={state.infoLeft.text} onChange={e => update('infoLeft', { text: e.target.value })} />
-                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showInfoLeft !== false} onChange={e => applyState({ ...state, showInfoLeft: e.target.checked })} className="custom-checkbox"/> Mostra</label>
-                </div>
-                <div className="control-field mb-4">
-                  <span className="control-label">
-                    Artista 
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <input type="color" title="Colore Artista" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.artistStyle?.color || "#111111"} onChange={e => update('artistStyle', { color: e.target.value })} />
-                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('artist')}>🎯</span>
-                    </div>
-                  </span>
-                  <input type="text" className="control-input" value={state.artist} onChange={e => applyState({ ...state, artist: e.target.value })} />
-                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showArtist !== false} onChange={e => applyState({ ...state, showArtist: e.target.checked })} className="custom-checkbox"/> Mostra</label>
-                </div>
-                <div className="control-field mb-4">
-                  <span className="control-label">
-                    Copyright 
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <input type="color" title="Colore Copyright" style={{ width: '24px', height: '24px', padding: 0, border: 'none', cursor: 'pointer', borderRadius: '4px' }} value={state.copyright.color} onChange={e => update('copyright', { color: e.target.value })} />
-                      <span className="text-xs" style={{ cursor:'pointer' }} onClick={() => setActiveLayer('copyright')}>🎯</span>
-                    </div>
-                  </span>
-                  <input type="text" className="control-input" value={state.copyright.text} onChange={e => update('copyright', { text: e.target.value })} />
-                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showCopyright !== false} onChange={e => applyState({ ...state, showCopyright: e.target.checked })} className="custom-checkbox"/> Mostra</label>
-                </div>
-                <button className="btn btn-ghost w-full mt-2 text-xs" onClick={resetFooterAlign}>🔄 Allinea come Originale</button>
-                <hr className="my-4 border-[var(--border)]" />
                 <div className="control-field mb-2">
                   <label className="checkbox-label"><input type="checkbox" checked={exportBleed} onChange={e => setExportBleed(e.target.checked)} className="custom-checkbox"/> Aggiungi 3mm Bleed</label>
                 </div>
@@ -799,7 +809,7 @@ export default function TokenPreviewSinglePtFrame() {
                 <button className="btn btn-primary w-full" onClick={exportPNG}>⬇ Scarica PNG per Stampa</button>
                 
                 <hr className="my-4 border-[var(--border)]" />
-                <div className="sidebar-panel-title">💾 Gestione Progetto</div>
+                <div className="sidebar-panel-title" style={{ border: 'none', padding: '0 0 12px 0' }}>💾 Gestione Progetto</div>
                 <button className="btn btn-ghost w-full mb-2" style={{ background: 'var(--surf-off)' }} onClick={saveProject}>💾 Salva Progetto (JSON)</button>
                 <label className="btn btn-ghost w-full" style={{ background: 'var(--surf-off)', textAlign: 'center', cursor: 'pointer' }}>
                   📂 Carica Progetto (JSON)
