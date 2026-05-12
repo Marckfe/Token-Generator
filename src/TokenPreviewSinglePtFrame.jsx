@@ -24,8 +24,19 @@ const SYMBOLS = import.meta.glob("/src/assets/simbol/*.{svg,png,jpg,jpeg,webp}",
 
 const CW = 620, CH = 890;
 const BLEED = 21;
-const FT = "Beleren, MatrixSC, Cinzel, Georgia, serif";
-const FB = "MPlantin, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
+const FT_DEFAULT = "BelerenBold, MatrixBold, Cinzel, Georgia, serif";
+const FB_DEFAULT = "Mplantin, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
+
+const FONT_OPTIONS = [
+  { id: 'BelerenBold', name: 'Beleren Bold' },
+  { id: 'MatrixBold', name: 'Matrix Bold' },
+  { id: 'MatrixBoldSmallCaps', name: 'Matrix Small Caps' },
+  { id: 'Mplantin', name: 'MPlantin' },
+  { id: 'magic-font', name: 'Magic Font' },
+  { id: 'Cinzel', name: 'Cinzel' },
+  { id: 'Georgia', name: 'Georgia' },
+  { id: 'serif', name: 'Serif Standard' }
+];
 const HISTORY_LIMIT = 40;
 
 // --- IMAGE CACHE FOR 60FPS SYNCHRONOUS RENDERING ---
@@ -127,13 +138,14 @@ function cloneState(s) { return JSON.parse(JSON.stringify(s)); }
 function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 
 // --- REUSABLE UI COMPONENTS ---
-const ColorPickerField = ({ label, value, onChange, onTarget }) => (
+const ColorPickerField = ({ label, value, onChange, onTarget, fontValue, onFontChange }) => (
   <div className="control-field mb-4">
-    <span className="control-label">
-      {label}
+    <div className="flex justify-between items-center mb-1">
+      <span className="control-label m-0">{label}</span>
       {onTarget && <span className="text-xs opacity-60 hover:opacity-100 cursor-pointer" onClick={onTarget}>🎯 Seleziona Layer</span>}
-    </span>
-    <div className="color-picker-input-group">
+    </div>
+    
+    <div className="color-picker-input-group mb-2">
       <div className="color-preview-block" style={{ backgroundColor: value }}>
         <input type="color" value={value} onChange={e => onChange(e.target.value)} />
       </div>
@@ -145,6 +157,12 @@ const ColorPickerField = ({ label, value, onChange, onTarget }) => (
         placeholder="#FFFFFF"
       />
     </div>
+
+    {onFontChange && (
+      <select className="control-input py-1 text-xs" value={fontValue} onChange={e => onFontChange(e.target.value)}>
+        {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+      </select>
+    )}
   </div>
 );
 
@@ -192,9 +210,9 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (state.showName !== false) {
-    const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1) : nameStyle.fontSize;
+    const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1, nameStyle.fontFamily || FT_DEFAULT) : nameStyle.fontSize;
     ctx.save();
-    ctx.font = `bold ${fittedNameSize}px ${FT}`;
+    ctx.font = `bold ${fittedNameSize}px ${nameStyle.fontFamily || FT_DEFAULT}`;
     ctx.fillStyle = nameStyle.color;
     ctx.textBaseline = "middle";
     ctx.textAlign = nameStyle.align || "center";
@@ -204,9 +222,9 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (state.showType !== false) {
-    const fittedTypeSize = state.autoFitType ? fitTextBox(type || "Token", typeStyle.fontSize, 14, CW - typeStyle.x - 40, 1) : typeStyle.fontSize;
+    const fittedTypeSize = state.autoFitType ? fitTextBox(type || "Token", typeStyle.fontSize, 14, CW - typeStyle.x - 40, 1, typeStyle.fontFamily || FT_DEFAULT) : typeStyle.fontSize;
     ctx.save();
-    ctx.font = `bold ${fittedTypeSize}px ${FT}`;
+    ctx.font = `bold ${fittedTypeSize}px ${typeStyle.fontFamily || FT_DEFAULT}`;
     ctx.fillStyle = typeStyle.color;
     ctx.textBaseline = "middle";
     ctx.textAlign = typeStyle.align || "left";
@@ -215,11 +233,11 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (showAbility && ability) {
-    const size = state.autoFitRules ? fitTextBox(ability, abilityStyle.fontSize, 14, abilityStyle.width || (CW - abilityStyle.x * 2), 10) : abilityStyle.fontSize;
+    const size = state.autoFitRules ? fitTextBox(ability, abilityStyle.fontSize, 14, abilityStyle.width || (CW - abilityStyle.x * 2), 10, abilityStyle.fontFamily || FB_DEFAULT) : abilityStyle.fontSize;
     const lines = String(ability).split("\n");
     let curY = abilityStyle.y;
     for (const line of lines) {
-      curY = drawManaText(ctx, line, abilityStyle.x, curY, size, abilityStyle.color, FB, abilityStyle.width || (CW - abilityStyle.x * 2));
+      curY = drawManaText(ctx, line, abilityStyle.x, curY, size, abilityStyle.color, abilityStyle.fontFamily || FB_DEFAULT, abilityStyle.width || (CW - abilityStyle.x * 2));
       curY += Math.max(2, abilityStyle.lineGap || 4);
     }
   }
@@ -235,7 +253,7 @@ function renderCardSync(canvas, state, withBleed = false) {
     let ptSize = ptStyle.fontSize || 36;
     let pw, sw, rw, totalW;
     do {
-      ctx.font = `bold ${ptSize}px ${FT}`;
+      ctx.font = `bold ${ptSize}px ${ptStyle.fontFamily || FT_DEFAULT}`;
       pw = ctx.measureText(pt?.power || "0").width;
       sw = ctx.measureText("/").width;
       rw = ctx.measureText(pt?.toughness || "0").width;
@@ -257,7 +275,7 @@ function renderCardSync(canvas, state, withBleed = false) {
 
   if (state.showInfoLeft !== false && infoLeft) {
     ctx.save();
-    ctx.font = `${infoLeft.fontSize || 11}px ${FT}`;
+    ctx.font = `${infoLeft.fontSize || 11}px ${infoLeft.fontFamily || FT_DEFAULT}`;
     ctx.fillStyle = infoLeft.color || "#1a1a1a";
     ctx.textBaseline = "bottom";
     ctx.textAlign = "left";
@@ -266,7 +284,7 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
   if (state.showArtist !== false && state.artist) {
     ctx.save();
-    ctx.font = `${state.artistStyle?.fontSize || 11}px ${FT}`;
+    ctx.font = `${state.artistStyle?.fontSize || 11}px ${state.artistStyle?.fontFamily || FT_DEFAULT}`;
     ctx.fillStyle = state.artistStyle?.color || "#1a1a1a";
     ctx.textBaseline = "bottom";
     ctx.textAlign = "left";
@@ -275,7 +293,7 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
   if (state.showCopyright !== false && copyright) {
     ctx.save();
-    ctx.font = `${copyright.fontSize || 9}px ${FT}`;
+    ctx.font = `${copyright.fontSize || 9}px ${copyright.fontFamily || FT_DEFAULT}`;
     ctx.fillStyle = copyright.color || "#111";
     ctx.textBaseline = "bottom";
     ctx.textAlign = "right";
@@ -286,11 +304,11 @@ function renderCardSync(canvas, state, withBleed = false) {
 }
 
 function getGuideMetrics(state) {
-  const nameSize = state.autoFitName ? fitTextBox((state.name || "TOKEN").toUpperCase(), state.nameStyle.fontSize, 16, CW - 90, 1) : state.nameStyle.fontSize;
-  const typeSize = state.autoFitType ? fitTextBox(state.type || "Token", state.typeStyle.fontSize, 14, CW - state.typeStyle.x - 40, 1) : state.typeStyle.fontSize;
-  const abilitySize = state.autoFitRules ? fitTextBox(state.ability || "", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10) : state.abilityStyle.fontSize;
-  const typeWidth = measureTextWidth(state.type || "Token", typeSize, FT, "bold");
-  const nameWidth = measureTextWidth((state.name || "TOKEN").toUpperCase(), nameSize, FT, "bold");
+  const nameSize = state.autoFitName ? fitTextBox((state.name || "TOKEN").toUpperCase(), state.nameStyle.fontSize, 16, CW - 90, 1, state.nameStyle.fontFamily || FT_DEFAULT) : state.nameStyle.fontSize;
+  const typeSize = state.autoFitType ? fitTextBox(state.type || "Token", state.typeStyle.fontSize, 14, CW - state.typeStyle.x - 40, 1, state.typeStyle.fontFamily || FT_DEFAULT) : state.typeStyle.fontSize;
+  const abilitySize = state.autoFitRules ? fitTextBox(state.ability || "", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, state.abilityStyle.fontFamily || FB_DEFAULT) : state.abilityStyle.fontSize;
+  const typeWidth = measureTextWidth(state.type || "Token", typeSize, state.typeStyle.fontFamily || FT_DEFAULT, "bold");
+  const nameWidth = measureTextWidth((state.name || "TOKEN").toUpperCase(), nameSize, state.nameStyle.fontFamily || FT_DEFAULT, "bold");
   const abilityLines = Math.max(1, String(state.ability || '').split('\n').length || 1);
   const abilityHeight = Math.max(54, abilityLines * (abilitySize * 1.45) + Math.max(8, state.abilityStyle.lineGap || 4) * (abilityLines - 1) + 12);
   const nameCenterX = state.nameStyle.align === 'left' ? state.nameStyle.x + 10 + nameWidth/2 : state.nameStyle.align === 'right' ? state.nameStyle.x + CW - 10 - nameWidth/2 : state.nameStyle.x + CW/2;
@@ -300,9 +318,9 @@ function getGuideMetrics(state) {
     type: state.showType !== false ? { x: state.typeStyle.x - 4, y: state.typeStyle.y - Math.round(typeSize * 0.58), w: Math.max(100, typeWidth + 14), h: Math.max(22, Math.round(typeSize * 1.15)), c: '#22c55e' } : null,
     ability: state.showAbility !== false ? { x: state.abilityStyle.x - 4, y: state.abilityStyle.y - 4, w: state.abilityStyle.width || (CW - state.abilityStyle.x * 2), h: abilityHeight, c: '#f59e0b' } : null,
     pt: state.showPT !== false ? { x: state.ptStyle.frameX + 6, y: state.ptStyle.frameY + 6, w: Math.max(20, state.ptStyle.width - 12), h: Math.max(20, state.ptStyle.height - 12), c: '#f472b6' } : null,
-    infoLeft: state.showInfoLeft !== false ? { x: Math.max(10, (state.infoLeft?.x || 18) - 4), y: CH - (state.infoLeft?.y || 12) - Math.max(12, state.infoLeft?.fontSize || 11), w: Math.max(40, measureTextWidth(state.infoLeft?.text, state.infoLeft?.fontSize || 11, FT, 'normal') + 8), h: Math.max(14, (state.infoLeft?.fontSize || 11) + 6), c: '#a78bfa' } : null,
-    artist: state.showArtist !== false ? { x: Math.max(10, (state.artistStyle?.x || 18) - 4), y: CH - (state.artistStyle?.y || 26) - Math.max(12, state.artistStyle?.fontSize || 11), w: Math.max(60, measureTextWidth("Illus. " + state.artist, state.artistStyle?.fontSize || 11, FT, 'normal') + 8), h: Math.max(14, (state.artistStyle?.fontSize || 11) + 6), c: '#a78bfa' } : null,
-    copyright: state.showCopyright !== false ? { x: CW - (state.copyright?.x || 18) - measureTextWidth(state.copyright?.text || `™ & © ${new Date().getFullYear()} Wizards of the Coast`, state.copyright?.fontSize || 9, FT, 'normal') - 4, y: CH - (state.copyright?.y || 12) - Math.max(10, state.copyright?.fontSize || 9), w: Math.max(80, measureTextWidth(state.copyright?.text || `™ & © ${new Date().getFullYear()} Wizards of the Coast`, state.copyright?.fontSize || 9, FT, 'normal') + 8), h: Math.max(12, (state.copyright?.fontSize || 9) + 6), c: '#a78bfa' } : null,
+    infoLeft: state.showInfoLeft !== false ? { x: Math.max(10, (state.infoLeft?.x || 18) - 4), y: CH - (state.infoLeft?.y || 12) - Math.max(12, state.infoLeft?.fontSize || 11), w: Math.max(40, measureTextWidth(state.infoLeft?.text, state.infoLeft?.fontSize || 11, state.infoLeft?.fontFamily || FT_DEFAULT, 'normal') + 8), h: Math.max(14, (state.infoLeft?.fontSize || 11) + 6), c: '#a78bfa' } : null,
+    artist: state.showArtist !== false ? { x: Math.max(10, (state.artistStyle?.x || 18) - 4), y: CH - (state.artistStyle?.y || 26) - Math.max(12, state.artistStyle?.fontSize || 11), w: Math.max(60, measureTextWidth("Illus. " + state.artist, state.artistStyle?.fontSize || 11, state.artistStyle?.fontFamily || FT_DEFAULT, 'normal') + 8), h: Math.max(14, (state.artistStyle?.fontSize || 11) + 6), c: '#a78bfa' } : null,
+    copyright: state.showCopyright !== false ? { x: CW - (state.copyright?.x || 18) - measureTextWidth(state.copyright?.text || `™ & © ${new Date().getFullYear()} Wizards of the Coast`, state.copyright?.fontSize || 9, state.copyright?.fontFamily || FT_DEFAULT, 'normal') - 4, y: CH - (state.copyright?.y || 12) - Math.max(10, state.copyright?.fontSize || 9), w: Math.max(80, measureTextWidth(state.copyright?.text || `™ & © ${new Date().getFullYear()} Wizards of the Coast`, state.copyright?.fontSize || 9, state.copyright?.fontFamily || FT_DEFAULT, 'normal') + 8), h: Math.max(12, (state.copyright?.fontSize || 9) + 6), c: '#a78bfa' } : null,
   };
   for (let k in boxes) if (!boxes[k]) delete boxes[k];
   return boxes;
@@ -314,13 +332,13 @@ const DEFAULT_STATE = {
   artUrl: "", artTransform: { zoom: 1, x: 0, y: 0 },
   frameSet: Object.keys(FRAME_MAP)[0] || "", frame: getDefaultFrame(), ptFrame: getDefaultPtFrame(),
   name: "Goblin", showName: true, autoFitName: true, autoFitType: true, autoFitRules: false,
-  nameStyle: { x: 0, y: 54, fontSize: 28, color: "#111111", align: "center" },
-  type: "Token Creature — Goblin", showType: true, typeStyle: { x: 44, y: 602, fontSize: 24, color: "#111111", align: "left" },
-  ability: "Haste", abilityStyle: { x: 44, y: 644, width: 532, fontSize: 24, color: "#111111", lineGap: 4 }, showAbility: true,
-  pt: { power: "1", toughness: "1" }, ptStyle: { frameX: 457, frameY: 789, width: 126, height: 54, fontSize: 36, color: "#111111", powerOffsetX: 0 }, showPT: true,
-  infoLeft: { text: "SET • EN", x: 18, y: 12, color: "#111111", fontSize: 11 }, showInfoLeft: true,
-  artist: "Artist Name", artistStyle: { x: 18, y: 26, color: "#111111", fontSize: 11 }, showArtist: true,
-  copyright: { text: `™ & © ${new Date().getFullYear()} Wizards of the Coast`, x: 18, y: 12, color: "#111111", fontSize: 9 }, showCopyright: true,
+  nameStyle: { x: 0, y: 54, fontSize: 28, color: "#111111", align: "center", fontFamily: 'BelerenBold' },
+  type: "Token Creature — Goblin", showType: true, typeStyle: { x: 44, y: 602, fontSize: 24, color: "#111111", align: "left", fontFamily: 'BelerenBold' },
+  ability: "Haste", abilityStyle: { x: 44, y: 644, width: 532, fontSize: 24, color: "#111111", lineGap: 4, fontFamily: 'Mplantin' }, showAbility: true,
+  pt: { power: "1", toughness: "1" }, ptStyle: { frameX: 457, frameY: 789, width: 126, height: 54, fontSize: 36, color: "#111111", powerOffsetX: 0, fontFamily: 'BelerenBold' }, showPT: true,
+  infoLeft: { text: "SET • EN", x: 18, y: 12, color: "#111111", fontSize: 11, fontFamily: 'BelerenBold' }, showInfoLeft: true,
+  artist: "Artist Name", artistStyle: { x: 18, y: 26, color: "#111111", fontSize: 11, fontFamily: 'BelerenBold' }, showArtist: true,
+  copyright: { text: `™ & © ${new Date().getFullYear()} Wizards of the Coast`, x: 18, y: 12, color: "#111111", fontSize: 9, fontFamily: 'Mplantin' }, showCopyright: true,
 };
 
 export default function TokenPreviewSinglePtFrame() {
@@ -688,6 +706,8 @@ export default function TokenPreviewSinglePtFrame() {
                   label="Colore Testo P/T" 
                   value={state.ptStyle.color} 
                   onChange={v => update('ptStyle', { color: v })}
+                  fontValue={state.ptStyle.fontFamily}
+                  onFontChange={v => update('ptStyle', { fontFamily: v })}
                 />
                 <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} className="custom-checkbox"/> Mostra P/T Box</label>
                 
@@ -719,6 +739,8 @@ export default function TokenPreviewSinglePtFrame() {
                   value={state.nameStyle.color} 
                   onChange={v => update('nameStyle', { color: v })}
                   onTarget={() => setActiveLayer('name')}
+                  fontValue={state.nameStyle.fontFamily}
+                  onFontChange={v => update('nameStyle', { fontFamily: v })}
                 />
 
                 <hr className="my-4 border-[var(--border)] opacity-30" />
@@ -734,6 +756,8 @@ export default function TokenPreviewSinglePtFrame() {
                   value={state.typeStyle.color} 
                   onChange={v => update('typeStyle', { color: v })}
                   onTarget={() => setActiveLayer('type')}
+                  fontValue={state.typeStyle.fontFamily}
+                  onFontChange={v => update('typeStyle', { fontFamily: v })}
                 />
 
                 <hr className="my-4 border-[var(--border)] opacity-30" />
@@ -749,6 +773,8 @@ export default function TokenPreviewSinglePtFrame() {
                   value={state.abilityStyle.color} 
                   onChange={v => update('abilityStyle', { color: v })}
                   onTarget={() => setActiveLayer('ability')}
+                  fontValue={state.abilityStyle.fontFamily}
+                  onFontChange={v => update('abilityStyle', { fontFamily: v })}
                 />
               </div>
             </>
@@ -764,6 +790,8 @@ export default function TokenPreviewSinglePtFrame() {
                   value={state.infoLeft.color} 
                   onChange={v => update('infoLeft', { color: v })}
                   onTarget={() => setActiveLayer('infoLeft')}
+                  fontValue={state.infoLeft.fontFamily}
+                  onFontChange={v => update('infoLeft', { fontFamily: v })}
                 />
                 <input type="text" className="control-input mb-2" value={state.infoLeft.text} onChange={e => update('infoLeft', { text: e.target.value })} placeholder="Es. C10/C20" />
                 <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showInfoLeft !== false} onChange={e => applyState({ ...state, showInfoLeft: e.target.checked })} className="custom-checkbox"/> Mostra Testo Extra</label>
@@ -775,6 +803,8 @@ export default function TokenPreviewSinglePtFrame() {
                   value={state.artistStyle?.color || "#111111"} 
                   onChange={v => update('artistStyle', { color: v })}
                   onTarget={() => setActiveLayer('artist')}
+                  fontValue={state.artistStyle.fontFamily}
+                  onFontChange={v => update('artistStyle', { fontFamily: v })}
                 />
                 <input type="text" className="control-input mb-2" value={state.artist} onChange={e => applyState({ ...state, artist: e.target.value })} placeholder="Nome Artista" />
                 <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showArtist !== false} onChange={e => applyState({ ...state, showArtist: e.target.checked })} className="custom-checkbox"/> Mostra Artista</label>
@@ -786,6 +816,8 @@ export default function TokenPreviewSinglePtFrame() {
                   value={state.copyright.color} 
                   onChange={v => update('copyright', { color: v })}
                   onTarget={() => setActiveLayer('copyright')}
+                  fontValue={state.copyright.fontFamily}
+                  onFontChange={v => update('copyright', { fontFamily: v })}
                 />
                 <input type="text" className="control-input mb-2" value={state.copyright.text} onChange={e => update('copyright', { text: e.target.value })} placeholder="TM & © 2024 Wizards" />
                 <label className="checkbox-label mb-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showCopyright !== false} onChange={e => applyState({ ...state, showCopyright: e.target.checked })} className="custom-checkbox"/> Mostra Copyright</label>
