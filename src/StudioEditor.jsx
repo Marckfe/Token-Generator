@@ -39,19 +39,20 @@ export default function StudioEditor() {
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1000);
   const [zoom, setZoom] = useState(1);
+  const [activeTab, setActiveTab] = useState('preview'); // 'preview' or 'tools'
 
   useEffect(() => {
     const fn = () => {
       const mobile = window.innerWidth < 1000;
       setIsMobile(mobile);
       if (mobile) {
-        const availableW = window.innerWidth - 40;
-        const availableH = window.innerHeight - 250; // Account for nav and sidebar
+        const availableW = window.innerWidth - 30;
+        const availableH = window.innerHeight - 200; 
         const zoomW = availableW / CW;
         const zoomH = availableH / CH;
-        setZoom(Math.min(zoomW, zoomH, 0.8));
+        setZoom(Math.min(zoomW, zoomH, 0.7));
       } else {
-        setZoom(0.8);
+        setZoom(0.75);
       }
     };
     window.addEventListener("resize", fn);
@@ -306,31 +307,51 @@ export default function StudioEditor() {
 
   return (
     <div className={`editor-layout studio-mode ${isMobile ? 'is-mobile' : ''}`}>
-      <nav className="editor-nav">
-        <div className="nav-item" onClick={() => addLayer('text', 'NUOVO TESTO')}>
-          <Type size={20} /> <span className="nav-label">Testo</span>
-        </div>
-        <label className="nav-item">
-          <ImageIcon size={20} /> <span className="nav-label">Asset</span>
-          <input type="file" hidden accept="image/*" onChange={handleAssetUpload} />
-        </label>
-        <div className="nav-item" onClick={() => setSelectedId(null)}>
-          <Layers size={20} /> <span className="nav-label">Livelli</span>
-        </div>
-        <div className="nav-item" style={{ marginTop: isMobile ? 0 : 'auto' }} onClick={exportCanvas}>
-          <Download size={20} /> <span className="nav-label">Esporta</span>
-        </div>
-      </nav>
+      {!isMobile && (
+        <nav className="editor-nav">
+          <div className="nav-item" onClick={() => addLayer('text', 'NUOVO TESTO')}>
+            <Type size={20} /> <span className="nav-label">Testo</span>
+          </div>
+          <label className="nav-item">
+            <ImageIcon size={20} /> <span className="nav-label">Asset</span>
+            <input type="file" hidden accept="image/*" onChange={handleAssetUpload} />
+          </label>
+          <div className="nav-item" onClick={() => setSelectedId(null)}>
+            <Layers size={20} /> <span className="nav-label">Livelli</span>
+          </div>
+          <div className="nav-item" style={{ marginTop: 'auto' }} onClick={exportCanvas}>
+            <Download size={20} /> <span className="nav-label">Esporta</span>
+          </div>
+        </nav>
+      )}
 
-      {isMobile && selectedId && (
+      {isMobile && (
+        <div className="mobile-editor-tabs">
+          <button className={`mobile-editor-tab ${activeTab === 'preview' ? 'active' : ''}`} onClick={() => setActiveTab('preview')}>Anteprima</button>
+          <button className={`mobile-editor-tab ${activeTab === 'tools' ? 'active' : ''}`} onClick={() => setActiveTab('tools')}>Strumenti</button>
+        </div>
+      )}
+
+      {isMobile && selectedId && activeTab === 'preview' && (
         <div className="mobile-properties-bar">
            <button className="btn btn-ghost" onClick={() => setSelectedId(null)}>✕ Chiudi</button>
            <span className="text-xs opacity-60">Modifica: {activeLayer.type === 'text' ? 'Testo' : 'Immagine'}</span>
         </div>
       )}
 
-      <aside className="editor-sidebar">
-        {selectedId ? (
+      {(!isMobile || activeTab === 'tools') && (
+        <aside className="editor-sidebar" style={isMobile ? { width: '100vw', height: 'calc(100vh - 120px)' } : {}}>
+          {isMobile && (
+             <div className="mobile-subnav mb-4 flex gap-2 overflow-x-auto p-4 border-b border-[var(--border)]">
+                <button className="btn btn-ghost text-xs" onClick={() => addLayer('text', 'NUOVO TESTO')}><Type size={14}/> + Testo</button>
+                <label className="btn btn-ghost text-xs cursor-pointer">
+                  <ImageIcon size={14}/> + Asset
+                  <input type="file" hidden accept="image/*" onChange={handleAssetUpload} />
+                </label>
+                <button className="btn btn-ghost text-xs" onClick={exportCanvas}><Download size={14}/> Esporta</button>
+             </div>
+          )}
+          {selectedId ? (
           <div className="control-group">
             <div className="sidebar-panel-title flex justify-between items-center">
               <span>Proprietà Livello</span>
@@ -470,8 +491,9 @@ export default function StudioEditor() {
         )}
       </aside>
 
-      <main className="editor-workspace">
-        <div className="editor-toolbar justify-between px-6">
+      {(!isMobile || activeTab === 'preview') && (
+        <main className="editor-workspace">
+          <div className="editor-toolbar justify-between px-6">
           <div className="flex items-center gap-4">
             <span className="text-sm font-bold opacity-60 uppercase tracking-widest">Studio Mode</span>
           </div>
@@ -481,22 +503,30 @@ export default function StudioEditor() {
         </div>
 
         <div className="editor-canvas-container">
+          <div style={{ 
+            width: CW * zoom, 
+            height: CH * zoom, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            position: 'relative'
+          }}>
             <div 
-            ref={canvasRef}
-            className="canvas-wrapper studio-canvas"
-            style={{ 
-              width: CW, 
-              height: CH, 
-              transform: `scale(${zoom})`,
-              transformOrigin: 'top center',
-              background: bgArt ? `url(${bgArt}) center/cover no-repeat` : 'repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 50% / 40px 40px',
-              position: 'relative',
-              overflow: 'hidden',
-              boxShadow: '0 50px 100px rgba(0,0,0,0.8)',
-              borderRadius: '26px'
-            }}
-            onClick={() => setSelectedId(null)}
-          >
+              ref={canvasRef}
+              className="canvas-wrapper studio-canvas"
+              style={{ 
+                width: CW, 
+                height: CH, 
+                transform: `scale(${zoom})`,
+                transformOrigin: 'center center',
+                background: bgArt ? `url(${bgArt}) center/cover no-repeat` : 'repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 50% / 40px 40px',
+                position: 'absolute',
+                overflow: 'hidden',
+                boxShadow: '0 50px 100px rgba(0,0,0,0.8)',
+                borderRadius: '26px'
+              }}
+              onClick={() => setSelectedId(null)}
+            >
             {!bgArt && (
               <div style={{ 
                 position: 'absolute', 
