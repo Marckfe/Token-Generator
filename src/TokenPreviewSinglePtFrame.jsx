@@ -385,11 +385,14 @@ export default function TokenPreviewSinglePtFrame() {
       if (kind === 'pt') next.ptStyle = { ...next.ptStyle, frameX: Math.round(snap.ptStyle.frameX + dx), frameY: Math.round(snap.ptStyle.frameY + dy) };
       if (kind === 'footer') next.infoLeft = { ...next.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||12) - dy) };
       
+      dragRef.current.lastState = next;
       applyState(next, false);
     };
     
     const up = () => {
-      if (dragRef.current) applyState(cloneState(state), true);
+      if (dragRef.current && dragRef.current.lastState) {
+        applyState(cloneState(dragRef.current.lastState), true);
+      }
       dragRef.current = null;
       window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
       window.removeEventListener('touchmove', move); window.removeEventListener('touchend', up);
