@@ -340,7 +340,7 @@ export default function StudioEditor() {
       )}
 
       {(!isMobile || activeTab === 'tools') && (
-        <aside className="editor-sidebar" style={isMobile ? { width: '100vw', height: 'calc(100vh - 120px)' } : {}}>
+        <aside className="editor-sidebar" style={isMobile ? { width: '100vw', flex: 1, height: 'auto', overflowY: 'auto' } : {}}>
           {isMobile && (
              <div className="mobile-subnav mb-4 flex gap-2 overflow-x-auto p-4 border-b border-[var(--border)]">
                 <button className="btn btn-ghost text-xs" onClick={() => addLayer('text', 'NUOVO TESTO')}><Type size={14}/> + Testo</button>

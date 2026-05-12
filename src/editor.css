@@ -386,10 +386,12 @@
 
 .studio-mode.is-mobile .editor-sidebar {
   width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   height: auto;
-  max-height: 40vh;
   border-right: none;
-  border-bottom: 1px solid var(--border);
+  overflow-y: auto;
 }
 
 .studio-mode.is-mobile .editor-workspace {
