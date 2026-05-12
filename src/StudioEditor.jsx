@@ -47,10 +47,10 @@ export default function StudioEditor() {
       setIsMobile(mobile);
       if (mobile) {
         const availableW = window.innerWidth - 30;
-        const availableH = window.innerHeight - 200; 
+        const availableH = window.innerHeight - 150; // More space by removing toolbar
         const zoomW = availableW / CW;
         const zoomH = availableH / CH;
-        setZoom(Math.min(zoomW, zoomH, 0.7));
+        setZoom(Math.min(zoomW, zoomH, 0.85));
       } else {
         setZoom(0.75);
       }
@@ -495,16 +495,18 @@ export default function StudioEditor() {
 
       {(!isMobile || activeTab === 'preview') && (
         <main className="editor-workspace">
-          <div className="editor-toolbar justify-between px-6">
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-bold opacity-60 uppercase tracking-widest">Studio Mode</span>
+          {!isMobile && (
+            <div className="editor-toolbar justify-between px-6">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-bold opacity-60 uppercase tracking-widest">Studio Mode</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button className="btn btn-primary text-xs py-1 px-4" onClick={exportCanvas}><Download size={14} className="mr-2"/> Esporta PNG</button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button className="btn btn-primary text-xs py-1 px-4" onClick={exportCanvas}><Download size={14} className="mr-2"/> Esporta PNG</button>
-            </div>
-          </div>
+          )}
 
-          <div className="editor-canvas-container">
+          <div className="editor-canvas-container" style={isMobile ? { padding: '10px 0' } : {}}>
             <div style={{ 
               width: CW * zoom, 
               height: CH * zoom, 
