@@ -12,8 +12,26 @@ const FORMATS = [
 
 export default function DeckChecker() {
   const [maindeck, setMaindeck] = useState('');
-  const [commanders, setCommanders] = useState('');
+  const [commander1, setCommander1] = useState('');
+  const [commander2, setCommander2] = useState('');
+  const [cmdSuggestions, setCmdSuggestions] = useState([]);
   
+  const searchTimeout = useRef(null);
+
+  const handleCmdSearch = (val, setter) => {
+    setter(val);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (val.length >= 3) {
+      searchTimeout.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(val)}`);
+          const data = await res.json();
+          setCmdSuggestions(data.data || []);
+        } catch (e) {}
+      }, 300);
+    }
+  };
+
   const [playerData, setPlayerData] = useState({
     lastName: '', firstName: '', dci: '', date: '', event: '', deckName: '', deckDesigner: ''
   });
@@ -29,12 +47,16 @@ export default function DeckChecker() {
       .map(line => {
         // Strip set codes like "(OTP) 8" or "(MH3) 241"
         let cleanLine = line.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
-        // Convert single slashes to double slashes for split cards if needed
-        cleanLine = cleanLine.replace(/\s+\/\s+/g, ' // ');
         
         const match = cleanLine.match(/^(\d+)x?\s+(.+)$/i);
-        if (match) return { qty: parseInt(match[1], 10), name: match[2].trim() };
-        return { qty: 1, name: cleanLine.trim() };
+        let name = match ? match[2].trim() : cleanLine.trim();
+        let qty = match ? parseInt(match[1], 10) : 1;
+        
+        // Per le carte doppie (MDFC) o split, Scryfall le trova sempre perfettamente 
+        // se passiamo solo il nome della faccia frontale.
+        name = name.split(/\s*\/\/?\s*/)[0].trim();
+        
+        return { qty, name };
       });
   };
 
@@ -43,7 +65,9 @@ export default function DeckChecker() {
     setResults(null);
     
     const mainLines = parseLines(maindeck);
-    const cmdLines = parseLines(commanders);
+    const cmdLines = [];
+    if (commander1.trim()) cmdLines.push({ qty: 1, name: commander1.trim().split(/\s*\/\/?\s*/)[0].trim() });
+    if (commander2.trim()) cmdLines.push({ qty: 1, name: commander2.trim().split(/\s*\/\/?\s*/)[0].trim() });
     setParsedDeck({ main: mainLines, cmd: cmdLines });
 
     const allCards = [...mainLines, ...cmdLines];
@@ -194,8 +218,12 @@ export default function DeckChecker() {
         </div>
         
         <div className="control-field mb-4">
-          <label className="control-label">Comandante/i o Sideboard</label>
-          <textarea className="control-input" rows={3} placeholder="es. Vial Smasher the Fierce" value={commanders} onChange={e => setCommanders(e.target.value)}></textarea>
+          <label className="control-label">Comandante (Ricerca rapida Scryfall)</label>
+          <input type="text" className="control-input mb-2" placeholder="Cerca Comandante 1..." value={commander1} onChange={e => handleCmdSearch(e.target.value, setCommander1)} list="cmd-list" />
+          <input type="text" className="control-input" placeholder="Cerca eventuale Partner..." value={commander2} onChange={e => handleCmdSearch(e.target.value, setCommander2)} list="cmd-list" />
+          <datalist id="cmd-list">
+            {cmdSuggestions.map(s => <option key={s} value={s} />)}
+          </datalist>
         </div>
 
         <button className="btn btn-primary w-full" onClick={handleCheck} disabled={checking}>
