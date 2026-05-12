@@ -113,7 +113,7 @@ function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
   return y;
 }
 
-function measureTextWidth(text, fontSize, family = FT, weight = "bold") {
+function measureTextWidth(text, fontSize, family = FT_DEFAULT, weight = "bold") {
   const c = document.createElement("canvas");
   const ctx = c.getContext("2d");
   ctx.font = `${weight} ${fontSize}px ${family}`;
@@ -126,7 +126,7 @@ function fitTextBox(text, startSize, minSize, width, linesLimit = 12) {
   while (size > minSize) {
     let ok = true;
     for (const line of lines) {
-      if (measureTextWidth(line.replace(/\{[^}]+\}/g, "MM"), size, FB, "normal") > width) { ok = false; break; }
+      if (measureTextWidth(line.replace(/\{[^}]+\}/g, "MM"), size, FB_DEFAULT, "normal") > width) { ok = false; break; }
     }
     if (ok && lines.length <= linesLimit) return size;
     size -= 1;
