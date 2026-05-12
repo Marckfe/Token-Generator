@@ -1,17 +1,16 @@
 import React, { useState, useRef, useCallback } from "react";
 import TokenPreviewSinglePtFrame from "./TokenPreviewSinglePtFrame";
 import { PDFDocument, rgb } from "pdf-lib";
-import MTGDeckValidatorPanel from "./MTGDeckValidatorPanel";
 
 // ── COSTANTI ──────────────────────────────────────────────────────────────────
 const CARD_WIDTH_MM = 63, CARD_HEIGHT_MM = 88;
-const BLEED_MM = 3; // bleed tipografico
+const BLEED_MM = 3;
 const mmToPt = mm => (mm / 25.4) * 72;
-const CARD_W  = mmToPt(CARD_WIDTH_MM);
-const CARD_H  = mmToPt(CARD_HEIGHT_MM);
-const PAGE_W  = 595.28, PAGE_H = 841.89; // A4 in pt
+const CARD_W = mmToPt(CARD_WIDTH_MM);
+const CARD_H = mmToPt(CARD_HEIGHT_MM);
+const PAGE_W = 595.28, PAGE_H = 841.89;
 
-// ── UTILITY: dataURL → ArrayBuffer ────────────────────────────────────────────
+// ── UTILITY ───────────────────────────────────────────────────────────────────
 function dataURLtoBuffer(dataUrl) {
   const base64 = dataUrl.split(",")[1];
   const bin = atob(base64);
@@ -19,9 +18,6 @@ function dataURLtoBuffer(dataUrl) {
   for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
   return buf.buffer;
 }
-
-// ── UTILITY: carica immagine su canvas e ritorna PNG dataURL ──────────────────
-// Usato per le immagini Scryfall (CORS) — le disegna su canvas per estrarre i byte
 function imgToDataURL(url) {
   return new Promise((res, rej) => {
     const img = new Image();
@@ -33,13 +29,12 @@ function imgToDataURL(url) {
       res(c.toDataURL("image/png"));
     };
     img.onerror = () => {
-      // fallback: carica senza crossOrigin (alcune CDN lo permettono)
       const img2 = new Image();
       img2.onload = () => {
         const c = document.createElement("canvas");
         c.width = img2.naturalWidth; c.height = img2.naturalHeight;
         c.getContext("2d").drawImage(img2, 0, 0);
-        try { res(c.toDataURL("image/png")); } catch { rej(new Error("CORS: impossibile leggere " + url)); }
+        try { res(c.toDataURL("image/png")); } catch { rej(new Error("CORS: " + url)); }
       };
       img2.onerror = rej;
       img2.src = url;
@@ -47,8 +42,6 @@ function imgToDataURL(url) {
     img.src = url;
   });
 }
-
-// ── UTILITY: File → dataURL ───────────────────────────────────────────────────
 function fileToDataURL(file) {
   return new Promise((res, rej) => {
     const r = new FileReader();
@@ -61,13 +54,11 @@ function fileToDataURL(file) {
 // ── ICONS ─────────────────────────────────────────────────────────────────────
 const Icon = ({ d, size = 16 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
     <path d={d} />
   </svg>
 );
 
-<<<<<<< HEAD
-=======
 // ── SCRYFALL SEARCH PANEL ─────────────────────────────────────────────────────
 // Cerca carte che contengono il testo nel nome, poi recupera tutte le stampe
 async function fetchAllPrints(name) {
@@ -166,7 +157,7 @@ function PrintGrid({ prints, selected, onToggle, onQty }) {
   );
 }
 
-function ScryfallSearchPanel({ onAddCards }) {
+function CardSearchPanel({ onAddCards }) {
   const [query, setQuery]         = React.useState("");
   const [suggestions, setSuggs]   = React.useState([]);
   const [showSugg, setShowSugg]   = React.useState(false);
@@ -315,8 +306,8 @@ function ScryfallSearchPanel({ onAddCards }) {
         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth={2}>
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
         </svg>
-        <span style={{ fontWeight:700, color:G, fontSize:14 }}>Cerca carta su Scryfall</span>
-        <span style={{ fontSize:11, color:"#4a4948" }}>— tutte le stampe + scelta art</span>
+        <span style={{ fontWeight:700, color:G, fontSize:14 }}>Cerca carte</span>
+        <span style={{ fontSize:11, color:"#4a4948" }}>— tutte le stampe + scelta illustrazione</span>
       </div>
 
       <div style={{ position:"relative", marginBottom:10 }}>
@@ -690,22 +681,22 @@ function BulkImportPanel({ onAddCards, toast }) {
 }
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
->>>>>>> parent of d2ca8fa (Update MTGProxyCreator.jsx)
 export default function MTGProxyCreator() {
-  const [tab, setTab]             = useState("proxy");
-  const [images, setImages]       = useState([]);
-  const [dragIdx, setDragIdx]     = useState(null);
-  const [isDrop, setIsDrop]       = useState(false);
-  const [isGen, setIsGen]         = useState(false);
-  const [loadRnd, setLoadRnd]     = useState(false);
-  const [printOpen, setPrintOpen] = useState(false);
+  const [tab, setTab]           = useState("proxy");
+  const [images, setImages]     = useState([]);
+  const [dragIdx, setDragIdx]   = useState(null);
+  const [isDrop, setIsDrop]     = useState(false);
+  const [isGen, setIsGen]       = useState(false);
+  const [loadRnd, setLoadRnd]   = useState(false);
+  const [printOpen, setPrintOpen]   = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [snack, setSnack]         = useState({ show: false, msg: "", type: "s" });
+  const [snack, setSnack]       = useState({ show: false, msg: "", type: "s" });
   const [printCols, setPrintCols] = useState(3);
   const [printRows, setPrintRows] = useState(3);
-  const [printGap, setPrintGap]   = useState(2);
-  const [cutMarks, setCutMarks]   = useState(true);
-  const [bleedPDF, setBleedPDF]   = useState(false); // bleed 3mm nel PDF
+  const [printGap, setPrintGap] = useState(2);
+  const [cutMarks, setCutMarks] = useState(true);
+  const [bleedPDF, setBleedPDF] = useState(false);
+  const [showScryfall, setShowScryfall] = useState(false);
   const inputRef = useRef();
 
   const toast = useCallback((msg, type = "s") => {
@@ -731,8 +722,10 @@ export default function MTGProxyCreator() {
   const reorder = toIdx => {
     if (dragIdx === null || dragIdx === toIdx) return;
     setImages(prev => {
-      const a = [...prev]; const [m] = a.splice(dragIdx, 1);
-      a.splice(toIdx, 0, m); return a;
+      const a = [...prev];
+      const [m] = a.splice(dragIdx, 1);
+      a.splice(toIdx, 0, m);
+      return a;
     });
     setDragIdx(toIdx);
   };
@@ -748,7 +741,9 @@ export default function MTGProxyCreator() {
   const dup = idx => {
     setImages(prev => {
       const d = { ...prev[idx], id: Date.now() + Math.random() };
-      const a = [...prev]; a.splice(idx + 1, 0, d); return a;
+      const a = [...prev];
+      a.splice(idx + 1, 0, d);
+      return a;
     });
     toast("Duplicata!");
   };
@@ -766,174 +761,133 @@ export default function MTGProxyCreator() {
         const d = await fetch("https://api.scryfall.com/cards/random").then(r => r.json());
         const imgUrl = d.image_uris?.normal || d.image_uris?.large || d.card_faces?.[0]?.image_uris?.normal;
         if (!imgUrl) continue;
-        // Scarica subito come blob — evita problemi CORS in fase di export PDF
         try {
           const blob = await fetch(imgUrl).then(r => r.blob());
           const localUrl = URL.createObjectURL(blob);
           const file = new File([blob], `${d.name}.jpg`, { type: blob.type });
           results.push({ id: d.id + "_" + Math.random(), name: d.name, url: localUrl, file, srcType: "scryfall" });
         } catch {
-          // fallback: salva solo URL (potrebbe fallire in export)
           results.push({ id: d.id + "_" + Math.random(), name: d.name, url: imgUrl, srcType: "scryfall" });
         }
       }
       setImages(prev => [...prev, ...results]);
-<<<<<<< HEAD
-      toast(`${results.length} carte aggiunte!`);
-=======
       toast(`${results.length} carte casuali aggiunte!`);
->>>>>>> parent of d2ca8fa (Update MTGProxyCreator.jsx)
-    } catch (e) { toast("Errore Scryfall: " + e.message, "e"); }
+    } catch (e) { toast("Errore ricerca: " + e.message, "e"); }
     finally { setLoadRnd(false); }
   };
 
-  // ── GENERA PDF ─────────────────────────────────────────────────────────────
+  // ── GENERA PDF ───────────────────────────────────────────────────────────────
   const genPDF = async () => {
     if (!images.length) { toast("Nessuna carta", "w"); return; }
     setIsGen(true);
     try {
-      const perPage  = printCols * printRows;
-      const gapPt    = mmToPt(printGap);
-      // Se bleed attivo, le carte nel PDF sono leggermente più grandi
-      const bleedPt  = bleedPDF ? mmToPt(BLEED_MM) : 0;
-      const cardW    = CARD_W + bleedPt * 2;
-      const cardH    = CARD_H + bleedPt * 2;
-
-      const doc = await PDFDocument.create();
-
+      const perPage = printCols * printRows;
+      const gapPt   = mmToPt(printGap);
+      const bleedPt = bleedPDF ? mmToPt(BLEED_MM) : 0;
+      const cardW   = CARD_W + bleedPt * 2;
+      const cardH   = CARD_H + bleedPt * 2;
+      const doc     = await PDFDocument.create();
       for (let start = 0; start < images.length; start += perPage) {
         const page  = doc.addPage([PAGE_W, PAGE_H]);
-        page.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: PAGE_H, color: rgb(1,1,1) });
-
+        page.drawRectangle({ x:0, y:0, width:PAGE_W, height:PAGE_H, color:rgb(1,1,1) });
         const batch = images.slice(start, start + perPage);
         const gW    = printCols * cardW + (printCols - 1) * gapPt;
         const gH    = printRows * cardH + (printRows - 1) * gapPt;
         const sx    = (PAGE_W - gW) / 2;
         const sy    = (PAGE_H - gH) / 2;
-
         for (let i = 0; i < batch.length; i++) {
           const item = batch[i];
           try {
-            // ── Ottieni dataURL dell'immagine ────────────────────────────────
             let dataUrl;
-            if (item.dataUrl) {
-              // già in cache (canvas token)
-              dataUrl = item.dataUrl;
-            } else if (item.file) {
-              // file caricato dall'utente
-              dataUrl = await fileToDataURL(item.file);
-            } else if (item.url) {
-              // URL remoto (es. Scryfall) — passa per canvas per aggirare CORS
-              dataUrl = await imgToDataURL(item.url);
-            } else {
-              throw new Error("Nessuna sorgente immagine");
-            }
-
-            // ── Converti dataURL → buffer → embed in PDF ────────────────────
-            const buf = dataURLtoBuffer(dataUrl);
+            if      (item.dataUrl) dataUrl = item.dataUrl;
+            else if (item.file)    dataUrl = await fileToDataURL(item.file);
+            else if (item.url)     dataUrl = await imgToDataURL(item.url);
+            else throw new Error("Nessuna sorgente immagine");
+            const buf  = dataURLtoBuffer(dataUrl);
             let pimg;
-            if (dataUrl.startsWith("data:image/jpeg")) {
-              pimg = await doc.embedJpg(buf);
-            } else {
-              pimg = await doc.embedPng(buf);
-            }
-
-            // ── Posizione nella griglia ──────────────────────────────────────
-            const col = i % printCols;
-            const row = Math.floor(i / printCols);
-            const x   = sx + col * (cardW + gapPt);
-            const y   = sy + (printRows - 1 - row) * (cardH + gapPt);
-
+            if (dataUrl.startsWith("data:image/jpeg")) pimg = await doc.embedJpg(buf);
+            else                                        pimg = await doc.embedPng(buf);
+            const col  = i % printCols;
+            const row  = Math.floor(i / printCols);
+            const x    = sx + col * (cardW + gapPt);
+            const y    = sy + (printRows - 1 - row) * (cardH + gapPt);
             page.drawImage(pimg, { x, y, width: cardW, height: cardH });
-
-            // ── Crop marks (sul bordo taglio, non sul bleed) ─────────────────
             if (cutMarks) {
               const mk = mmToPt(4), g2 = mmToPt(1);
               const c  = rgb(0.5, 0.5, 0.5), t = 0.4;
-              // Coordinate del bordo taglio reale (senza bleed)
               const cx0 = x + bleedPt, cy0 = y + bleedPt;
               const cx1 = x + cardW - bleedPt, cy1 = y + cardH - bleedPt;
-              const corners = [[cx0, cy0],[cx1, cy0],[cx0, cy1],[cx1, cy1]];
-              corners.forEach(([px, py]) => {
+              [[cx0,cy0],[cx1,cy0],[cx0,cy1],[cx1,cy1]].forEach(([px,py]) => {
                 const signX = px === cx0 ? -1 : 1;
                 const signY = py === cy0 ? -1 : 1;
-                page.drawLine({ start:{x: px - signX*(g2+mk), y: py}, end:{x: px - signX*g2, y: py}, color:c, thickness:t });
-                page.drawLine({ start:{x: px + signX*g2,     y: py}, end:{x: px + signX*(g2+mk), y: py}, color:c, thickness:t });
-                page.drawLine({ start:{x: px, y: py - signY*(g2+mk)}, end:{x: px, y: py - signY*g2}, color:c, thickness:t });
-                page.drawLine({ start:{x: px, y: py + signY*g2},     end:{x: px, y: py + signY*(g2+mk)}, color:c, thickness:t });
+                page.drawLine({ start:{x:px-(signX*(g2+mk)), y:py}, end:{x:px-signX*g2, y:py}, color:c, thickness:t });
+                page.drawLine({ start:{x:px+signX*g2, y:py}, end:{x:px+signX*(g2+mk), y:py}, color:c, thickness:t });
+                page.drawLine({ start:{x:px, y:py-(signY*(g2+mk))}, end:{x:px, y:py-signY*g2}, color:c, thickness:t });
+                page.drawLine({ start:{x:px, y:py+signY*g2}, end:{x:px, y:py+signY*(g2+mk)}, color:c, thickness:t });
               });
             }
           } catch (e) {
             console.warn(`Carta ${i} saltata:`, e.message);
-            // Disegna un placeholder grigio per la carta saltata
             const col = i % printCols, row = Math.floor(i / printCols);
             const x = sx + col*(cardW+gapPt), y = sy + (printRows-1-row)*(cardH+gapPt);
             page.drawRectangle({ x, y, width:cardW, height:cardH, color:rgb(0.9,0.9,0.9) });
-            page.drawText("Errore caricamento", { x: x+10, y: y+cardH/2, size:8, color:rgb(0.5,0.5,0.5) });
+            page.drawText("Errore caricamento", { x:x+10, y:y+cardH/2, size:8, color:rgb(0.5,0.5,0.5) });
           }
         }
       }
-
       const bytes = await doc.save();
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      a.href = URL.createObjectURL(new Blob([bytes], { type:"application/pdf" }));
       a.download = "mtg-proxy-stampa.pdf";
       a.click();
       toast("✅ PDF scaricato!");
     } catch (e) {
-      console.error(e);
-      toast("Errore PDF: " + e.message, "e");
-    } finally {
-      setIsGen(false);
-    }
+      console.error(e); toast("Errore PDF: " + e.message, "e");
+    } finally { setIsGen(false); }
   };
 
   const perPage = printCols * printRows;
   const pages   = Math.max(1, Math.ceil(images.length / perPage));
-
-  // ── STYLES ────────────────────────────────────────────────────────────────
   const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 700);
-  const NAV_ITEMS = [["proxy","Proxy"],["token","Token"],["deckcheck","Deck Check"]];
   React.useEffect(() => {
     const fn = () => setIsMobile(window.innerWidth < 700);
-    window.addEventListener("resize", fn); return () => window.removeEventListener("resize", fn);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
   }, []);
+
+  const G = "#4f98a3", BD = "#393836";
 
   const s = {
     shell: { display:"flex", flexDirection:"column", minHeight:"100vh" },
-    sidebar: { display:"flex", flexDirection:"column", background:"var(--surface)", borderRight:"1px solid var(--border)", padding:"20px 12px", position:"sticky", top:0, height:"100vh", overflowY:"auto", width:220, flexShrink:0 },
-    main: { display:"flex", flexDirection:"column", padding: isMobile ? "14px 12px" : "28px 32px", gap:"20px", overflowX:"hidden", flex:1, minWidth:0 },
-    navBtn: (active) => ({ display:"flex", alignItems:"center", gap:10, padding:"10px 13px", borderRadius:"var(--r-lg)", color: active?"var(--primary)":"var(--muted)", background: active?"var(--primary-hl)":"transparent", fontSize:".85rem", fontWeight: active?700:500, cursor:"pointer", border:"none", width:"100%", textAlign:"left", transition:"all var(--tr)" }),
-    btn: (v) => ({ display:"inline-flex", alignItems:"center", gap:7, padding:"8px 16px", borderRadius:"var(--r-lg)", fontSize:".83rem", fontWeight:600, cursor:"pointer", border:"none", transition:"all var(--tr)", whiteSpace:"nowrap", background: v==="primary"?"var(--primary)":v==="accent"?"rgba(79,152,163,.15)":"transparent", color: v==="primary"?"#0f0e0c":v==="accent"?"var(--accent)":"var(--muted)", ...(v==="ghost"?{border:"1px solid var(--border)"}:{}), ...(v==="accent"?{border:"1px solid rgba(79,152,163,.35)"}:{}) }),
-    card: { position:"relative", aspectRatio:"63/88", borderRadius:"var(--r-md)", overflow:"hidden", background:"var(--surf-off)", boxShadow:"var(--sh-sm)", cursor:"grab", transition:"transform var(--tr),box-shadow var(--tr)" },
+    sidebar: { display:"flex", flexDirection:"column", background:"var(--surface)",
+      borderRight:"1px solid var(--border)", padding:"20px 12px",
+      position:"sticky", top:0, height:"100vh", overflowY:"auto", width:220, flexShrink:0 },
+    main: { display:"flex", flexDirection:"column",
+      padding: isMobile ? "14px 12px" : "28px 32px",
+      gap:"20px", overflowX:"hidden", flex:1, minWidth:0 },
+    navBtn: (active) => ({
+      display:"flex", alignItems:"center", gap:10, padding:"10px 13px",
+      borderRadius:"var(--r-lg)", color: active?"var(--primary)":"var(--muted)",
+      background: active?"var(--primary-hl)":"transparent",
+      fontSize:".85rem", fontWeight: active?700:500, cursor:"pointer",
+      border:"none", width:"100%", textAlign:"left", transition:"all var(--tr)"
+    }),
+    btn: (v) => ({
+      display:"inline-flex", alignItems:"center", gap:7, padding:"8px 16px",
+      borderRadius:"var(--r-lg)", fontSize:".83rem", fontWeight:600, cursor:"pointer",
+      border:"none", transition:"all var(--tr)", whiteSpace:"nowrap",
+      background: v==="primary"?"var(--primary)":v==="accent"?"rgba(79,152,163,.15)":"transparent",
+      color: v==="primary"?"#0f0e0c":v==="accent"?"var(--accent)":"var(--muted)",
+      ...(v==="ghost"?{border:"1px solid var(--border)"}:{}),
+      ...(v==="accent"?{border:"1px solid rgba(79,152,163,.35)"}:{})
+    }),
+    card: { position:"relative", aspectRatio:"63/88", borderRadius:"var(--r-md)",
+      overflow:"hidden", background:"var(--surf-off)", boxShadow:"var(--sh-sm)",
+      cursor:"grab", transition:"transform var(--tr),box-shadow var(--tr)" },
   };
 
   return (
     <div style={s.shell}>
-<<<<<<< HEAD
-
-      {/* TOPBAR MOBILE */}
-      {isMobile && (
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-          background:"var(--surface)", borderBottom:"1px solid var(--border)",
-          padding:"10px 14px", gap:8, flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-              <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" stroke="#c9a227" strokeWidth="2"/>
-              <polygon points="16,7 25,12 25,20 16,25 7,20 7,12" fill="rgba(201,162,39,.12)" stroke="#c9a227" strokeWidth="1"/>
-              <text x="16" y="20" textAnchor="middle" fill="#c9a227" fontSize="10" fontWeight="900" fontFamily="serif">P</text>
-            </svg>
-            <span style={{ fontWeight:900, color:"var(--primary)", fontSize:"1rem", letterSpacing:"-.02em" }}>MTG Proxy</span>
-          </div>
-          <div style={{ display:"flex", gap:4 }}>
-            {[["proxy","🖨 Proxy"],["token","🃏 Token"]].map(([id,label]) => (
-              <button key={id} onClick={() => setTab(id)}
-                style={{ padding:"7px 13px", borderRadius:"var(--r-lg)", border:"none",
-                  background: tab===id ? "var(--primary-hl)" : "transparent",
-                  color: tab===id ? "var(--primary)" : "var(--muted)",
-                  fontWeight: tab===id ? 700 : 500, fontSize:".83rem", cursor:"pointer" }}>
-                {label}
-=======
       {/* SIDEBAR desktop */}
       {!isMobile && (
         <div style={{ display:"flex", flex:1 }}>
@@ -944,199 +898,44 @@ export default function MTGProxyCreator() {
             {[
               { id:"proxy",   icon:"M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7", label:"Proxy Stampa" },
               { id:"token",   icon:"M12 5v14M5 12h14", label:"Token Creator" },
-              { id:"import",  icon:"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3", label:"Importa" },
             ].map(n => (
               <button key={n.id} style={s.navBtn(tab===n.id)} onClick={() => setTab(n.id)}>
                 <Icon d={n.icon} size={16} />
                 {n.label}
->>>>>>> parent of d2ca8fa (Update MTGProxyCreator.jsx)
+              </button>
+            ))}
+          </aside>
+          <main style={s.main}>
+            {tab === "proxy"  && <ProxyTab {...{ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, isGen, loadRnd, printOpen, setPrintOpen, confirmOpen, setConfirmOpen, snack, printCols, setPrintCols, printRows, setPrintRows, printGap, setPrintGap, cutMarks, setCutMarks, bleedPDF, setBleedPDF, showScryfall, setShowScryfall, inputRef, toast, handleFiles, onDrop, reorder, remove, dup, clearAll, fetchRandom, genPDF, perPage, pages, s, isMobile }} />}
+            {tab === "token"  && <TokenPreviewSinglePtFrame />}
+          </main>
+        </div>
+      )}
+
+      {/* MOBILE */}
+      {isMobile && (
+        <div style={{ display:"flex", flexDirection:"column", flex:1 }}>
+          <div style={{ display:"flex", background:"var(--surface)", borderBottom:"1px solid var(--border)" }}>
+            {[{id:"proxy",label:"🖨 Stampa"},{id:"token",label:"🃏 Token"}].map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                style={{ flex:1, padding:"12px 4px", border:"none", cursor:"pointer",
+                  background: tab===t.id ? "var(--primary-hl)" : "transparent",
+                  color: tab===t.id ? G : "var(--muted)",
+                  fontWeight: tab===t.id ? 700 : 500, fontSize:13,
+                  borderBottom: tab===t.id ? `2px solid ${G}` : "2px solid transparent" }}>
+                {t.label}
               </button>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* LAYOUT ROW: sidebar desktop + main */}
-      <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
-
-        {/* SIDEBAR DESKTOP */}
-        {!isMobile && (
-          <aside style={s.sidebar}>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:28, paddingBottom:20, borderBottom:"1px solid var(--divider)" }}>
-              <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
-                <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" stroke="#c9a227" strokeWidth="2"/>
-                <polygon points="16,7 25,12 25,20 16,25 7,20 7,12" fill="rgba(201,162,39,.12)" stroke="#c9a227" strokeWidth="1"/>
-                <text x="16" y="20" textAnchor="middle" fill="#c9a227" fontSize="10" fontWeight="900" fontFamily="serif">P</text>
-              </svg>
-              <span style={{ fontSize:"1.05rem", fontWeight:900, color:"var(--primary)", letterSpacing:"-.02em" }}>MTG Proxy</span>
-            </div>
-            <nav style={{ display:"flex", flexDirection:"column", gap:3, flex:1 }}>
-              {[
-                ["proxy","Proxy Stampa","M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"],
-                ["token","Token Creator","M2 3h20v14H2zM8 21h8M12 17v4"]
-              ].map(([id,label,d]) => (
-                <button key={id} style={s.navBtn(tab===id)} onClick={() => setTab(id)}>
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={d}/></svg>
-                  {label}
-                </button>
-              ))}
-            </nav>
-            <div style={{ paddingTop:16, borderTop:"1px solid var(--divider)", fontSize:".72rem", color:"var(--faint)", textAlign:"center" }}>by Marco Feoli</div>
-          </aside>
-        )}
-
-        {/* MAIN */}
-        <main style={s.main}>
-        {tab === "proxy" && (
-          <>
-            <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:14, flexWrap:"wrap" }}>
-              <div>
-                <h1 style={{ fontSize:"1.55rem", fontWeight:900, color:"var(--text)", letterSpacing:"-.03em" }}>Proxy Card Printer</h1>
-                <p style={{ fontSize:".82rem", color:"var(--muted)", marginTop:4 }}>
-                  Carica le tue carte e genera un PDF pronto per la stampa
-                </p>
-              </div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                <button style={s.btn("ghost")} onClick={() => inputRef.current.click()}>
-                  <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-                  Carica immagini
-                </button>
-                <button style={s.btn("accent")} onClick={fetchRandom} disabled={loadRnd}>
-                  <Icon d="M1 4v6h6M23 20v-6h-6M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 0 1 3.51 15"/>
-                  {loadRnd ? "Caricamento…" : "9 carte random"}
-                </button>
-                {images.length > 0 && (
-                  <button style={s.btn("primary")} onClick={() => setPrintOpen(true)}>
-                    <Icon d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>
-                    Genera PDF ({images.length} carte)
-                  </button>
-                )}
-              </div>
-            </div>
-            <input ref={inputRef} type="file" accept="image/*" multiple style={{ display:"none" }}
-              onChange={e => { handleFiles(e.target.files); e.target.value=null; }} />
-
-            {/* Drop zone */}
-            <div
-              onDrop={onDrop}
-              onDragOver={e => { e.preventDefault(); setIsDrop(true); }}
-              onDragLeave={() => setIsDrop(false)}
-              onClick={() => !images.length && inputRef.current.click()}
-              style={{ border:`2px dashed ${isDrop?"var(--primary)":"var(--border)"}`, borderRadius:"var(--r-xl)", padding: images.length?"16px":"60px 20px", textAlign:"center", background: isDrop?"var(--primary-hl)":"var(--surf-off)", transition:"all var(--tr)", cursor: images.length?"default":"pointer", minHeight: images.length?"auto":180 }}>
-              {!images.length ? (
-                <div style={{ color:"var(--muted)" }}>
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin:"0 auto 12px" }}>
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-                  </svg>
-                  <p style={{ fontWeight:600, marginBottom:4 }}>Trascina le immagini qui o clicca per caricare</p>
-                  <p style={{ fontSize:".78rem" }}>PNG, JPG, WEBP — puoi caricare carte custom, screenshot, proxy</p>
-                </div>
-              ) : (
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))", gap:10 }}>
-                  {images.map((img, idx) => (
-                    <div key={img.id} draggable
-                      onDragStart={() => setDragIdx(idx)}
-                      onDragOver={e => { e.preventDefault(); reorder(idx); }}
-                      onDragEnd={() => setDragIdx(null)}
-                      style={{ ...s.card, outline: dragIdx===idx?"2px solid var(--primary)":"none" }}>
-                      <img src={img.url} alt={img.name||"card"} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-                      <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0)", transition:"background var(--tr)", display:"flex", alignItems:"flex-end", padding:4, gap:3, opacity:0, pointerEvents:"none" }}
-                        onMouseEnter={e => { e.currentTarget.style.background="rgba(0,0,0,.55)"; e.currentTarget.style.opacity=1; e.currentTarget.style.pointerEvents="auto"; }}
-                        onMouseLeave={e => { e.currentTarget.style.background="rgba(0,0,0,0)"; e.currentTarget.style.opacity=0; e.currentTarget.style.pointerEvents="none"; }}>
-                        <button onClick={() => dup(idx)} style={{ flex:1, background:"rgba(255,255,255,.15)", border:"none", color:"#fff", borderRadius:4, fontSize:10, padding:"3px 0", cursor:"pointer" }}>×2</button>
-                        <button onClick={() => remove(idx)} style={{ flex:1, background:"rgba(200,50,50,.7)", border:"none", color:"#fff", borderRadius:4, fontSize:10, padding:"3px 0", cursor:"pointer" }}>✕</button>
-                      </div>
-                      <div style={{ position:"absolute", top:3, left:3, background:"rgba(0,0,0,.6)", color:"#fff", fontSize:9, padding:"1px 4px", borderRadius:3 }}>{idx+1}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {images.length > 0 && (
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
-                <span style={{ fontSize:".82rem", color:"var(--muted)" }}>{images.length} carte • {pages} pagina{pages!==1?"e":""} PDF</span>
-                <div style={{ display:"flex", gap:8 }}>
-                  <button style={s.btn("ghost")} onClick={() => setPrintOpen(true)}>⚙ Impostazioni stampa</button>
-                  <button style={s.btn("ghost")} onClick={() => setConfirmOpen(true)} title="Rimuovi tutto">✕ Svuota</button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {tab === "token" && (
-          <TokenPreviewSinglePtFrame />
-        )}
-        </main>
-      </div>{/* fine layout row */}
-
-      {/* MODAL IMPOSTAZIONI STAMPA */}
-      {printOpen && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }}
-          onClick={e => e.target===e.currentTarget && setPrintOpen(false)}>
-          <div style={{ background:"var(--surface)", borderRadius:"var(--r-xl)", padding:28, width:400, maxWidth:"90vw", border:"1px solid var(--border)" }}>
-            <h2 style={{ fontWeight:800, marginBottom:20, color:"var(--text)" }}>Impostazioni PDF</h2>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:16 }}>
-              {[["Colonne",printCols,setPrintCols,1,6],["Righe",printRows,setPrintRows,1,6]].map(([label,val,set,min,max]) => (
-                <label key={label} style={{ fontSize:".83rem", color:"var(--muted)" }}>
-                  {label}
-                  <input type="number" min={min} max={max} value={val}
-                    onChange={e => set(Math.max(min,Math.min(max,+e.target.value)))}
-                    style={{ display:"block", width:"100%", marginTop:4, background:"var(--surf-off)", color:"var(--text)", border:"1px solid var(--border)", borderRadius:"var(--r-md)", padding:"6px 10px", fontSize:".9rem" }}/>
-                </label>
-              ))}
-              <label style={{ fontSize:".83rem", color:"var(--muted)" }}>
-                Margine (mm)
-                <input type="number" min={0} max={10} step={0.5} value={printGap}
-                  onChange={e => setPrintGap(+e.target.value)}
-                  style={{ display:"block", width:"100%", marginTop:4, background:"var(--surf-off)", color:"var(--text)", border:"1px solid var(--border)", borderRadius:"var(--r-md)", padding:"6px 10px", fontSize:".9rem" }}/>
-              </label>
-            </div>
-            <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:".83rem", color:"var(--muted)", marginBottom:10, cursor:"pointer" }}>
-              <input type="checkbox" checked={cutMarks} onChange={e => setCutMarks(e.target.checked)}/> Segni di taglio (crop marks)
-            </label>
-            <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:".83rem", color:"var(--muted)", marginBottom:20, cursor:"pointer" }}>
-              <input type="checkbox" checked={bleedPDF} onChange={e => setBleedPDF(e.target.checked)}/> Bleed tipografico 3mm (consigliato per tipografia)
-            </label>
-            <p style={{ fontSize:".78rem", color:"var(--faint)", marginBottom:20 }}>
-              {printCols}×{printRows} = {perPage} carte per pagina • {pages} pagina{pages!==1?"e":""} • Formato A4
-            </p>
-            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-              <button style={s.btn("ghost")} onClick={() => setPrintOpen(false)}>Annulla</button>
-              <button style={s.btn("primary")} onClick={() => { setPrintOpen(false); genPDF(); }} disabled={isGen}>
-                {isGen ? "⏳ Generazione…" : "⬇ Scarica PDF"}
-              </button>
-            </div>
+          <div style={{ flex:1, overflow:"auto", padding:"14px 12px" }}>
+            {tab === "proxy" && <ProxyTab {...{ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, isGen, loadRnd, printOpen, setPrintOpen, confirmOpen, setConfirmOpen, snack, printCols, setPrintCols, printRows, setPrintRows, printGap, setPrintGap, cutMarks, setCutMarks, bleedPDF, setBleedPDF, showScryfall, setShowScryfall, inputRef, toast, handleFiles, onDrop, reorder, remove, dup, clearAll, fetchRandom, genPDF, perPage, pages, s, isMobile }} />}
+            {tab === "token" && <TokenPreviewSinglePtFrame />}
           </div>
-        </div>
-      )}
-
-      {/* MODAL CONFERMA SVUOTA */}
-      {confirmOpen && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <div style={{ background:"var(--surface)", borderRadius:"var(--r-xl)", padding:28, width:340, border:"1px solid var(--border)" }}>
-            <h3 style={{ fontWeight:800, marginBottom:10, color:"var(--text)" }}>Svuotare la lista?</h3>
-            <p style={{ fontSize:".83rem", color:"var(--muted)", marginBottom:20 }}>Tutte le {images.length} carte verranno rimosse.</p>
-            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-              <button style={s.btn("ghost")} onClick={() => setConfirmOpen(false)}>Annulla</button>
-              <button style={{ ...s.btn("ghost"), color:"#e05050", borderColor:"#e05050" }} onClick={clearAll}>Svuota</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TOAST */}
-      {snack.show && (
-        <div style={{ position:"fixed", bottom:24, right:24, background: snack.type==="e"?"#7a1e1e":snack.type==="w"?"#5a4a00":"var(--primary)", color:"#fff", padding:"10px 18px", borderRadius:"var(--r-lg)", fontSize:".85rem", fontWeight:600, zIndex:200, boxShadow:"0 4px 20px rgba(0,0,0,.3)" }}>
-          {snack.msg}
         </div>
       )}
     </div>
   );
 }
-<<<<<<< HEAD
-=======
 
 // ── PROXY TAB ─────────────────────────────────────────────────────────────────
 function ProxyTab({ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, isGen, loadRnd,
@@ -1196,7 +995,7 @@ function ProxyTab({ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, i
             transition:"all .2s" }}>
           <svg width={16} height={16} viewBox="0 0 24 24" fill="none"
             stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          🔍 Cerca carte · Importa lista
+          🔍 Cerca carte · Aggiungi lista
           <span style={{ marginLeft:"auto", fontSize:11, opacity:.7 }}>
             {showScryfall ? "▲ chiudi" : "▼ apri"}
           </span>
@@ -1204,7 +1003,7 @@ function ProxyTab({ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, i
 
         {showScryfall && (
           <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:8 }}>
-            <ScryfallSearchPanel onAddCards={cards => {
+            <CardSearchPanel onAddCards={cards => {
               setImages(prev => [...prev, ...cards]);
               toast(`✅ ${cards.length} cop${cards.length===1?"ia":"ie"} aggiunte alla coda!`);
             }} />
@@ -1326,7 +1125,7 @@ function ProxyTab({ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, i
                     ✕ Rimuovi
                   </button>
                 </div>
-                {/* Nome carta da Scryfall */}
+                {/* Nome carta */}
                 {img.srcType === "scryfall" && img.name && (
                   <div style={{ position:"absolute", bottom:0, left:0, right:0,
                     background:"linear-gradient(transparent,rgba(0,0,0,.8))",
@@ -1357,7 +1156,7 @@ function ProxyTab({ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, i
           <div style={{ fontSize:48, marginBottom:12 }}>🃏</div>
           <div style={{ fontWeight:600, marginBottom:6 }}>Nessuna carta nella coda</div>
           <div style={{ fontSize:13 }}>
-            Usa la ricerca Scryfall, carica immagini locali, o aggiungi 9 carte casuali
+            Cerca carte, carica immagini locali, o aggiungi 9 carte casuali
           </div>
         </div>
       )}
@@ -1399,4 +1198,3 @@ function ProxyTab({ images, setImages, dragIdx, setDragIdx, isDrop, setIsDrop, i
     </>
   );
 }
->>>>>>> parent of d2ca8fa (Update MTGProxyCreator.jsx)
