@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ProxyCreatorMain from "./components/ProxyCreator/ProxyCreatorMain";
 import TokenPreviewSinglePtFrame from "./TokenPreviewSinglePtFrame";
+import StudioEditor from "./StudioEditor";
 import DeckChecker from "./components/DeckChecker/DeckChecker";
 
 function Icon({ d, size = 16, className = "" }) {
@@ -34,6 +35,7 @@ export default function MTGProxyCreator() {
             {[
               { id: "proxy", icon: "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7", label: "Proxy Stampa" },
               { id: "token", icon: "M12 5v14M5 12h14", label: "Token Creator" },
+              { id: "studio", icon: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5", label: "Studio Design" },
               { id: "checker", icon: "M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z", label: "Deck Checker" },
             ].map(n => (
               <button
@@ -49,6 +51,7 @@ export default function MTGProxyCreator() {
           <main className="main-content">
             {tab === "proxy" && <ProxyCreatorMain isMobile={false} />}
             {tab === "token" && <TokenPreviewSinglePtFrame />}
+            {tab === "studio" && <StudioEditor />}
             {tab === "checker" && <DeckChecker />}
           </main>
         </div>
@@ -61,6 +64,7 @@ export default function MTGProxyCreator() {
             {[
               { id: "proxy", label: "🖨 Stampa" }, 
               { id: "token", label: "🃏 Token" },
+              { id: "studio", label: "🎨 Studio" },
               { id: "checker", label: "🔍 Check" }
             ].map(t => (
               <button
@@ -75,6 +79,7 @@ export default function MTGProxyCreator() {
           <div className="mobile-content">
             {tab === "proxy" && <ProxyCreatorMain isMobile={true} />}
             {tab === "token" && <TokenPreviewSinglePtFrame />}
+            {tab === "studio" && <StudioEditor />}
             {tab === "checker" && <DeckChecker />}
           </div>
         </div>

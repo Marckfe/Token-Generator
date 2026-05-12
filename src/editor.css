@@ -249,6 +249,80 @@
 }
 .mobile-editor-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
+/* Studio Mode Styles */
+.studio-mode .nav-item {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.7rem;
+  padding: 12px 0;
+}
+
+.layers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+}
+
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surf-off);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: var(--tr);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.layer-item:hover {
+  background: var(--surf-dyn);
+  border-color: var(--faint);
+}
+
+.layer-item.active {
+  background: var(--accent-hl);
+  border-color: var(--accent);
+  color: var(--text-light);
+}
+
+.layer-item-actions {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.layer-item:hover .layer-item-actions {
+  opacity: 1;
+}
+
+.layer-item-actions button {
+  color: var(--muted);
+  hover: var(--error);
+}
+
+.layer-resize-handle {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: nwse-resize;
+  border: 2px solid #fff;
+}
+
+.studio-canvas {
+  background-color: #000;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.7);
+  outline: 1px solid rgba(255,255,255,0.1);
+}
+
 /* Custom Color Picker UI */
 .color-picker-input-group {
   display: flex;
