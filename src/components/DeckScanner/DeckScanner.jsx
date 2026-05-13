@@ -1,11 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
-import { Search, Image as ImageIcon, Trash2, Plus, Loader2, CheckCircle2, AlertCircle, Wand2 } from 'lucide-react';
+import { Search, Image as ImageIcon, Trash2, Plus, Loader2, CheckCircle2, AlertCircle, Wand2, Settings } from 'lucide-react';
 import './DeckScanner.css';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
 const priorityShort = ['opt', 'duress', 'shock', 'bolt'];
-const OPENROUTER_KEY = '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';
 
 const DeckScanner = ({ onAddToQueue }) => {
   const [image, setImage] = useState(null);
@@ -15,7 +14,14 @@ const DeckScanner = ({ onAddToQueue }) => {
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
   const [useAI, setUseAI] = useState(false);
+  const [apiKey, setApiKey] = useState(localStorage.getItem('openrouter_key') || '');
+  const [showSettings, setShowSettings] = useState(false);
   const fileInputRef = useRef(null);
+
+  const saveKey = (key) => {
+    setApiKey(key);
+    localStorage.setItem('openrouter_key', key);
+  };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -38,6 +44,12 @@ const DeckScanner = ({ onAddToQueue }) => {
 
   const processWithAI = async () => {
     if (!image) return;
+    if (!apiKey) {
+      setError("Inserisci una API Key nelle impostazioni per usare l'IA.");
+      setShowSettings(true);
+      return;
+    }
+
     setIsProcessing(true);
     setProgress(20);
     setError(null);
@@ -49,7 +61,7 @@ const DeckScanner = ({ onAddToQueue }) => {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${OPENROUTER_KEY}`,
+          "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -92,14 +104,14 @@ const DeckScanner = ({ onAddToQueue }) => {
           setResults(detectedCards);
           searchAllCards(detectedCards);
         } else {
-          throw new Error("Formato risposta non valido");
+          throw new Error("L'IA non ha restituito dati validi.");
         }
       } else {
-        throw new Error("Errore API OpenRouter");
+        throw new Error(data.error?.message || "Errore API OpenRouter");
       }
     } catch (err) {
       console.error('AI Error:', err);
-      setError('Errore durante l\'analisi AI. Verifica la connessione o l\'API Key.');
+      setError(err.message || 'Errore durante l\'analisi AI.');
     } finally {
       setIsProcessing(false);
       setProgress(100);
@@ -108,7 +120,6 @@ const DeckScanner = ({ onAddToQueue }) => {
 
   const processImage = async () => {
     if (useAI) return processWithAI();
-
     if (!image) return;
     setIsProcessing(true);
     setProgress(0);
@@ -122,7 +133,6 @@ const DeckScanner = ({ onAddToQueue }) => {
           }
         }
       });
-
       const { data: { text } } = await worker.recognize(image);
       await worker.terminate();
       parseText(text);
@@ -149,7 +159,6 @@ const DeckScanner = ({ onAddToQueue }) => {
   const parseText = (text) => {
     const rawChunks = text.split(/[\n|()\[\]\\\/]|\s{2,}/);
     const candidateMap = new Map();
-
     rawChunks.forEach(chunk => {
       let trimmed = chunk.trim();
       if (!trimmed || trimmed.length < 2) return;
@@ -157,16 +166,13 @@ const DeckScanner = ({ onAddToQueue }) => {
       const compacted = lower.replace(/\s+/g, '');
       let name = trimmed;
       let isForced = false;
-
       if (compacted.includes('opt')) { name = 'Opt'; isForced = true; }
       else if (compacted.includes('isla') || compacted.includes('isol')) { name = 'Island'; isForced = true; }
       else if (compacted.includes('moun') || compacted.includes('mont')) { name = 'Mountain'; isForced = true; }
       else if (compacted.includes('swam') || compacted.includes('palu')) { name = 'Swamp'; isForced = true; }
       else if (compacted.includes('fore')) { name = 'Forest'; isForced = true; }
       else if (compacted.includes('plai') || compacted.includes('pian')) { name = 'Plains'; isForced = true; }
-
       if (!isForced && !isLikelyCardName(trimmed)) return;
-
       let qty = 1;
       if (!isForced && !trimmed.includes('/')) {
         const startQty = trimmed.match(/^(\d+)\s*[xX]?\s+/);
@@ -179,15 +185,10 @@ const DeckScanner = ({ onAddToQueue }) => {
           name = trimmed.replace(endQty[0], '').trim();
         }
       }
-
       const isLand = basicLands.some(l => name.toLowerCase().includes(l));
       qty = isLand ? Math.min(qty, 60) : Math.min(qty, 4);
-
-      if (!isForced) {
-        name = name.replace(/[^\w\s',-]/g, ' ').replace(/\s+/g, ' ').trim();
-      }
+      if (!isForced) name = name.replace(/[^\w\s',-]/g, ' ').replace(/\s+/g, ' ').trim();
       if (name.length < 2) return;
-      
       const key = name.toLowerCase();
       if (candidateMap.has(key)) {
         const existing = candidateMap.get(key);
@@ -196,7 +197,6 @@ const DeckScanner = ({ onAddToQueue }) => {
         candidateMap.set(key, { name, qty });
       }
     });
-
     const detectedCards = Array.from(candidateMap.values()).map(item => ({
       id: Math.random().toString(36).substr(2, 9),
       qty: item.qty,
@@ -204,7 +204,6 @@ const DeckScanner = ({ onAddToQueue }) => {
       status: 'pending',
       data: null
     }));
-
     setResults(detectedCards);
     searchAllCards(detectedCards);
   };
@@ -255,10 +254,37 @@ const DeckScanner = ({ onAddToQueue }) => {
     <div className="deck-scanner-container">
       <div className="scanner-header">
         <div className="scanner-title">
-          <Wand2 className="text-accent" />
-          <h2>Deck Scanner OCR</h2>
+          <div className="flex items-center gap-3">
+            <Wand2 className="text-accent" />
+            <h2>Deck Scanner OCR</h2>
+          </div>
+          <button 
+            className={`p-2 rounded-lg transition-all ${showSettings ? 'bg-accent text-white' : 'bg-surface2 border border-border text-muted'}`}
+            onClick={() => setShowSettings(!showSettings)}
+          >
+            <Settings size={18} />
+          </button>
         </div>
         <p className="scanner-subtitle">Analisi avanzata con IA per mazzi e screenshot.</p>
+        
+        {showSettings && (
+          <div className="mt-4 p-4 bg-surface border border-accent/20 rounded-xl">
+            <label className="block text-[10px] font-bold uppercase tracking-wider mb-2 text-accent">Configurazione OpenRouter</label>
+            <div className="flex gap-2">
+              <input 
+                type="password" 
+                placeholder="Incolla qui la tua API Key (sk-or-v1-...)" 
+                className="flex-1 bg-black border border-border rounded-lg px-3 py-2 text-xs text-accent focus:border-accent outline-none"
+                value={apiKey}
+                onChange={(e) => saveKey(e.target.value)}
+              />
+              <button className="bg-accent text-white px-4 py-2 rounded-lg text-xs font-bold" onClick={() => setShowSettings(false)}>
+                Salva
+              </button>
+            </div>
+            <p className="text-[10px] mt-2 opacity-50">La chiave viene salvata localmente nel tuo browser.</p>
+          </div>
+        )}
       </div>
 
       <div className="scanner-layout">
@@ -292,7 +318,7 @@ const DeckScanner = ({ onAddToQueue }) => {
                   <Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} />
                   <div>
                     <p className="text-sm font-bold">Modalità IA Avanzata</p>
-                    <p className="text-[11px] opacity-60">Precisione massima con OpenRouter</p>
+                    <p className="text-[11px] opacity-60">Precisione massima con Vision AI</p>
                   </div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -304,14 +330,14 @@ const DeckScanner = ({ onAddToQueue }) => {
 
             <button 
               className={`w-full py-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
-                !image || isProcessing ? 'bg-muted/20 text-muted' : useAI ? 'bg-accent text-white' : 'bg-primary text-white'
+                !image || isProcessing ? 'bg-muted/20 text-muted cursor-not-allowed' : useAI ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'bg-primary text-white'
               }`}
               onClick={processImage}
               disabled={!image || isProcessing}
             >
               {isProcessing ? 'Analisi in corso...' : (useAI ? 'Avvia Analisi IA' : 'Inizia Scansione OCR')}
             </button>
-            {error && <div className="mt-4 p-3 bg-error/10 text-error text-xs rounded-lg">{error}</div>}
+            {error && <div className="mt-4 p-3 bg-error/10 text-error text-[11px] rounded-lg border border-error/20">{error}</div>}
           </div>
         </div>
 
