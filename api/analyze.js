@@ -7,21 +7,20 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ error: 'Chiave API non configurata su Vercel.' });
+    return res.status(500).json({ error: '[MTG-AI] Chiave API non configurata su Vercel.' });
   }
 
-  // List of models to try in order
+  // List of models to try. 1.5 Flash is more stable for free tier quotas.
   const models = [
-    "gemini-2.0-flash",
     "gemini-1.5-flash",
+    "gemini-2.0-flash",
     "gemini-1.5-flash-8b"
   ];
 
-  let lastError = null;
+  let lastError = "";
 
   for (const model of models) {
     try {
-      console.log(`Provando analisi con modello: ${model}`);
       const base64Data = image.split(',')[1];
       
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -39,10 +38,10 @@ export default async function handler(req, res) {
 
       const data = await response.json();
       
+      // If we get a quota error (429) or other API errors, try the next model
       if (data.error) {
-        // If it's a quota error or other retryable error, continue to next model
-        console.warn(`Errore con ${model}:`, data.error.message);
-        lastError = data.error.message;
+        lastError = `${model}: ${data.error.message}`;
+        console.warn(`[MTG-AI] Fallimento con ${model}: ${lastError}`);
         continue; 
       }
 
@@ -51,18 +50,19 @@ export default async function handler(req, res) {
       
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        console.log(`Successo con modello: ${model}`);
         return res.status(200).json(parsed);
       } else {
-        throw new Error("Formato risposta non valido.");
+        lastError = `${model}: Risposta JSON non trovata`;
+        continue;
       }
     } catch (error) {
-      console.error(`Catch errore con ${model}:`, error.message);
-      lastError = error.message;
-      // Continue to next model
+      lastError = `${model}: ${error.message}`;
+      continue;
     }
   }
 
-  // If we reach here, all models failed
-  return res.status(500).json({ error: `Tutti i modelli hanno fallito. Ultimo errore: ${lastError}` });
+  // If all models failed, return a structured error
+  return res.status(500).json({ 
+    error: `[MTG-AI] Tutti i modelli hanno fallito le quote. Ultimo errore: ${lastError}. Per favore riprova tra un minuto.` 
+  });
 }
