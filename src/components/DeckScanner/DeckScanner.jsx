@@ -104,17 +104,17 @@ const DeckScanner = ({ onAddToQueue }) => {
 
     try {
       const base64Image = await compressImage(image);
-      const freeModels = await fetchAvailableFreeVisionModels();
       
+      // The "openrouter/free" model is a wildcard that routes to any available free model
       let modelsToTry = [
         customModel,
-        ...freeModels,
+        "openrouter/free", 
         "google/gemini-2.0-flash-exp:free",
-        "google/gemini-flash-1.5-8b-exp:free",
-        "meta-llama/llama-3.2-11b-vision-instruct:free"
+        "meta-llama/llama-3.2-11b-vision-instruct:free",
+        "google/gemini-flash-1.5-8b-exp:free"
       ].filter(Boolean);
       
-      modelsToTry = [...new Set(modelsToTry)]; // Deduplicate
+      modelsToTry = [...new Set(modelsToTry)];
 
       let lastError = "";
 
