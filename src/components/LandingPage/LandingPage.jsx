@@ -5,6 +5,24 @@ import './LandingPage.css';
 
 const LandingPage = () => {
   const { login } = useAuth();
+  const [error, setError] = React.useState(null);
+
+  const handleLogin = async () => {
+    try {
+      setError(null);
+      await login();
+    } catch (err) {
+      console.error("Login Error:", err);
+      if (err.code === 'auth/popup-blocked') {
+        alert("Il pop-up di Google è stato bloccato dal browser. Abilitalo per continuare.");
+      } else if (err.code === 'auth/unauthorized-domain') {
+        alert("Questo dominio non è autorizzato su Firebase. Aggiungilo nelle impostazioni di Authentication -> Settings -> Authorized domains.");
+      } else {
+        alert("Errore durante il login: " + err.message);
+      }
+      setError(err.message);
+    }
+  };
 
   return (
     <div className="landing-container">
@@ -18,9 +36,10 @@ const LandingPage = () => {
             La piattaforma definitiva per creare proxy, scansionare mazzi con l'IA e gestire la tua collezione Magic: The Gathering.
           </p>
           
-          <button className="login-cta" onClick={login}>
+          <button className="login-cta" onClick={handleLogin}>
             Entra con Google <ChevronRight size={20} />
           </button>
+          {error && <p style={{ color: '#ff5252', marginTop: '16px', fontSize: '0.8rem' }}>{error}</p>}
         </div>
 
         <div className="features-grid">
