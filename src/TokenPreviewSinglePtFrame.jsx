@@ -950,14 +950,26 @@ export default function TokenPreviewSinglePtFrame() {
             Rilascia l'immagine per aggiornare l'Artwork
           </div>
 
-          <div className="editor-toolbar justify-center">
-            <button className="btn btn-icon" onClick={undo} disabled={historyIdx === 0} title="Annulla">
+          <div className="editor-toolbar justify-center gap-3">
+            <button 
+              className={`history-btn ${historyIdx > 0 ? 'active' : ''}`} 
+              onClick={undo} 
+              disabled={historyIdx === 0} 
+              title="Annulla (Torna indietro)"
+            >
               <Icon d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
+              <span className="history-label">UNDO</span>
             </button>
-            <button className="btn btn-icon" onClick={redo} disabled={historyIdx >= history.length - 1} title="Ripeti">
+            <button 
+              className={`history-btn ${historyIdx < history.length - 1 ? 'active' : ''}`} 
+              onClick={redo} 
+              disabled={historyIdx >= history.length - 1} 
+              title="Ripeti (Vai avanti)"
+            >
+              <span className="history-label">REDO</span>
               <Icon d="M21 7v6h-6M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" />
             </button>
-            <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 8px' }}></div>
+            <div style={{ width: 1, height: 24, background: 'var(--border)', margin: '0 8px' }}></div>
             <label className="checkbox-label" style={{ fontSize: '0.8rem' }}>
               <input type="checkbox" checked={showGuides} onChange={e => setShowGuides(e.target.checked)} className="custom-checkbox"/> Mostra Guide
             </label>
