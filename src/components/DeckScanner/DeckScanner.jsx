@@ -155,11 +155,9 @@ const DeckScanner = ({ onAddToQueue }) => {
 
       if (data.object === 'card') {
         setResults(prev => {
-          // Check if this card (by Scryfall ID) already exists in our results as 'found'
           const existingIdx = prev.findIndex(c => c.status === 'found' && c.data?.id === data.id && c.id !== card.id);
           
           if (existingIdx !== -1) {
-            // If it exists, merge the quantity and remove the current duplicate-to-be
             const newResults = [...prev];
             const isLand = basicLands.some(l => data.name.toLowerCase().includes(l));
             const newQty = newResults[existingIdx].qty + card.qty;
@@ -167,7 +165,6 @@ const DeckScanner = ({ onAddToQueue }) => {
             return newResults.filter(c => c.id !== card.id);
           }
 
-          // Otherwise, update the current card to 'found'
           return prev.map(c => c.id === card.id ? { 
             ...c, 
             status: 'found', 
@@ -230,35 +227,29 @@ const DeckScanner = ({ onAddToQueue }) => {
             className={`scanner-dropzone ${isProcessing ? 'processing' : ''}`}
             onClick={() => !isProcessing && fileInputRef.current.click()}
           >
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              onChange={handleImageUpload}
+              accept="image/*"
+              className="hidden"
+            />
             {preview ? (
               <img src={preview} alt="Anteprima" className="scanner-preview-img" />
             ) : (
               <div className="dropzone-placeholder">
-                <ImageIcon size={48} className="mb-3 opacity-40" />
-                <span>Trascina qui l'immagine o clicca per caricare</span>
-                <p className="text-xs text-muted mt-2">Supporta JPG, PNG</p>
+                <ImageIcon size={48} className="mb-4 opacity-20" />
+                <p>Trascina un'immagine o clicca per caricare</p>
               </div>
             )}
             
             {isProcessing && (
               <div className="processing-overlay">
-                <Loader2 className="animate-spin mb-2" size={32} />
-                <span>Scansione in corso... {progress}%</span>
+                <Loader2 size={40} className="animate-spin mb-4 text-accent" />
+                <p className="font-bold">{useAI ? 'L\'IA sta analizzando l\'immagine...' : 'Scansione OCR in corso...'}</p>
                 <div className="progress-bar-bg">
                   <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
                 </div>
-              </div>
-            )}
-          </div>
-
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleImageUpload} 
-            accept="image/*" 
-            className="hidden" 
-          />
-
           <button 
             className="btn btn-primary btn-block mt-4" 
             onClick={processImage} 
