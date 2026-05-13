@@ -1,22 +1,38 @@
 import React, { useState, useRef } from 'react';
 import { jsPDF } from 'jspdf';
+import { 
+  ShieldCheck, 
+  AlertTriangle, 
+  Info, 
+  FileText, 
+  Download, 
+  Search,
+  CheckCircle2,
+  XCircle,
+  Clock
+} from 'lucide-react';
 import './DeckChecker.css';
 
 const FORMATS = [
-  { id: 'standard', name: 'Standard' },
+  { id: 'commander', name: 'Commander' },
+  { id: 'duel', name: 'Duel Commander' },
   { id: 'modern', name: 'Modern' },
+  { id: 'standard', name: 'Standard' },
   { id: 'legacy', name: 'Legacy' },
-  { id: 'premodern', name: 'Premodern' },
-  { id: 'duel', name: 'Duel Commander' }
+  { id: 'pioneer', name: 'Pioneer' }
 ];
 
 export default function DeckChecker() {
+  const [selectedFormat, setSelectedFormat] = useState('commander');
   const [maindeck, setMaindeck] = useState('');
+  const [sideboard, setSideboard] = useState('');
   const [commander1, setCommander1] = useState('');
   const [commander2, setCommander2] = useState('');
   const [cmdSuggestions, setCmdSuggestions] = useState([]);
   
   const searchTimeout = useRef(null);
+
+  const isSingleton = selectedFormat === 'commander' || selectedFormat === 'duel';
 
   const handleCmdSearch = (val, setter) => {
     setter(val);
@@ -24,7 +40,6 @@ export default function DeckChecker() {
     if (val.length >= 3) {
       searchTimeout.current = setTimeout(async () => {
         try {
-          // Usiamo search invece di autocomplete per filtrare solo i comandanti legali
           const res = await fetch(`https://api.scryfall.com/cards/search?q=is:commander+(f:duel+or+f:commander)+${encodeURIComponent(val)}`);
           const data = await res.json();
           if (data.data) {
@@ -36,29 +51,23 @@ export default function DeckChecker() {
   };
 
   const [playerData, setPlayerData] = useState({
-    lastName: '', firstName: '', dci: '', date: '', event: '', deckName: '', deckDesigner: ''
+    lastName: '', firstName: '', playerId: '', date: '', event: '', deckName: '', deckDesigner: ''
   });
 
   const [checking, setChecking] = useState(false);
-  const [results, setResults] = useState(null); // { formatId: { status: 'legal'|'banned', reasons: [...] } }
-  const [parsedDeck, setParsedDeck] = useState({ main: [], cmd: [] }); // For PDF
+  const [results, setResults] = useState(null); 
+  const [parsedDeck, setParsedDeck] = useState({ main: [], cmd: [] }); 
 
   const parseLines = (text) => {
     return text.split('\n')
       .map(line => line.trim())
       .filter(line => line.length > 0)
       .map(line => {
-        // Strip set codes like "(OTP) 8" or "(MH3) 241"
         let cleanLine = line.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
-        
         const match = cleanLine.match(/^(\d+)x?\s+(.+)$/i);
         let name = match ? match[2].trim() : cleanLine.trim();
         let qty = match ? parseInt(match[1], 10) : 1;
-        
-        // Per le carte doppie (MDFC) o split, Scryfall le trova sempre perfettamente 
-        // se passiamo solo il nome della faccia frontale.
         name = name.split(/\s*\/\/?\s*/)[0].trim();
-        
         return { qty, name };
       });
   };
@@ -69,10 +78,14 @@ export default function DeckChecker() {
     
     const mainLines = parseLines(maindeck);
     const cmdLines = [];
-    if (commander1.trim()) cmdLines.push({ qty: 1, name: commander1.trim().split(/\s*\/\/?\s*/)[0].trim() });
-    if (commander2.trim()) cmdLines.push({ qty: 1, name: commander2.trim().split(/\s*\/\/?\s*/)[0].trim() });
-    setParsedDeck({ main: mainLines, cmd: cmdLines });
-
+    
+    if (isSingleton) {
+      if (commander1.trim()) cmdLines.push({ qty: 1, name: commander1.trim().split(/\s*\/\/?\s*/)[0].trim() });
+      if (commander2.trim()) cmdLines.push({ qty: 1, name: commander2.trim().split(/\s*\/\/?\s*/)[0].trim() });
+    } else {
+      cmdLines.push(...parseLines(sideboard));
+    }
+    
     const allCards = [...mainLines, ...cmdLines];
     if (allCards.length === 0) {
       setChecking(false);
@@ -80,7 +93,6 @@ export default function DeckChecker() {
     }
 
     try {
-      // Chunk requests for Scryfall (max 75 per request)
       const uniqueNames = [...new Set(allCards.map(c => c.name))];
       let fetchedCards = [];
       
@@ -95,152 +107,236 @@ export default function DeckChecker() {
         fetchedCards = fetchedCards.concat(data.data);
       }
 
-      // Map legalities
-      const legalityMap = {}; // name -> legalities
-      fetchedCards.forEach(c => { legalityMap[c.name.toLowerCase()] = c.legalities; });
-
-      const newResults = {};
-      FORMATS.forEach(f => {
-        newResults[f.id] = { status: 'legal', reasons: [] };
+      const cardInfoMap = {}; 
+      fetchedCards.forEach(c => { 
+        cardInfoMap[c.name.toLowerCase()] = {
+          legalities: c.legalities,
+          type: c.type_line
+        }; 
       });
 
-      // Check maindeck
-      mainLines.forEach(item => {
-        const leg = legalityMap[item.name.toLowerCase()];
-        if (!leg) {
-          FORMATS.forEach(f => newResults[f.id].reasons.push(`${item.name}: Non trovata`));
-          return;
-        }
-        FORMATS.forEach(f => {
-          const l = leg[f.id];
-          if (l === 'not_legal' || l === 'banned') {
-            newResults[f.id].status = 'banned';
-            newResults[f.id].reasons.push(`${item.name} (${l === 'not_legal' ? 'Non legale' : 'Bannata'})`);
-          }
-        });
-      });
+      const enrichedMain = mainLines.map(item => ({
+        ...item,
+        type: cardInfoMap[item.name.toLowerCase()]?.type || 'Unknown'
+      }));
+      const enrichedCmd = cmdLines.map(item => ({
+        ...item,
+        type: cardInfoMap[item.name.toLowerCase()]?.type || 'Unknown'
+      }));
 
-      // Check commanders
-      cmdLines.forEach(item => {
-        const leg = legalityMap[item.name.toLowerCase()];
-        if (!leg) {
-          FORMATS.forEach(f => newResults[f.id].reasons.push(`${item.name} (Cmd): Non trovata`));
+      setParsedDeck({ main: enrichedMain, cmd: enrichedCmd });
+
+      const newResults = { status: 'legal', reasons: [] };
+      allCards.forEach(item => {
+        const info = cardInfoMap[item.name.toLowerCase()];
+        if (!info) {
+          newResults.status = 'banned';
+          newResults.reasons.push({ name: item.name, reason: 'Non trovata' });
           return;
         }
-        FORMATS.forEach(f => {
-          const l = leg[f.id];
-          if (l === 'not_legal' || l === 'banned') {
-            newResults[f.id].status = 'banned';
-            newResults[f.id].reasons.push(`${item.name} (Cmd) (${l === 'not_legal' ? 'Non legale' : 'Bannata'})`);
-          } else if (f.id === 'duel' && l === 'restricted') {
-            newResults[f.id].status = 'banned';
-            newResults[f.id].reasons.push(`${item.name} (Bannata come Comandante)`);
-          }
-        });
+        
+        const l = info.legalities[selectedFormat];
+        if (l === 'not_legal' || l === 'banned') {
+          newResults.status = 'banned';
+          newResults.reasons.push({ name: item.name, reason: l === 'not_legal' ? 'Non legale' : 'Bannata' });
+        } else if (selectedFormat === 'duel' && l === 'restricted') {
+          newResults.status = 'banned';
+          newResults.reasons.push({ name: item.name, reason: 'Bannata come Comandante' });
+        }
       });
 
       setResults(newResults);
     } catch (e) {
-      alert("Errore durante il controllo nel database.");
+      console.error(e);
+      alert("Errore durante il controllo.");
     }
     setChecking(false);
   };
 
   const generatePDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text("DECK REGISTRATION SHEET", 105, 20, { align: "center" });
+    
+    // Header Logo & Title
+    doc.setFillColor(0, 188, 212);
+    doc.circle(20, 15, 6, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(10); doc.text("M", 20, 16.2, { align: "center" });
+    doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+    doc.text("OFFICIAL DECK REGISTRATION SHEET", 105, 16, { align: "center" });
 
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
+    // Player Info Grid
+    doc.setFontSize(9); doc.setFont("helvetica", "normal");
+    const drawField = (label, val, x, y, w) => {
+      doc.setFont("helvetica", "bold"); doc.text(label, x, y);
+      doc.setFont("helvetica", "normal"); doc.text(val || "________________", x + 25, y);
+      doc.setDrawColor(200); doc.line(x + 25, y + 1, x + w, y + 1);
+    };
 
-    // Header info
-    doc.text(`Last Name: ${playerData.lastName}`, 20, 35);
-    doc.text(`First Name: ${playerData.firstName}`, 110, 35);
-    doc.text(`Event: ${playerData.event}`, 20, 45);
-    doc.text(`Date: ${playerData.date}`, 110, 45);
-    doc.text(`DCI / Player #: ${playerData.dci}`, 20, 55);
-    doc.text(`Deck Name: ${playerData.deckName}`, 110, 55);
-    doc.text(`Deck Designer: ${playerData.deckDesigner}`, 20, 65);
+    drawField("Last Name:", playerData.lastName, 20, 30, 80);
+    drawField("First Name:", playerData.firstName, 110, 30, 80);
+    drawField("Player ID:", playerData.playerId, 20, 38, 80);
+    drawField("Date:", playerData.date, 110, 38, 80);
+    drawField("Deck Name:", playerData.deckName, 20, 46, 80);
+    drawField("Event:", playerData.event, 110, 46, 80);
 
-    doc.setLineWidth(0.5);
-    doc.line(20, 70, 190, 70);
-
-    // Columns
-    doc.setFont("helvetica", "bold");
-    doc.text("Qty", 20, 80); doc.text("Card Name", 35, 80);
-    doc.text("Qty", 110, 80); doc.text("Card Name", 125, 80);
-    doc.setFont("helvetica", "normal");
-
-    let y1 = 88;
-    let y2 = 88;
-
-    // Draw main deck items
-    parsedDeck.main.forEach((item, idx) => {
-      // Split into two columns for maindeck (e.g. 60 cards -> 30/30)
-      if (idx < 35) {
-        doc.text(item.qty.toString(), 22, y1);
-        doc.text(item.name.substring(0, 30), 35, y1);
-        doc.line(20, y1 + 1, 100, y1 + 1); // underline
-        y1 += 6;
-      } else {
-        doc.text(item.qty.toString(), 112, y2);
-        doc.text(item.name.substring(0, 30), 125, y2);
-        doc.line(110, y2 + 1, 190, y2 + 1); // underline
-        y2 += 6;
-      }
-    });
-
-    // Draw commanders / sideboard
-    if (parsedDeck.cmd.length > 0) {
-      let sy = Math.max(y1, y2) + 15;
-      doc.setFont("helvetica", "bold");
-      doc.text("Commanders / Sideboard", 20, sy);
-      doc.setFont("helvetica", "normal");
-      sy += 8;
-      parsedDeck.cmd.forEach(item => {
-        doc.text(item.qty.toString(), 22, sy);
-        doc.text(item.name.substring(0, 30), 35, sy);
-        doc.line(20, sy + 1, 100, sy + 1);
-        sy += 6;
+    // Categories Logic
+    const categorize = (deck) => {
+      const groups = {
+        Land: [],
+        Creature: [],
+        "Instant/Sorcery": [],
+        Other: []
+      };
+      deck.forEach(c => {
+        const type = c.type.toLowerCase();
+        if (type.includes("land")) groups.Land.push(c);
+        else if (type.includes("creature")) groups.Creature.push(c);
+        else if (type.includes("instant") || type.includes("sorcery")) groups["Instant/Sorcery"].push(c);
+        else groups.Other.push(c);
       });
+      return groups;
+    };
+
+    const mainGroups = categorize(parsedDeck.main);
+    const isSingleton = selectedFormat === 'commander' || selectedFormat === 'duel';
+    
+    let currentY = 60;
+    let colX = 20;
+    const colW = 85;
+
+    const drawSection = (title, items, x, y) => {
+      if (items.length === 0) return y;
+      const total = items.reduce((sum, i) => sum + i.qty, 0);
+      doc.setFont("helvetica", "bold");
+      doc.setFillColor(240); doc.rect(x - 2, y - 4, colW + 4, 6, 'F');
+      doc.text(`${title.toUpperCase()} (${total})`, x, y);
+      doc.setFont("helvetica", "normal");
+      let nextY = y + 6;
+      items.forEach(item => {
+        doc.text(item.qty.toString(), x, nextY);
+        doc.text(item.name.substring(0, 35), x + 8, nextY);
+        doc.setDrawColor(230); doc.line(x, nextY + 1, x + colW, nextY + 1);
+        nextY += 5.5;
+      });
+      return nextY + 6;
+    };
+
+    // Column 1: Creatures & Lands
+    let y1 = drawSection("Creatures", mainGroups.Creature, 20, 65);
+    y1 = drawSection("Lands", mainGroups.Land, 20, y1);
+
+    // Column 2: Spells & Other
+    let y2 = drawSection("Instants & Sorceries", mainGroups["Instant/Sorcery"], 110, 65);
+    y2 = drawSection("Other Spells", mainGroups.Other, 110, y2);
+
+    // Sideboard / Commander Section
+    if (parsedDeck.cmd.length > 0) {
+      let finalY = Math.max(y1, y2) + 5;
+      if (finalY > 260) { // New page or shift? Let's try to fit on one page.
+         finalY = 230; 
+      }
+      const title = isSingleton ? "Commanders" : "Sideboard";
+      drawSection(title, parsedDeck.cmd, 20, finalY);
     }
 
-    doc.save(`${playerData.lastName}_${playerData.deckName}_Registration.pdf`.replace(/\s+/g, '_'));
+    // Totals Footer
+    const totalMain = parsedDeck.main.reduce((sum, i) => sum + i.qty, 0);
+    doc.setFont("helvetica", "bold");
+    doc.text(`TOTAL MAIN DECK: ${totalMain}`, 110, 280);
+    
+    doc.save(`${playerData.lastName}_Registration.pdf`);
   };
 
   return (
     <div className="deck-checker-container">
       <div className="deck-checker-sidebar">
-        <div className="sidebar-panel-title">🛡️ Formazione Mazzo</div>
-        
-        <div className="control-field mb-4">
-          <label className="control-label">Maindeck (Qtà Nome, una per riga)</label>
-          <textarea className="control-input" rows={12} placeholder="es. 4x Brainstorm&#10;1 Lightning Bolt" value={maindeck} onChange={e => setMaindeck(e.target.value)}></textarea>
-        </div>
-        
-        <div className="control-field mb-4">
-          <label className="control-label">Comandante (Ricerca rapida database)</label>
-          <input type="text" className="control-input mb-2" placeholder="Cerca Comandante 1..." value={commander1} onChange={e => handleCmdSearch(e.target.value, setCommander1)} list="cmd-list" />
-          <input type="text" className="control-input" placeholder="Cerca eventuale Partner..." value={commander2} onChange={e => handleCmdSearch(e.target.value, setCommander2)} list="cmd-list" />
-          <datalist id="cmd-list">
-            {cmdSuggestions.map(s => <option key={s} value={s} />)}
-          </datalist>
+        <div className="sidebar-panel-title flex items-center gap-2">
+          <ShieldCheck size={18} />
+          <span>Analisi Legalità</span>
         </div>
 
-        <button className="btn btn-primary w-full" onClick={handleCheck} disabled={checking}>
-          {checking ? 'Controllo in corso...' : '🔍 Controlla Legalità'}
+        <div className="control-field mb-6">
+          <label className="control-label">Seleziona Formato</label>
+          <div className="format-selector">
+            {FORMATS.map(f => (
+              <button 
+                key={f.id} 
+                className={`format-btn ${selectedFormat === f.id ? 'active' : ''}`}
+                onClick={() => setSelectedFormat(f.id)}
+              >
+                {f.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div className="control-field mb-4">
+          <label className="control-label">Lista Carte (Maindeck)</label>
+          <textarea 
+            className="control-input" 
+            rows={isSingleton ? 10 : 7} 
+            placeholder="es. 4x Brainstorm&#10;1 Lightning Bolt" 
+            value={maindeck} 
+            onChange={e => setMaindeck(e.target.value)}
+          ></textarea>
+        </div>
+
+        {isSingleton ? (
+          <div className="control-field mb-6">
+            <label className="control-label">Comandanti</label>
+            <div className="relative mb-2">
+              <Search size={14} className="absolute left-3 top-3 opacity-40" />
+              <input 
+                type="text" 
+                className="control-input pl-9" 
+                placeholder="Comandante 1..." 
+                value={commander1} 
+                onChange={e => handleCmdSearch(e.target.value, setCommander1)} 
+                list="cmd-list" 
+              />
+            </div>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-3 opacity-40" />
+              <input 
+                type="text" 
+                className="control-input pl-9" 
+                placeholder="Partner / Background..." 
+                value={commander2} 
+                onChange={e => handleCmdSearch(e.target.value, setCommander2)} 
+                list="cmd-list" 
+              />
+            </div>
+            <datalist id="cmd-list">
+              {cmdSuggestions.map(s => <option key={s} value={s} />)}
+            </datalist>
+          </div>
+        ) : (
+          <div className="control-field mb-6">
+            <label className="control-label">Sideboard</label>
+            <textarea 
+              className="control-input" 
+              rows={4} 
+              placeholder="es. 3x Duress&#10;1 Pyroblast" 
+              value={sideboard} 
+              onChange={e => setSideboard(e.target.value)}
+            ></textarea>
+          </div>
+        )}
+
+        <button className="btn btn-primary w-full py-4 text-lg font-bold" onClick={handleCheck} disabled={checking}>
+          {checking ? <Clock className="animate-spin mr-2" /> : <ShieldCheck className="mr-2" />}
+          {checking ? 'Analisi in corso...' : 'Verifica Mazzo'}
         </button>
 
-        <hr className="my-4 border-[var(--border)]" />
-        <div className="sidebar-panel-title">📝 Dati Torneo (per Export PDF)</div>
+        <div className="sidebar-panel-title mt-8 flex items-center gap-2">
+          <FileText size={18} />
+          <span>Export Torneo</span>
+        </div>
         <div className="flex gap-2 mb-2">
           <input type="text" className="control-input" placeholder="Cognome" value={playerData.lastName} onChange={e => setPlayerData({...playerData, lastName: e.target.value})} />
           <input type="text" className="control-input" placeholder="Nome" value={playerData.firstName} onChange={e => setPlayerData({...playerData, firstName: e.target.value})} />
         </div>
         <div className="flex gap-2 mb-2">
-          <input type="text" className="control-input" placeholder="DCI / ID" value={playerData.dci} onChange={e => setPlayerData({...playerData, dci: e.target.value})} />
+          <input type="text" className="control-input" placeholder="Player ID (ex DCI)" value={playerData.playerId} onChange={e => setPlayerData({...playerData, playerId: e.target.value})} />
           <input type="date" className="control-input" value={playerData.date} onChange={e => setPlayerData({...playerData, date: e.target.value})} />
         </div>
         <div className="mb-2">
@@ -251,60 +347,54 @@ export default function DeckChecker() {
           <input type="text" className="control-input" placeholder="Designer" value={playerData.deckDesigner} onChange={e => setPlayerData({...playerData, deckDesigner: e.target.value})} />
         </div>
         
-        <button className="btn btn-ghost w-full" style={{ background: 'var(--surf-off)' }} onClick={generatePDF}>
-          ⬇ Scarica Registration Sheet PDF
+        <button className="btn btn-ghost w-full border border-[var(--border)]" onClick={generatePDF}>
+          <Download size={16} className="mr-2" />
+          Scarica PDF Registration Sheet
         </button>
       </div>
 
       <div className="deck-checker-main">
         {results ? (
-          <div className="results-grid">
-            {FORMATS.map(f => {
-              const res = results[f.id];
-              return (
-                <div key={f.id} className={`result-card ${res.status}`}>
-                  <h3>{f.name}</h3>
-                  {res.status === 'legal' ? (
-                    <div className="text-success font-bold text-lg">✅ LEGAL</div>
-                  ) : (
-                    <div>
-                      <div className="text-error font-bold text-lg mb-2">❌ BANNED</div>
-                      <ul className="text-sm text-left pl-4 list-disc text-[var(--faint)]">
-                        {res.reasons.map((r, i) => <li key={i}>{r}</li>)}
-                      </ul>
-                    </div>
-                  )}
+          <div className="check-result-hero">
+            <div className="status-badge">
+              {results.status === 'legal' ? <CheckCircle2 size={80} color="var(--success)" /> : <XCircle size={80} color="var(--error)" />}
+            </div>
+            <h2 className={`status-title ${results.status}`}>
+              {results.status === 'legal' ? 'Mazzo Legale' : 'Mazzo Non Legale'}
+            </h2>
+            <p className="format-name-hero">Formato: {FORMATS.find(f => f.id === selectedFormat)?.name}</p>
+
+            {results.status === 'legal' ? (
+              <div className="p-8 bg-[var(--success-hl)] rounded-2xl border border-[var(--success)]/20 max-w-md">
+                <ShieldCheck size={40} className="mx-auto mb-4 opacity-40" />
+                <p className="text-lg">Tutte le carte sono state verificate con successo nel database globale di Scryfall.</p>
+              </div>
+            ) : (
+              <div className="banned-list-container">
+                <div className="banned-list-title">
+                  <AlertTriangle size={18} />
+                  <span>Problemi rilevati ({results.reasons.length})</span>
                 </div>
-              );
-            })}
+                <div className="banned-items-list">
+                  {results.reasons.map((r, i) => (
+                    <div key={i} className="banned-item">
+                      <span className="card-name">{r.name}</span>
+                      <span className="ban-reason">{r.reason}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <button className="btn btn-ghost mt-12 opacity-50 hover:opacity-100" onClick={() => setResults(null)}>
+              Nuova Analisi
+            </button>
           </div>
         ) : (
           <div className="deck-checker-empty">
-            <div className="sheet-preview">
-              <h3>📄 Anteprima DCI Registration Sheet</h3>
-              <div className="sheet-preview-content">
-                <div className="sheet-header">
-                  <div><strong>Last Name:</strong> {playerData.lastName || '________'}</div>
-                  <div><strong>First Name:</strong> {playerData.firstName || '________'}</div>
-                  <div><strong>Event:</strong> {playerData.event || '________'}</div>
-                  <div><strong>Date:</strong> {playerData.date || '________'}</div>
-                  <div><strong>DCI / ID:</strong> {playerData.dci || '________'}</div>
-                  <div><strong>Deck Name:</strong> {playerData.deckName || '________'}</div>
-                </div>
-                <div className="sheet-body">
-                  <div className="sheet-col">
-                    <div className="sheet-title">Main Deck</div>
-                    <div className="sheet-lines">
-                      {parseLines(maindeck).slice(0, 15).map((c, i) => (
-                        <div key={i} className="sheet-line"><span>{c.qty}</span> <span className="line-text">{c.name}</span></div>
-                      ))}
-                      {parseLines(maindeck).length > 15 && <div className="text-xs text-muted mt-2">...e altre carte</div>}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p className="mt-8 text-[var(--faint)] text-center">Inserisci una lista e clicca "Controlla Legalità" per interrogare il database globale, oppure compila i dati e scarica il foglio PDF ufficiale per i tornei!</p>
+            <ShieldCheck size={100} className="empty-icon opacity-10 mb-6" />
+            <h3 className="text-2xl font-black uppercase opacity-20">In attesa di analisi</h3>
+            <p className="max-w-xs mt-4 text-center opacity-40">Seleziona il formato, inserisci la lista e premi "Verifica Mazzo" per iniziare il controllo.</p>
           </div>
         )}
       </div>

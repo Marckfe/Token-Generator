@@ -11,10 +11,16 @@ import {
   Plus,
   Maximize,
   RotateCw,
-  Copy
+  Copy,
+  Cloud,
+  Check,
+  Save,
+  Loader2
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import "./editor.css";
+import { useAuth } from "./context/AuthContext";
+import { saveUserToken, getUserTokens, deleteUserToken } from "./services/dbService";
 
 const CW = 620, CH = 890;
 
@@ -30,6 +36,7 @@ const FONT_OPTIONS = [
 ];
 
 export default function StudioEditor() {
+  const { user } = useAuth();
   const [layers, setLayers] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [bgArt, setBgArt] = useState(null);
@@ -37,9 +44,38 @@ export default function StudioEditor() {
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef(null);
 
+  const [projectName, setProjectName] = useState("Nuovo Token");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null); // 'saving', 'success', 'error'
+
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1000);
   const [zoom, setZoom] = useState(1);
   const [activeTab, setActiveTab] = useState('preview'); // 'preview' or 'tools'
+
+  const handleSaveCloud = async (isDraft = true) => {
+    if (!user) {
+      alert("Devi essere loggato per salvare sul Cloud.");
+      return;
+    }
+    setIsSaving(true);
+    setSaveStatus('saving');
+    try {
+      const tokenData = {
+        name: projectName,
+        layers: layers,
+        bgArt: bgArt,
+        isDraft: isDraft
+      };
+      await saveUserToken(user.uid, tokenData, isDraft);
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   useEffect(() => {
     const fn = () => {
@@ -457,7 +493,41 @@ export default function StudioEditor() {
             </div>
           ) : (
             <div className="control-group">
-              <div className="sidebar-panel-title">Progetto Studio</div>
+              <div className="sidebar-panel-title flex items-center gap-2">
+                <Cloud size={16} />
+                <span>Salvataggio Cloud</span>
+              </div>
+              <div className="control-field mb-4">
+                <span className="control-label">Nome Progetto</span>
+                <input 
+                  type="text" 
+                  value={projectName} 
+                  onChange={e => setProjectName(e.target.value)} 
+                  className="control-input"
+                  placeholder="Esempio: Token Drago..."
+                />
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  className="btn btn-ghost flex-1 text-xs" 
+                  onClick={() => handleSaveCloud(true)}
+                  disabled={isSaving}
+                >
+                  {saveStatus === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  <span className="ml-2">Bozza</span>
+                </button>
+                <button 
+                  className="btn btn-primary flex-1 text-xs" 
+                  onClick={() => handleSaveCloud(false)}
+                  disabled={isSaving}
+                >
+                  {saveStatus === 'success' ? <Check size={14} /> : <Check size={14} />}
+                  <span className="ml-2">Definitivo</span>
+                </button>
+              </div>
+              {saveStatus === 'success' && <p className="text-[10px] text-success mt-2 text-center font-bold">✓ Salvato con successo nel Cloud!</p>}
+
+              <div className="sidebar-panel-title mt-8">Progetto Studio</div>
               <div className="control-field mb-6">
                 <span className="control-label">Artwork di Sfondo (Full Art)</span>
                 <label className="btn btn-primary w-full text-center cursor-pointer">
@@ -465,6 +535,12 @@ export default function StudioEditor() {
                   <input type="file" hidden accept="image/*" onChange={handleBgUpload} />
                 </label>
               </div>
+
+              <CloudLibrary user={user} onLoad={(token) => {
+                setLayers(token.layers || []);
+                setBgArt(token.bgArt || null);
+                setProjectName(token.name || "Token Caricato");
+              }} />
 
               <div className="sidebar-panel-title mt-6" style={{ fontSize: '0.9rem' }}>Livelli ({layers.length})</div>
               <div className="layers-list">
@@ -604,6 +680,63 @@ export default function StudioEditor() {
           </div>
         </main>
       )}
+    </div>
+  );
+}
+
+function CloudLibrary({ user, onLoad }) {
+  const [tokens, setTokens] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = async () => {
+    if (!user) return;
+    setLoading(true);
+    const data = await getUserTokens(user.uid);
+    setTokens(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refresh();
+  }, [user]);
+
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
+    if (window.confirm("Vuoi davvero eliminare questo progetto?")) {
+      await deleteUserToken(user.uid, id);
+      refresh();
+    }
+  };
+
+  if (!user) return null;
+
+  return (
+    <div className="cloud-library-section mt-6">
+      <div className="sidebar-panel-title flex items-center justify-between">
+        <span>La tua Libreria Cloud</span>
+        <button onClick={refresh} className="text-accent hover:rotate-180 transition-transform"><RotateCw size={12} /></button>
+      </div>
+      <div className="tokens-grid mt-4">
+        {loading ? (
+          <div className="text-center py-4 opacity-50 text-xs">Caricamento...</div>
+        ) : tokens.length === 0 ? (
+          <div className="text-center py-4 opacity-50 text-xs italic">Nessun progetto salvato</div>
+        ) : (
+          tokens.map(t => (
+            <div key={t.id} className="token-item-card" onClick={() => onLoad(t)}>
+              <div className="token-item-info">
+                <div className="token-item-name">{t.name}</div>
+                <div className={`token-item-badge ${t.isDraft ? 'draft' : 'final'}`}>
+                  {t.isDraft ? 'Bozza' : 'Definitivo'}
+                </div>
+              </div>
+              <button className="token-item-delete" onClick={(e) => handleDelete(e, t.id)}>
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

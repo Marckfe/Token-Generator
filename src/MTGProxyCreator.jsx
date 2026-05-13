@@ -6,6 +6,7 @@ import DeckChecker from "./components/DeckChecker/DeckChecker";
 import DeckScanner from "./components/DeckScanner/DeckScanner";
 import { useAuth } from "./context/AuthContext";
 import { LogOut, User as UserIcon } from "lucide-react";
+import { getUserQueue, saveUserQueue } from "./services/dbService";
 
 function Icon({ d, size = 16, className = "" }) {
   return (
@@ -19,14 +20,40 @@ function Icon({ d, size = 16, className = "" }) {
 export default function MTGProxyCreator() {
   const [tab, setTab] = useState("proxy");
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 700);
-  const [globalQueue, setGlobalQueue] = useState([]);
+  const [globalQueue, setGlobalQueue] = useState(() => {
+    const saved = localStorage.getItem("mtg_print_queue");
+    return saved ? JSON.parse(saved) : [];
+  });
   const { user, logout } = useAuth();
+  const [hasLoadedCloud, setHasLoadedCloud] = useState(false);
 
   useEffect(() => {
     const fn = () => setIsMobile(window.innerWidth < 700);
     window.addEventListener("resize", fn);
     return () => window.removeEventListener("resize", fn);
   }, []);
+
+  // Sync Cloud -> Local al login
+  useEffect(() => {
+    const syncCloud = async () => {
+      if (user && !hasLoadedCloud) {
+        const cloudQueue = await getUserQueue(user.uid);
+        if (cloudQueue && cloudQueue.length > 0) {
+          setGlobalQueue(cloudQueue);
+        }
+        setHasLoadedCloud(true);
+      }
+    };
+    syncCloud();
+  }, [user, hasLoadedCloud]);
+
+  // Sync Local -> Cloud al cambiamento
+  useEffect(() => {
+    localStorage.setItem("mtg_print_queue", JSON.stringify(globalQueue));
+    if (user && hasLoadedCloud) {
+      saveUserQueue(user.uid, globalQueue);
+    }
+  }, [globalQueue, user, hasLoadedCloud]);
 
   const addToGlobalQueue = (newItems) => {
     setGlobalQueue(prev => [...prev, ...newItems]);
