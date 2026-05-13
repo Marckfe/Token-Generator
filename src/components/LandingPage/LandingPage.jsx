@@ -70,7 +70,7 @@ const LandingPage = () => {
       </main>
 
       <footer className="landing-footer">
-        <p>© 2026 MTG Token Generator & Studio • Made for Planeswalkers</p>
+        <p>© 2026 MTG Token Generator & Studio • Made with ❤️ by Marco Feoli</p>
       </footer>
     </div>
   );

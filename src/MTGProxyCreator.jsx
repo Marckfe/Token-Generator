@@ -77,6 +77,9 @@ export default function MTGProxyCreator() {
                 <LogOut size={18} />
               </button>
             </div>
+            <div className="sidebar-credits">
+              Created by <span className="text-accent">Marco Feoli</span>
+            </div>
           </aside>
           <main className="main-content">
             {tab === "proxy" && <ProxyCreatorMain isMobile={false} externalQueue={globalQueue} setExternalQueue={setGlobalQueue} />}
