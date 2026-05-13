@@ -243,38 +243,55 @@ export default function DeckChecker() {
       doc.setFillColor(240); doc.rect(x - 2, y - 4, colW + 4, 6, 'F');
       doc.text(`${title.toUpperCase()} (${total})`, x, y);
       doc.setFont("helvetica", "normal");
-      let nextY = y + 6;
+      let nextY = y + 5;
+      doc.setFontSize(8); // Smaller font for card list
       items.forEach(item => {
+        if (nextY > 280) return; // Basic overflow protection
         doc.text(item.qty.toString(), x, nextY);
-        doc.text(item.name.substring(0, 35), x + 8, nextY);
-        doc.setDrawColor(230); doc.line(x, nextY + 1, x + colW, nextY + 1);
-        nextY += 5.5;
+        doc.text(item.name.substring(0, 40), x + 6, nextY);
+        doc.setDrawColor(230); doc.line(x, nextY + 0.5, x + colW, nextY + 0.5);
+        nextY += 4.5; // Tighter line height
       });
       return nextY + 6;
     };
 
-    // Column 1: Creatures & Lands
-    let y1 = drawSection("Creatures", mainGroups.Creature, 20, 65);
+    // 1. COMMANDERS AT TOP (if singleton)
+    let startY = 60;
+    if (isSingleton && parsedDeck.cmd.length > 0) {
+      startY = drawSection("Commanders", parsedDeck.cmd, 20, 60);
+    }
+
+    // 2. MAIN DECK COLUMNS
+    let y1 = drawSection("Creatures", mainGroups.Creature, 20, startY);
     y1 = drawSection("Lands", mainGroups.Land, 20, y1);
 
-    // Column 2: Spells & Other
-    let y2 = drawSection("Instants & Sorceries", mainGroups["Instant/Sorcery"], 110, 65);
+    let y2 = drawSection("Instants & Sorceries", mainGroups["Instant/Sorcery"], 110, startY);
     y2 = drawSection("Other Spells", mainGroups.Other, 110, y2);
 
-    // Sideboard / Commander Section
-    if (parsedDeck.cmd.length > 0) {
-      let finalY = Math.max(y1, y2) + 5;
-      if (finalY > 260) { // New page or shift? Let's try to fit on one page.
-         finalY = 230; 
-      }
-      const title = isSingleton ? "Commanders" : "Sideboard";
-      drawSection(title, parsedDeck.cmd, 20, finalY);
+    let finalY = Math.max(y1, y2) + 10;
+
+    // 3. SIDEBOARD AT BOTTOM (if not singleton)
+    if (!isSingleton && parsedDeck.cmd.length > 0) {
+      if (finalY > 270) finalY = 270;
+      finalY = drawSection("Sideboard", parsedDeck.cmd, 20, finalY);
     }
 
     // Totals Footer
     const totalMain = parsedDeck.main.reduce((sum, i) => sum + i.qty, 0);
+    const totalSide = parsedDeck.cmd.reduce((sum, i) => sum + i.qty, 0);
+    const grandTotal = totalMain + totalSide;
+
     doc.setFont("helvetica", "bold");
-    doc.text(`TOTAL MAIN DECK: ${totalMain}`, 110, 280);
+    doc.setFontSize(10);
+    const footerY = Math.min(290, Math.max(finalY + 5, 285));
+    
+    doc.text(`MAIN: ${totalMain}`, 20, footerY);
+    doc.text(`${isSingleton ? 'COMMANDERS' : 'SIDEBOARD'}: ${totalSide}`, 60, footerY);
+    doc.setFillColor(0, 188, 212); // Cyan accent
+    doc.setTextColor(255);
+    doc.rect(108, footerY - 5, 82, 7, 'F');
+    doc.text(`GRAND TOTAL: ${grandTotal} CARDS`, 110, footerY);
+    doc.setTextColor(0);
     
     doc.save(`${playerData.lastName}_Registration.pdf`);
   };
