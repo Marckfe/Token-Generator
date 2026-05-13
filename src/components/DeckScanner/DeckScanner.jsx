@@ -3,6 +3,9 @@ import { createWorker } from 'tesseract.js';
 import { Search, Image as ImageIcon, Trash2, Plus, Loader2, CheckCircle2, AlertCircle, Wand2 } from 'lucide-react';
 import './DeckScanner.css';
 
+const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
+const priorityShort = ['opt', 'duress', 'shock', 'bolt'];
+
 const DeckScanner = ({ onAddToQueue }) => {
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -52,47 +55,55 @@ const DeckScanner = ({ onAddToQueue }) => {
     }
   };
 
+  const isLikelyCardName = (name) => {
+    const n = name.toLowerCase();
+    // MTG Keywords found in text boxes, not names
+    const boxKeywords = ['whenever', 'enters', 'battlefield', 'damage', 'creature', 'target', 'untap', 'draw', 'scry', 'surveil', 'lifelink', 'haste', 'flying', 'trample', 'vigilance', 'token', 'put a', 'counter', 'search', 'library', 'graveyard', 'exile', 'mana', 'pay', 'cost', 'additional', 'sacrifice', 'destroy', 'exile', 'return', 'hand', 'bottom', 'top', 'reveal'];
+    
+    if (boxKeywords.some(word => n.includes(word))) return false;
+    
+    // Names should have at least one vowel (mostly)
+    if (!/[aeiouy]/.test(n) && n.length > 3) return false;
+    
+    // Too many numbers or symbols?
+    const symbols = (name.match(/[^\w\s]/g) || []).length;
+    if (symbols > 3) return false;
+    
+    // Ratio check: names are mostly letters
+    const letters = (name.match(/[a-zA-Z]/g) || []).length;
+    if (letters / name.length < 0.6) return false;
+
+    return true;
+  };
+
   const parseText = (text) => {
-    // 1. Split by newlines, pipes, brackets AND double spaces (columns)
     const rawChunks = text.split(/[\n|()\[\]\\\/]|\s{2,}/);
     const candidateMap = new Map();
-    
-    const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
-    const priorityShort = ['opt', 'duress', 'shock', 'bolt']; // Common short names
 
     rawChunks.forEach(chunk => {
       let trimmed = chunk.trim();
       if (!trimmed || trimmed.length < 2) return;
 
       const lower = trimmed.toLowerCase();
-      
-      // Handle OCR spacing artifacts for lands (e.g., "I s l a n d")
       const compacted = lower.replace(/\s+/g, '');
-      const isLand = basicLands.some(l => compacted.includes(l));
       
-      // HEURISTIC: If it's very short but contains "op" or "is", it might be Opt or Island
       let name = trimmed;
-      if (compacted.includes('opt')) name = 'Opt';
-      else if (compacted.includes('isla') || compacted.includes('isol')) name = 'Island';
-      else if (compacted.includes('moun') || compacted.includes('mont')) name = 'Mountain';
-      else if (compacted.includes('swam') || compacted.includes('palu')) name = 'Swamp';
-      else if (compacted.includes('fore')) name = 'Forest';
-      else if (compacted.includes('plai') || compacted.includes('pian')) name = 'Plains';
+      let isForced = false;
 
-      const isShort = priorityShort.some(s => lower === s || compacted === s) || name === 'Opt';
-      const isActualLand = basicLands.some(l => name.toLowerCase().includes(l));
-      
-      if (!isActualLand && !isShort) {
-        if (trimmed.length > 50) return;
-        if (lower.includes('http') || lower.includes('www')) return;
-      }
+      // Special recovery for high-priority cards
+      if (compacted.includes('opt')) { name = 'Opt'; isForced = true; }
+      else if (compacted.includes('isla') || compacted.includes('isol')) { name = 'Island'; isForced = true; }
+      else if (compacted.includes('moun') || compacted.includes('mont')) { name = 'Mountain'; isForced = true; }
+      else if (compacted.includes('swam') || compacted.includes('palu')) { name = 'Swamp'; isForced = true; }
+      else if (compacted.includes('fore')) { name = 'Forest'; isForced = true; }
+      else if (compacted.includes('plai') || compacted.includes('pian')) { name = 'Plains'; isForced = true; }
+
+      if (!isForced && !isLikelyCardName(trimmed)) return;
 
       let qty = 1;
-      // If we didn't force the name above, try to extract quantity
-      if (name === trimmed && !trimmed.includes('/')) {
+      if (!isForced && !trimmed.includes('/')) {
         const startQty = trimmed.match(/^(\d+)\s*[xX]?\s+/);
         const endQty = trimmed.match(/\s+(\d+)\s*[xX]?$/);
-        
         if (startQty) {
           qty = parseInt(startQty[1]);
           name = trimmed.replace(startQty[0], '').trim();
@@ -102,14 +113,14 @@ const DeckScanner = ({ onAddToQueue }) => {
         }
       }
 
-      // Hard limit of 4 for non-lands
-      if (!isActualLand) {
+      const isLand = basicLands.some(l => name.toLowerCase().includes(l));
+      if (!isLand) {
         qty = Math.min(qty, 4);
       } else {
         qty = Math.min(qty, 60); 
       }
 
-      if (name === trimmed) {
+      if (!isForced) {
         name = name.replace(/[^\w\s',-]/g, ' ').replace(/\s+/g, ' ').trim();
       }
       if (name.length < 2) return;
@@ -117,7 +128,7 @@ const DeckScanner = ({ onAddToQueue }) => {
       const key = name.toLowerCase();
       if (candidateMap.has(key)) {
         const existing = candidateMap.get(key);
-        existing.qty = Math.min(existing.qty + qty, isActualLand ? 100 : 4);
+        existing.qty = Math.min(existing.qty + qty, isLand ? 100 : 4);
       } else {
         candidateMap.set(key, { name, qty });
       }
