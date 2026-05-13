@@ -1,19 +1,20 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
 import { Search, Image as ImageIcon, Trash2, Plus, Loader2, CheckCircle2, AlertCircle, Wand2 } from 'lucide-react';
 import './DeckScanner.css';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
 const priorityShort = ['opt', 'duress', 'shock', 'bolt'];
+const OPENROUTER_KEY = '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';
 
 const DeckScanner = ({ onAddToQueue }) => {
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [rawText, setRawText] = useState('');
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
+  const [useAI, setUseAI] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleImageUpload = (e) => {
@@ -22,12 +23,92 @@ const DeckScanner = ({ onAddToQueue }) => {
       setImage(file);
       setPreview(URL.createObjectURL(file));
       setResults([]);
-      setRawText('');
       setError(null);
     }
   };
 
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  const processWithAI = async () => {
+    if (!image) return;
+    setIsProcessing(true);
+    setProgress(20);
+    setError(null);
+
+    try {
+      const base64Image = await fileToBase64(image);
+      setProgress(50);
+
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "model": "google/gemini-flash-1.5-exp:free",
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Extract all Magic: The Gathering card names and their exact quantities from this image. Format the output strictly as a JSON array of objects: [{\"name\": \"Card Name\", \"qty\": 4}]. Count stacked cards by their visible headers. Ignore non-card text."
+                },
+                {
+                  "type": "image_url",
+                  "image_url": {
+                    "url": base64Image
+                  }
+                }
+              ]
+            }
+          ]
+        })
+      });
+
+      const data = await response.json();
+      setProgress(80);
+
+      if (data.choices && data.choices[0]) {
+        const content = data.choices[0].message.content;
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const parsedResults = JSON.parse(jsonMatch[0]);
+          const detectedCards = parsedResults.map(item => ({
+            id: Math.random().toString(36).substr(2, 9),
+            qty: item.qty,
+            name: item.name,
+            status: 'pending',
+            data: null
+          }));
+          setResults(detectedCards);
+          searchAllCards(detectedCards);
+        } else {
+          throw new Error("Formato risposta non valido");
+        }
+      } else {
+        throw new Error("Errore API OpenRouter");
+      }
+    } catch (err) {
+      console.error('AI Error:', err);
+      setError('Errore durante l\'analisi AI. Verifica la connessione o l\'API Key.');
+    } finally {
+      setIsProcessing(false);
+      setProgress(100);
+    }
+  };
+
   const processImage = async () => {
+    if (useAI) return processWithAI();
+
     if (!image) return;
     setIsProcessing(true);
     setProgress(0);
@@ -43,13 +124,11 @@ const DeckScanner = ({ onAddToQueue }) => {
       });
 
       const { data: { text } } = await worker.recognize(image);
-      setRawText(text);
       await worker.terminate();
-      
       parseText(text);
     } catch (err) {
       console.error('OCR Error:', err);
-      setError('Errore durante la scansione dell\'immagine. Riprova con un\'immagine più nitida.');
+      setError('Errore durante la scansione OCR.');
     } finally {
       setIsProcessing(false);
     }
@@ -57,22 +136,13 @@ const DeckScanner = ({ onAddToQueue }) => {
 
   const isLikelyCardName = (name) => {
     const n = name.toLowerCase();
-    // MTG Keywords found in text boxes, not names
-    const boxKeywords = ['whenever', 'enters', 'battlefield', 'damage', 'creature', 'target', 'untap', 'draw', 'scry', 'surveil', 'lifelink', 'haste', 'flying', 'trample', 'vigilance', 'token', 'put a', 'counter', 'search', 'library', 'graveyard', 'exile', 'mana', 'pay', 'cost', 'additional', 'sacrifice', 'destroy', 'exile', 'return', 'hand', 'bottom', 'top', 'reveal'];
-    
+    const boxKeywords = ['whenever', 'enters', 'battlefield', 'damage', 'creature', 'target', 'untap', 'draw', 'scry', 'surveil', 'lifelink', 'haste', 'flying', 'trample', 'vigilance', 'token', 'put a', 'counter', 'search', 'library', 'graveyard', 'exile', 'mana', 'pay', 'cost', 'additional', 'sacrifice', 'destroy', 'return', 'hand', 'bottom', 'top', 'reveal'];
     if (boxKeywords.some(word => n.includes(word))) return false;
-    
-    // Names should have at least one vowel (mostly)
     if (!/[aeiouy]/.test(n) && n.length > 3) return false;
-    
-    // Too many numbers or symbols?
     const symbols = (name.match(/[^\w\s]/g) || []).length;
     if (symbols > 3) return false;
-    
-    // Ratio check: names are mostly letters
     const letters = (name.match(/[a-zA-Z]/g) || []).length;
     if (letters / name.length < 0.6) return false;
-
     return true;
   };
 
@@ -83,14 +153,11 @@ const DeckScanner = ({ onAddToQueue }) => {
     rawChunks.forEach(chunk => {
       let trimmed = chunk.trim();
       if (!trimmed || trimmed.length < 2) return;
-
       const lower = trimmed.toLowerCase();
       const compacted = lower.replace(/\s+/g, '');
-      
       let name = trimmed;
       let isForced = false;
 
-      // Special recovery for high-priority cards
       if (compacted.includes('opt')) { name = 'Opt'; isForced = true; }
       else if (compacted.includes('isla') || compacted.includes('isol')) { name = 'Island'; isForced = true; }
       else if (compacted.includes('moun') || compacted.includes('mont')) { name = 'Mountain'; isForced = true; }
@@ -114,11 +181,7 @@ const DeckScanner = ({ onAddToQueue }) => {
       }
 
       const isLand = basicLands.some(l => name.toLowerCase().includes(l));
-      if (!isLand) {
-        qty = Math.min(qty, 4);
-      } else {
-        qty = Math.min(qty, 60); 
-      }
+      qty = isLand ? Math.min(qty, 60) : Math.min(qty, 4);
 
       if (!isForced) {
         name = name.replace(/[^\w\s',-]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -148,15 +211,12 @@ const DeckScanner = ({ onAddToQueue }) => {
 
   const searchCard = async (card) => {
     setResults(prev => prev.map(c => c.id === card.id ? { ...c, status: 'searching' } : c));
-    
     try {
       const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(card.name)}`);
       const data = await response.json();
-
       if (data.object === 'card') {
         setResults(prev => {
           const existingIdx = prev.findIndex(c => c.status === 'found' && c.data?.id === data.id && c.id !== card.id);
-          
           if (existingIdx !== -1) {
             const newResults = [...prev];
             const isLand = basicLands.some(l => data.name.toLowerCase().includes(l));
@@ -164,13 +224,7 @@ const DeckScanner = ({ onAddToQueue }) => {
             newResults[existingIdx].qty = isLand ? newQty : Math.min(newQty, 4);
             return newResults.filter(c => c.id !== card.id);
           }
-
-          return prev.map(c => c.id === card.id ? { 
-            ...c, 
-            status: 'found', 
-            name: data.name, 
-            data: data 
-          } : c);
+          return prev.map(c => c.id === card.id ? { ...c, status: 'found', name: data.name, data: data } : c);
         });
       } else {
         setResults(prev => prev.filter(c => c.id !== card.id));
@@ -180,22 +234,12 @@ const DeckScanner = ({ onAddToQueue }) => {
     }
   };
 
-  const searchAllCards = (cards) => {
-    cards.forEach(card => searchCard(card));
-  };
-
-  const updateCardQty = (id, newQty) => {
-    setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, newQty) } : c));
-  };
-
-  const removeCard = (id) => {
-    setResults(prev => prev.filter(c => c.id !== id));
-  };
-
+  const searchAllCards = (cards) => cards.forEach(card => searchCard(card));
+  const updateCardQty = (id, newQty) => setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, newQty) } : c));
+  const removeCard = (id) => setResults(prev => prev.filter(c => c.id !== id));
   const handleAddToQueue = () => {
     const validCards = results.filter(c => c.status === 'found');
     if (validCards.length === 0) return;
-
     const queueItems = validCards.map(c => ({
       id: c.data.id,
       name: c.data.name,
@@ -204,9 +248,7 @@ const DeckScanner = ({ onAddToQueue }) => {
       set: c.data.set_name,
       artist: c.data.artist
     }));
-
     onAddToQueue(queueItems);
-    // Optional: show success or redirect
   };
 
   return (
@@ -216,9 +258,7 @@ const DeckScanner = ({ onAddToQueue }) => {
           <Wand2 className="text-accent" />
           <h2>Deck Scanner OCR</h2>
         </div>
-        <p className="scanner-subtitle">
-          Carica una foto della tua decklist o uno screenshot per convertirlo istantaneamente in proxy.
-        </p>
+        <p className="scanner-subtitle">Analisi avanzata con IA per mazzi e screenshot.</p>
       </div>
 
       <div className="scanner-layout">
@@ -227,13 +267,7 @@ const DeckScanner = ({ onAddToQueue }) => {
             className={`scanner-dropzone ${isProcessing ? 'processing' : ''}`}
             onClick={() => !isProcessing && fileInputRef.current.click()}
           >
-            <input 
-              type="file" 
-              ref={fileInputRef}
-              onChange={handleImageUpload}
-              accept="image/*"
-              className="hidden"
-            />
+            <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
             {preview ? (
               <img src={preview} alt="Anteprima" className="scanner-preview-img" />
             ) : (
@@ -242,86 +276,72 @@ const DeckScanner = ({ onAddToQueue }) => {
                 <p>Trascina un'immagine o clicca per caricare</p>
               </div>
             )}
-            
             {isProcessing && (
               <div className="processing-overlay">
                 <Loader2 size={40} className="animate-spin mb-4 text-accent" />
-                <p className="font-bold">{useAI ? 'L\'IA sta analizzando l\'immagine...' : 'Scansione OCR in corso...'}</p>
-                <div className="progress-bar-bg">
-                  <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
+                <p className="font-bold">{useAI ? 'L\'IA sta analizzando...' : 'Scansione OCR...'}</p>
+                <div className="progress-bar-bg"><div className="progress-bar-fill" style={{ width: `${progress}%` }}></div></div>
+              </div>
+            )}
+          </div>
+
+          <div className="scanner-controls mt-6">
+            <div className="ai-toggle-container mb-4">
+              <div className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border">
+                <div className="flex items-center gap-3">
+                  <Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} />
+                  <div>
+                    <p className="text-sm font-bold">Modalità IA Avanzata</p>
+                    <p className="text-[11px] opacity-60">Precisione massima con OpenRouter</p>
+                  </div>
                 </div>
-          <button 
-            className="btn btn-primary btn-block mt-4" 
-            onClick={processImage} 
-            disabled={!image || isProcessing}
-          >
-            {isProcessing ? 'Elaborazione...' : 'Inizia Scansione OCR'}
-          </button>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />
+                  <div className="w-11 h-6 bg-muted/20 rounded-full peer peer-checked:bg-accent after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                </label>
+              </div>
+            </div>
+
+            <button 
+              className={`w-full py-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                !image || isProcessing ? 'bg-muted/20 text-muted' : useAI ? 'bg-accent text-white' : 'bg-primary text-white'
+              }`}
+              onClick={processImage}
+              disabled={!image || isProcessing}
+            >
+              {isProcessing ? 'Analisi in corso...' : (useAI ? 'Avvia Analisi IA' : 'Inizia Scansione OCR')}
+            </button>
+            {error && <div className="mt-4 p-3 bg-error/10 text-error text-xs rounded-lg">{error}</div>}
+          </div>
         </div>
 
         <div className="scanner-results-section">
           <div className="results-header">
-            <h3>Risultati Riconosciuti ({results.length})</h3>
-            {results.length > 0 && (
-              <button 
-                className="btn btn-accent text-xs py-1"
-                onClick={handleAddToQueue}
-                disabled={!results.some(c => c.status === 'found')}
-              >
-                <Plus size={14} /> Aggiungi alla Coda
-              </button>
-            )}
+            <h3>Risultati ({results.length})</h3>
+            <button className="btn btn-accent text-xs" onClick={handleAddToQueue} disabled={results.length === 0}>
+              <Plus size={14} /> Aggiungi alla Coda
+            </button>
           </div>
-
           <div className="results-list">
-            {results.length === 0 && !isProcessing && (
-              <div className="results-empty">
-                <Search size={32} className="opacity-20 mb-2" />
-                <p>Nessuna carta rilevata. Carica un'immagine per iniziare.</p>
-              </div>
-            )}
-
             {results.map((card) => (
               <div key={card.id} className={`result-card-item ${card.status}`}>
                 {card.status === 'found' && card.data?.image_uris?.normal && (
-                  <div className="card-thumb">
-                    <img src={card.data.image_uris.small || card.data.image_uris.normal} alt={card.name} />
-                  </div>
+                  <div className="card-thumb"><img src={card.data.image_uris.small} alt={card.name} /></div>
                 )}
-                
                 <div className="card-item-body">
-                  <div className="card-item-main">
-                    <span className="result-name" title={card.name}>{card.name}</span>
-                    <div className="result-status-tag">
-                      {card.status === 'searching' && <Loader2 size={10} className="animate-spin" />}
-                      {card.status === 'found' && <CheckCircle2 size={10} className="text-success" />}
-                      <span className="ml-1 text-[9px] uppercase font-bold opacity-70">
-                        {card.status === 'searching' ? 'Ricerca...' : 'Confermata'}
-                      </span>
-                    </div>
-                  </div>
-
+                  <span className="result-name">{card.name}</span>
                   <div className="card-item-footer">
                     <div className="result-qty-control">
                       <button onClick={() => updateCardQty(card.id, card.qty - 1)}>-</button>
-                      <input 
-                        type="number" 
-                        value={card.qty} 
-                        onChange={(e) => updateCardQty(card.id, parseInt(e.target.value))}
-                        min="1"
-                      />
+                      <input type="number" value={card.qty} readOnly />
                       <button onClick={() => updateCardQty(card.id, card.qty + 1)}>+</button>
                     </div>
-                    <button className="delete-btn" onClick={() => removeCard(card.id)}>
-                      <Trash2 size={14} />
-                    </button>
+                    <button className="delete-btn" onClick={() => removeCard(card.id)}><Trash2 size={14} /></button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-          
-          {error && <div className="error-text mt-3">{error}</div>}
         </div>
       </div>
     </div>
