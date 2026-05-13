@@ -14,7 +14,7 @@ const DeckScanner = ({ onAddToQueue }) => {
   const [error, setError] = useState(null);
   const [useAI, setUseAI] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('openrouter_key') || '');
-  const [customModel, setCustomModel] = useState(localStorage.getItem('openrouter_model') || '');
+  const [customModel, setCustomModel] = useState(localStorage.getItem('openrouter_model') || 'google/gemini-2.0-flash-exp:free');
   const [showKeyInput, setShowKeyInput] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -49,7 +49,7 @@ const DeckScanner = ({ onAddToQueue }) => {
   const processWithAI = async () => {
     if (!image) return;
     if (!apiKey) {
-      setError("Inserisci la tua OpenRouter API Key per usare l'IA.");
+      setError("Inserisci la tua API Key.");
       setShowKeyInput(true);
       return;
     }
@@ -58,19 +58,21 @@ const DeckScanner = ({ onAddToQueue }) => {
     setProgress(20);
     setError(null);
 
+    // Hardcoded known working models list on OpenRouter
     const models = [
-      customModel, 
+      customModel,
       "google/gemini-2.0-flash-exp:free",
-      "google/gemini-flash-1.5-8b-exp:free",
-      "google/gemini-pro-1.5-exp:free"
+      "google/gemini-flash-1.5-exp:free",
+      "google/gemini-pro-1.5-exp:free",
+      "google/gemini-flash-1.5-8b-exp:free"
     ].filter(Boolean);
 
     const tryModel = async (index) => {
       if (index >= models.length) {
-        throw new Error("Nessun modello IA gratuito disponibile. Verifica il nome del modello nelle impostazioni.");
+        throw new Error("Nessun modello IA disponibile. Controlla il nome del modello nelle impostazioni.");
       }
 
-      const model = models[index];
+      const model = models[index].trim();
       try {
         const base64Image = await fileToBase64(image);
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -87,7 +89,7 @@ const DeckScanner = ({ onAddToQueue }) => {
               {
                 "role": "user",
                 "content": [
-                  { "type": "text", "text": "Extract all MTG card names and quantities from this image. Format strictly as JSON array: [{\"name\": \"Card Name\", \"qty\": 4}]. Count stacks by visible headers." },
+                  { "type": "text", "text": "List MTG cards in this image as JSON: [{\"name\":\"Card Name\",\"qty\":4}]. Count stacked cards." },
                   { "type": "image_url", "image_url": { "url": base64Image } }
                 ]
               }
@@ -96,8 +98,10 @@ const DeckScanner = ({ onAddToQueue }) => {
         });
 
         const data = await response.json();
+        
         if (data.error) {
-          if (data.error.code === 404 || data.error.message.includes("No endpoints") || data.error.message.includes("not found")) {
+          // If model not found, try next one
+          if (data.error.code === 404 || data.error.message.includes("model") || data.error.message.includes("not found")) {
             return tryModel(index + 1);
           }
           throw new Error(data.error.message);
@@ -118,11 +122,11 @@ const DeckScanner = ({ onAddToQueue }) => {
             setResults(detected);
             detected.forEach(card => searchCard(card));
           } else {
-            throw new Error("L'IA non ha rilevato carte valide.");
+            throw new Error("L'IA non ha rilevato carte.");
           }
         }
       } catch (err) {
-        if (err.message.includes("No endpoints") || err.message.includes("404") || err.message.includes("not found")) {
+        if (err.message.includes("not found") || err.message.includes("404")) {
           return tryModel(index + 1);
         }
         throw err;
@@ -153,7 +157,7 @@ const DeckScanner = ({ onAddToQueue }) => {
       await worker.terminate();
       parseText(text);
     } catch (err) {
-      setError('Errore durante la scansione OCR.');
+      setError('Errore OCR.');
     } finally {
       setIsProcessing(false);
     }
@@ -218,7 +222,6 @@ const DeckScanner = ({ onAddToQueue }) => {
 
   const updateCardQty = (id, newQty) => setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, newQty) } : c));
   const removeCard = (id) => setResults(prev => prev.filter(c => c.id !== id));
-  
   const handleAddToQueue = () => {
     const validCards = results.filter(c => c.status === 'found');
     onAddToQueue(validCards.map(c => ({
@@ -240,15 +243,15 @@ const DeckScanner = ({ onAddToQueue }) => {
             <h2>Deck Scanner OCR</h2>
           </div>
         </div>
-        <p className="scanner-subtitle">Analisi avanzata con IA per mazzi e screenshot.</p>
+        <p className="scanner-subtitle">Analisi avanzata con IA.</p>
       </div>
 
       <div className="scanner-layout">
         <div className="scanner-upload-section">
           <div className={`scanner-dropzone ${isProcessing ? 'processing' : ''}`} onClick={() => !isProcessing && fileInputRef.current.click()}>
             <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-            {preview ? <img src={preview} alt="Anteprima" className="scanner-preview-img" /> : <div className="dropzone-placeholder"><ImageIcon size={48} /><p>Trascina un'immagine o clicca per caricare</p></div>}
-            {isProcessing && <div className="processing-overlay"><Loader2 size={40} className="animate-spin mb-4 text-accent" /><p className="font-bold">{useAI ? 'L\'IA sta analizzando...' : 'Scansione OCR...'}</p><div className="progress-bar-bg"><div className="progress-bar-fill" style={{ width: `${progress}%` }}></div></div></div>}
+            {preview ? <img src={preview} alt="Anteprima" className="scanner-preview-img" /> : <div className="dropzone-placeholder"><ImageIcon size={48} /><p>Carica un'immagine</p></div>}
+            {isProcessing && <div className="processing-overlay"><Loader2 size={40} className="animate-spin mb-4 text-accent" /><p className="font-bold">Analisi...</p></div>}
           </div>
 
           <div className="scanner-controls">
@@ -259,7 +262,6 @@ const DeckScanner = ({ onAddToQueue }) => {
                     <Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} />
                     <p className="mode-label">Modalità IA Avanzata</p>
                   </div>
-                  <p className="mode-desc">Precisione massima con Vision IA</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
@@ -271,21 +273,15 @@ const DeckScanner = ({ onAddToQueue }) => {
             {showKeyInput && (
               <div className="api-key-panel">
                 <div className="flex flex-col gap-3">
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-muted mb-1">OpenRouter API Key</label>
-                    <input type="password" placeholder="sk-or-v1-..." className="api-key-input w-full" value={apiKey} onChange={(e) => saveSettings(e.target.value, customModel)} />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-muted mb-1">Modello Vision (Opzionale)</label>
-                    <input type="text" placeholder="es: google/gemini-2.0-flash-exp:free" className="api-key-input w-full" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
-                  </div>
-                  <button className="api-key-save w-full py-2" onClick={() => setShowKeyInput(false)}>Salva Impostazioni</button>
+                  <input type="password" placeholder="API Key..." className="api-key-input" value={apiKey} onChange={(e) => saveSettings(e.target.value, customModel)} />
+                  <input type="text" placeholder="Modello (es: google/gemini-2.0-flash-exp:free)" className="api-key-input" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
+                  <button className="api-key-save py-2" onClick={() => setShowKeyInput(false)}>Salva</button>
                 </div>
               </div>
             )}
 
             <button className={`main-process-btn ${useAI ? 'ai' : ''}`} onClick={processImage} disabled={!image || isProcessing}>
-              {isProcessing ? <><Loader2 size={18} className="animate-spin" /> Analisi...</> : <>{useAI ? <Wand2 size={18} /> : <Search size={18} />} {useAI ? 'Avvia Analisi IA' : 'Inizia Scansione OCR'}</>}
+              {isProcessing ? <><Loader2 size={18} className="animate-spin" /> Analisi...</> : <>{useAI ? <Wand2 size={18} /> : <Search size={18} />} {useAI ? 'Analisi IA' : 'Scansione OCR'}</>}
             </button>
             {error && <div className="error-box"><AlertCircle size={14} /> {error}</div>}
           </div>
@@ -294,12 +290,9 @@ const DeckScanner = ({ onAddToQueue }) => {
         <div className="scanner-results-section">
           <div className="results-header">
             <h3>Risultati ({results.length})</h3>
-            <button className="add-to-queue-btn" onClick={handleAddToQueue} disabled={results.length === 0}>
-              <Plus size={14} /> Aggiungi alla Coda
-            </button>
+            <button className="add-to-queue-btn" onClick={handleAddToQueue} disabled={results.length === 0}>Aggiungi</button>
           </div>
           <div className="results-grid">
-            {results.length === 0 && !isProcessing && <div className="empty-results"><Search size={32} /><p>Nessuna carta rilevata.</p></div>}
             {results.map((card) => (
               <div key={card.id} className={`result-card-item ${card.status}`}>
                 {card.status === 'found' && card.data?.image_uris?.normal && (
