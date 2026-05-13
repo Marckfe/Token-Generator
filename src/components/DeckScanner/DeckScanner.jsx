@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
-import { Search, Image as ImageIcon, Trash2, Plus, Loader2, CheckCircle2, AlertCircle, Wand2, Settings } from 'lucide-react';
+import { Search, Image as ImageIcon, Trash2, Plus, Loader2, CheckCircle2, AlertCircle, Wand2, Settings, Key } from 'lucide-react';
 import './DeckScanner.css';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
@@ -15,7 +15,7 @@ const DeckScanner = ({ onAddToQueue }) => {
   const [error, setError] = useState(null);
   const [useAI, setUseAI] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('openrouter_key') || '');
-  const [showSettings, setShowSettings] = useState(false);
+  const [showKeyInput, setShowKeyInput] = useState(false);
   const fileInputRef = useRef(null);
 
   const saveKey = (key) => {
@@ -46,8 +46,8 @@ const DeckScanner = ({ onAddToQueue }) => {
   const processWithAI = async () => {
     if (!image) return;
     if (!apiKey) {
-      setError("Inserisci una API Key nelle impostazioni per usare l'IA.");
-      setShowSettings(true);
+      setError("Inserisci la tua OpenRouter API Key per usare l'IA.");
+      setShowKeyInput(true);
       return;
     }
 
@@ -59,16 +59,17 @@ const DeckScanner = ({ onAddToQueue }) => {
       const base64Image = await fileToBase64(image);
       setProgress(50);
 
+      // We use a more stable free model from OpenRouter
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": window.location.origin, // Required by OpenRouter
-          "X-Title": "MTG Proxy Creator", // Required by OpenRouter
+          "HTTP-Referer": "https://mtg-proxy-creator.vercel.app",
+          "X-Title": "MTG Proxy Creator",
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          "model": "google/gemini-flash-1.5-exp:free",
+          "model": "google/gemini-flash-1.5:free",
           "messages": [
             {
               "role": "user",
@@ -107,11 +108,11 @@ const DeckScanner = ({ onAddToQueue }) => {
           setResults(detectedCards);
           searchAllCards(detectedCards);
         } else {
-          throw new Error("L'IA non ha rilevato carte valide.");
+          throw new Error("L'IA non ha rilevato carte valide nell'immagine.");
         }
       } else {
-        const errMsg = data.error?.message || "Errore API OpenRouter. Verifica la tua API Key.";
-        throw new Error(errMsg);
+        const msg = data.error?.message || "Errore API. Verifica la tua Chiave.";
+        throw new Error(msg);
       }
     } catch (err) {
       console.error('AI Error:', err);
@@ -262,31 +263,8 @@ const DeckScanner = ({ onAddToQueue }) => {
             <Wand2 className="text-accent" size={24} />
             <h2>Deck Scanner OCR</h2>
           </div>
-          <button 
-            className={`settings-btn ${showSettings ? 'active' : ''}`}
-            onClick={() => setShowSettings(!showSettings)}
-            title="Impostazioni API"
-          >
-            <Settings size={20} />
-          </button>
         </div>
         <p className="scanner-subtitle">Analisi avanzata con IA per mazzi e screenshot.</p>
-        
-        {showSettings && (
-          <div className="settings-panel">
-            <label>Chiave API OpenRouter (sk-or-v1-...)</label>
-            <div className="settings-input-group">
-              <input 
-                type="password" 
-                placeholder="Incolla la tua chiave qui..." 
-                value={apiKey}
-                onChange={(e) => saveKey(e.target.value)}
-              />
-              <button onClick={() => setShowSettings(false)}>Chiudi</button>
-            </div>
-            <p className="settings-hint">La chiave viene salvata localmente nel browser.</p>
-          </div>
-        )}
       </div>
 
       <div className="scanner-layout">
@@ -316,17 +294,44 @@ const DeckScanner = ({ onAddToQueue }) => {
           <div className="scanner-controls">
             <div className="ai-mode-card">
               <div className="ai-mode-info">
-                <Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} />
-                <div>
-                  <p className="mode-label">Modalità IA Avanzata</p>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
+                    <Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} />
+                    <p className="mode-label">Modalità IA Avanzata</p>
+                  </div>
                   <p className="mode-desc">Precisione massima con Vision AI</p>
                 </div>
               </div>
-              <label className="switch">
-                <input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />
-                <span className="slider"></span>
-              </label>
+              <div className="flex items-center gap-4">
+                <button 
+                  className={`p-2 rounded-lg transition-all ${apiKey ? 'text-success' : 'text-error'}`}
+                  onClick={() => setShowKeyInput(!showKeyInput)}
+                  title="Configura Chiave API"
+                >
+                  <Key size={18} />
+                </button>
+                <label className="switch">
+                  <input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />
+                  <span className="slider"></span>
+                </label>
+              </div>
             </div>
+
+            {showKeyInput && (
+              <div className="api-key-panel">
+                <div className="flex gap-2">
+                  <input 
+                    type="password" 
+                    placeholder="Incolla la tua OpenRouter Key qui..." 
+                    className="api-key-input"
+                    value={apiKey}
+                    onChange={(e) => saveKey(e.target.value)}
+                  />
+                  <button className="api-key-save" onClick={() => setShowKeyInput(false)}>OK</button>
+                </div>
+                <p className="api-key-hint">Necessaria per la modalità IA.</p>
+              </div>
+            )}
 
             <button 
               className={`main-process-btn ${useAI ? 'ai' : ''}`}
