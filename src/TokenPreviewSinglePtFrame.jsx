@@ -178,11 +178,11 @@ function renderCardSync(canvas, state, withBleed = false) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, TW, TH);
 
-  // Elegant dark checkerboard for transparency/missing art
+  // Classic light checkerboard for transparency/missing art
   const size = 40;
   for (let y = 0; y < TH; y += size) {
     for (let x = 0; x < TW; x += size) {
-      ctx.fillStyle = (Math.floor(x / size) + Math.floor(y / size)) % 2 === 0 ? "#1a1a1a" : "#2a2a2a";
+      ctx.fillStyle = (Math.floor(x / size) + Math.floor(y / size)) % 2 === 0 ? "#f0f0f0" : "#ffffff";
       ctx.fillRect(x, y, size, size);
     }
   }
@@ -1015,9 +1015,9 @@ export default function TokenPreviewSinglePtFrame() {
             <div className="canvas-wrapper" style={{ 
               width: CW * pScale, 
               height: CH * pScale,
-              boxShadow: '0 50px 100px rgba(0,0,0,0.8)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
               borderRadius: 26 * pScale,
-              background: '#1a1a1a'
+              background: '#ffffff'
             }}>
               <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', background: 'transparent' }} />
               
@@ -1030,9 +1030,9 @@ export default function TokenPreviewSinglePtFrame() {
                   justifyContent: 'center', 
                   textAlign: 'center',
                   padding: '0 40px',
-                  color: 'var(--muted)',
+                  color: '#000',
                   fontWeight: 'bold',
-                  opacity: 0.3,
+                  opacity: 0.2,
                   textTransform: 'uppercase',
                   letterSpacing: '0.2em',
                   pointerEvents: 'none',

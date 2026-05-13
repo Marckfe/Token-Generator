@@ -292,8 +292,8 @@ export default function StudioEditor() {
       const newY = Math.round(dragRef.current.initialY + dy);
 
       updateLayer(dragRef.current.id, {
-        x: Math.max(0, Math.min(CW - layer.width, newX)),
-        y: Math.max(0, Math.min(CH - layer.height, newY))
+        x: Math.max(10, Math.min(CW - layer.width - 10, newX)),
+        y: Math.max(10, Math.min(CH - layer.height - 10, newY))
       });
     };
     const onEnd = () => setIsDragging(false);
@@ -530,10 +530,10 @@ export default function StudioEditor() {
                   height: CH, 
                   transform: `scale(${zoom})`,
                   transformOrigin: 'center center',
-                  background: bgArt ? `url(${bgArt}) center/cover no-repeat` : 'repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 50% / 40px 40px',
+                  background: bgArt ? `url(${bgArt}) center/cover no-repeat` : 'repeating-conic-gradient(#f0f0f0 0% 25%, #ffffff 0% 50%) 50% / 40px 40px',
                   position: 'absolute',
                   overflow: 'hidden',
-                  boxShadow: '0 50px 100px rgba(0,0,0,0.8)',
+                  boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
                   borderRadius: '26px'
                 }}
                 onClick={() => setSelectedId(null)}
@@ -547,9 +547,9 @@ export default function StudioEditor() {
                     justifyContent: 'center', 
                     textAlign: 'center',
                     padding: '0 40px',
-                    color: 'var(--muted)',
+                    color: '#000',
                     fontWeight: 'bold',
-                    opacity: 0.3,
+                    opacity: 0.2,
                     textTransform: 'uppercase',
                     letterSpacing: '0.2em',
                     pointerEvents: 'none',
