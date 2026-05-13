@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createWorker } from 'tesseract.js';
-import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload, Bug } from 'lucide-react';
+import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload, Bug, RefreshCw } from 'lucide-react';
 import './DeckScanner.css';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
@@ -25,6 +25,14 @@ const DeckScanner = ({ onAddToQueue }) => {
     setCustomModel(model.trim());
     localStorage.setItem('openrouter_key', cleanKey);
     localStorage.setItem('openrouter_model', model.trim());
+  };
+
+  const resetSettings = () => {
+    localStorage.removeItem('openrouter_key');
+    localStorage.removeItem('openrouter_model');
+    setApiKey('');
+    setCustomModel('');
+    window.location.reload();
   };
 
   const handleImageUpload = (e) => {
@@ -70,18 +78,14 @@ const DeckScanner = ({ onAddToQueue }) => {
       const resp = await fetch("https://openrouter.ai/api/v1/models");
       const data = await resp.json();
       if (!data.data) return [];
-      
-      // Filter for free models that likely support vision
       return data.data
         .filter(m => {
           const isFree = m.pricing.prompt === "0" && m.pricing.completion === "0";
-          const name = m.id.toLowerCase();
-          const isVision = name.includes('vision') || name.includes('gemini') || name.includes('pixtral') || name.includes('llava');
-          return isFree && isVision;
+          const id = m.id.toLowerCase();
+          return isFree && (id.includes('vision') || id.includes('gemini') || id.includes('pixtral') || id.includes('llava') || id.includes('multimodal'));
         })
         .map(m => m.id);
     } catch (e) {
-      console.error("Model fetch failed", e);
       return [];
     }
   };
@@ -95,30 +99,32 @@ const DeckScanner = ({ onAddToQueue }) => {
     }
 
     setIsProcessing(true);
-    setProgress(10);
     setError(null);
     setDebugInfo(null);
 
     try {
       const base64Image = await compressImage(image);
-      
-      // 1. Get the list of models to try
-      let modelsToTry = [customModel].filter(Boolean);
       const freeModels = await fetchAvailableFreeVisionModels();
-      modelsToTry = [...modelsToTry, ...freeModels, "google/gemini-pro-1.5-exp:free", "google/gemini-flash-1.5-exp:free"];
       
-      // Deduplicate
-      modelsToTry = [...new Set(modelsToTry)];
+      let modelsToTry = [
+        customModel,
+        ...freeModels,
+        "google/gemini-2.0-flash-exp:free",
+        "google/gemini-flash-1.5-8b-exp:free",
+        "meta-llama/llama-3.2-11b-vision-instruct:free"
+      ].filter(Boolean);
+      
+      modelsToTry = [...new Set(modelsToTry)]; // Deduplicate
 
       let lastError = "";
 
       const tryModel = async (index) => {
         if (index >= modelsToTry.length) {
-          throw new Error(`Nessun modello disponibile. Errore: ${lastError}`);
+          throw new Error(`Nessun modello ha funzionato. Ultimo errore: ${lastError}`);
         }
 
         const model = modelsToTry[index];
-        console.log(`Trying model: ${model}`);
+        console.log(`Trying model ${index + 1}/${modelsToTry.length}: ${model}`);
         
         try {
           const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -147,8 +153,7 @@ const DeckScanner = ({ onAddToQueue }) => {
           
           if (data.error) {
             lastError = data.error.message;
-            setDebugInfo(JSON.stringify(data.error, null, 2));
-            // Try next if model issue
+            setDebugInfo(`Model: ${model}\nError: ${JSON.stringify(data.error, null, 2)}`);
             if (data.error.code === 404 || lastError.includes("endpoint") || lastError.includes("not found")) {
               return tryModel(index + 1);
             }
@@ -170,7 +175,7 @@ const DeckScanner = ({ onAddToQueue }) => {
               setResults(detected);
               detected.forEach(card => searchCard(card));
             } else {
-              throw new Error("Formato risposta IA non valido.");
+              throw new Error("Risposta IA in formato non valido.");
             }
           }
         } catch (err) {
@@ -194,7 +199,6 @@ const DeckScanner = ({ onAddToQueue }) => {
     if (useAI) return processWithAI();
     if (!image) return;
     setIsProcessing(true);
-    setProgress(0);
     setError(null);
     try {
       const worker = await createWorker('eng+ita', 1);
@@ -267,6 +271,7 @@ const DeckScanner = ({ onAddToQueue }) => {
 
   const updateCardQty = (id, newQty) => setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, newQty) } : c));
   const removeCard = (id) => setResults(prev => prev.filter(c => c.id !== id));
+  
   const handleAddToQueue = () => {
     const validCards = results.filter(c => c.status === 'found');
     onAddToQueue(validCards.map(c => ({
@@ -285,7 +290,7 @@ const DeckScanner = ({ onAddToQueue }) => {
         <div className="scanner-title-row">
           <div className="scanner-title-group">
             <Wand2 className="text-accent" size={24} />
-            <h2>Deck Scanner OCR</h2>
+            <h2>Deck Scanner OCR <span className="version-tag">v2.1</span></h2>
           </div>
         </div>
         <p className="scanner-subtitle">Analisi avanzata con IA.</p>
@@ -320,7 +325,10 @@ const DeckScanner = ({ onAddToQueue }) => {
                 <div className="flex flex-col gap-3">
                   <input type="password" placeholder="API Key..." className="api-key-input" value={apiKey} onChange={(e) => saveSettings(e.target.value, customModel)} />
                   <input type="text" placeholder="Modello IA (Opzionale)" className="api-key-input" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
-                  <button className="api-key-save py-2" onClick={() => setShowKeyInput(false)}>Salva</button>
+                  <div className="flex gap-2">
+                    <button className="api-key-save flex-1 py-2" onClick={() => setShowKeyInput(false)}>Chiudi</button>
+                    <button className="api-key-reset py-2 px-3 bg-error-hl text-error rounded-lg" onClick={resetSettings} title="Reset Tutto"><RefreshCw size={14} /></button>
+                  </div>
                 </div>
               </div>
             )}
