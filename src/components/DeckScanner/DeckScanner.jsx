@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
-import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload, Bug, RefreshCw } from 'lucide-react';
+import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload, Bug, RefreshCw, HelpCircle } from 'lucide-react';
 import './DeckScanner.css';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
@@ -14,23 +14,8 @@ const DeckScanner = ({ onAddToQueue }) => {
   const [error, setError] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
   const [useAI, setUseAI] = useState(false);
-  const [apiKey, setApiKey] = useState(localStorage.getItem('openrouter_key') || '');
-  const [customModel, setCustomModel] = useState(localStorage.getItem('openrouter_model') || '');
-  const [showKeyInput, setShowKeyInput] = useState(false);
+  const { user } = useAuth();
   const fileInputRef = useRef(null);
-
-  const saveSettings = (key, model) => {
-    const cleanKey = key.replace(/\s/g, '');
-    setApiKey(cleanKey);
-    setCustomModel(model.trim());
-    localStorage.setItem('openrouter_key', cleanKey);
-    localStorage.setItem('openrouter_model', model.trim());
-  };
-
-  const resetSettings = () => {
-    localStorage.clear();
-    window.location.reload();
-  };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -51,7 +36,7 @@ const DeckScanner = ({ onAddToQueue }) => {
         img.src = event.target.result;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 800;
+          const MAX_SIZE = 1000;
           let width = img.width;
           let height = img.height;
           if (width > height) {
@@ -63,7 +48,7 @@ const DeckScanner = ({ onAddToQueue }) => {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.6));
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
         };
       };
     });
@@ -71,103 +56,40 @@ const DeckScanner = ({ onAddToQueue }) => {
 
   const processWithAI = async () => {
     if (!image) return;
-    if (!apiKey) {
-      setError("Inserisci l'API Key.");
-      setShowKeyInput(true);
+    if (!user) {
+      setError("Devi essere loggato per usare l'analisi IA.");
       return;
     }
 
     setIsProcessing(true);
     setError(null);
-    setDebugInfo(null);
+    setStatusMessage('Analisi sicura con Gemini...');
 
     try {
       const base64Image = await compressImage(image);
-      let modelsToTry = [
-        customModel,
-        "openrouter/free",
-        "google/gemini-2.0-flash-exp:free",
-        "meta-llama/llama-3.2-11b-vision-instruct:free",
-        "google/gemini-flash-1.5-8b-exp:free"
-      ].filter(Boolean);
-      modelsToTry = [...new Set(modelsToTry)];
+      
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64Image })
+      });
 
-      let lastError = "";
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
 
-      const tryModel = async (index) => {
-        if (index >= modelsToTry.length) {
-          throw new Error(`Nessun modello ha risposto. Ultimo errore: ${lastError}`);
-        }
-
-        const model = modelsToTry[index];
-        setStatusMessage(`Analisi con ${model.split('/')[1] || model}...`);
-        
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
-
-          const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            signal: controller.signal,
-            headers: {
-              "Authorization": `Bearer ${apiKey}`,
-              "HTTP-Referer": "https://mtg-proxy-creator.vercel.app",
-              "X-Title": "MTG Proxy Creator",
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              "model": model,
-              "messages": [
-                {
-                  "role": "user",
-                  "content": [
-                    { "type": "text", "text": "List MTG cards in image as JSON array: [{\"name\":\"Card Name\",\"qty\":1}]." },
-                    { "type": "image_url", "image_url": { "url": base64Image } }
-                  ]
-                }
-              ]
-            })
-          });
-
-          clearTimeout(timeoutId);
-          const data = await response.json();
-          
-          if (data.error) {
-            lastError = data.error.message;
-            if (data.error.code === 404 || lastError.includes("endpoint") || lastError.includes("not found")) {
-              return tryModel(index + 1);
-            }
-            throw new Error(lastError);
-          }
-
-          if (data.choices?.[0]?.message?.content) {
-            const content = data.choices[0].message.content;
-            const jsonMatch = content.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[0]);
-              const detected = parsed.map(item => ({
-                id: Math.random().toString(36).substr(2, 9),
-                qty: item.qty || 1,
-                name: item.name,
-                status: 'pending',
-                data: null
-              }));
-              setResults(detected);
-              detected.forEach(card => searchCard(card));
-            } else {
-              throw new Error("Risposta IA non valida.");
-            }
-          }
-        } catch (err) {
-          lastError = err.name === 'AbortError' ? 'Tempo scaduto' : err.message;
-          if (lastError.includes("404") || lastError.includes("endpoint") || lastError.includes("not found") || lastError.includes("Tempo scaduto")) {
-            return tryModel(index + 1);
-          }
-          throw err;
-        }
-      };
-
-      await tryModel(0);
+      const detected = data.map(item => ({
+        id: Math.random().toString(36).substr(2, 9),
+        qty: item.qty || 1,
+        name: item.name,
+        status: 'pending',
+        data: null
+      }));
+      
+      setResults(detected);
+      detected.forEach(card => searchCard(card));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -234,6 +156,7 @@ const DeckScanner = ({ onAddToQueue }) => {
       const data = await response.json();
       if (data.object === 'card') {
         setResults(prev => {
+          // If we found a card that's already in the list as "found", merge them
           const existing = prev.find(c => c.status === 'found' && c.data?.id === data.id && c.id !== card.id);
           if (existing) {
             const isLand = basicLands.some(l => data.name.toLowerCase().includes(l));
@@ -243,10 +166,11 @@ const DeckScanner = ({ onAddToQueue }) => {
           return prev.map(c => c.id === card.id ? { ...c, status: 'found', name: data.name, data } : c);
         });
       } else {
-        setResults(prev => prev.filter(c => c.id !== card.id));
+        // KEEP THE CARD even if not found, mark as error
+        setResults(prev => prev.map(c => c.id === card.id ? { ...c, status: 'error' } : c));
       }
     } catch (err) {
-      setResults(prev => prev.filter(c => c.id !== card.id));
+      setResults(prev => prev.map(c => c.id === card.id ? { ...c, status: 'error' } : c));
     }
   };
 
@@ -271,7 +195,7 @@ const DeckScanner = ({ onAddToQueue }) => {
         <div className="scanner-title-row">
           <div className="scanner-title-group">
             <Wand2 className="text-accent" size={24} />
-            <h2>Deck Scanner OCR <span className="version-tag">v2.2</span></h2>
+            <h2>Deck Scanner OCR <span className="version-tag">v2.3</span></h2>
           </div>
         </div>
         <p className="scanner-subtitle">Analisi avanzata con IA.</p>
@@ -299,30 +223,33 @@ const DeckScanner = ({ onAddToQueue }) => {
 
           <div className="scanner-controls">
             <div className="ai-mode-card">
-              <div className="ai-mode-info"><div className="flex items-center gap-2"><Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} /><p className="mode-label">IA Avanzata</p></div></div>
-              <div className="flex items-center gap-4">
-                <button className={`p-2 rounded-lg transition-all ${apiKey ? 'text-success' : 'text-error'}`} onClick={() => setShowKeyInput(!showKeyInput)}><Key size={18} /></button>
-                <label className="switch"><input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} /><span className="slider"></span></label>
+              <div className="ai-mode-info">
+                <div className="flex items-center gap-2">
+                  <Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} />
+                  <p className="mode-label">IA Avanzata</p>
+                </div>
+                <p className="mode-desc">Analisi sicura tramite Google Gemini</p>
               </div>
+              <label className="switch">
+                <input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />
+                <span className="slider"></span>
+              </label>
             </div>
 
-            {showKeyInput && (
-              <div className="api-key-panel">
-                <div className="flex flex-col gap-3">
-                  <input type="password" placeholder="API Key..." className="api-key-input" value={apiKey} onChange={(e) => saveSettings(e.target.value, customModel)} />
-                  <input type="text" placeholder="Modello IA" className="api-key-input" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
-                  <div className="flex gap-2">
-                    <button className="api-key-save flex-1 py-2" onClick={() => setShowKeyInput(false)}>Chiudi</button>
-                    <button className="api-key-reset py-2 px-3 bg-error-hl text-error rounded-lg" onClick={resetSettings}><RefreshCw size={14} /></button>
-                  </div>
-                </div>
+            <button className={`main-process-btn ${useAI ? 'ai' : ''}`} onClick={processImage} disabled={!image || isProcessing}>
+              {isProcessing ? (
+                <><Loader2 size={18} className="animate-spin" /> {statusMessage || 'Analisi...'}</>
+              ) : (
+                <>{useAI ? <Wand2 size={18} /> : <Search size={18} />} {useAI ? 'Analisi IA Sicura' : 'Scansione OCR'}</>
+              )}
+            </button>
+            
+            {error && (
+              <div className="error-box">
+                <AlertCircle size={14} />
+                <span className="flex-1">{error}</span>
               </div>
             )}
-
-            <button className={`main-process-btn ${useAI ? 'ai' : ''}`} onClick={processImage} disabled={!image || isProcessing}>
-              {isProcessing ? <><Loader2 size={18} className="animate-spin" /> Analisi...</> : <>{useAI ? <Wand2 size={18} /> : <Search size={18} />} {useAI ? 'Analisi IA' : 'Scansione OCR'}</>}
-            </button>
-            {error && <div className="error-box"><AlertCircle size={14} /><span className="flex-1 text-[10px]">{error}</span></div>}
           </div>
         </div>
 
@@ -334,11 +261,20 @@ const DeckScanner = ({ onAddToQueue }) => {
           <div className="results-grid">
             {results.map((card) => (
               <div key={card.id} className={`result-card-item ${card.status}`}>
-                {card.status === 'found' && card.data?.image_uris?.normal && (
-                  <div className="card-thumb"><img src={card.data.image_uris.small} alt={card.name} /></div>
-                )}
+                <div className="card-thumb">
+                  {card.status === 'found' ? (
+                    <img src={card.data?.image_uris?.normal || card.data?.card_faces?.[0]?.image_uris?.normal} alt={card.name} />
+                  ) : (
+                    <div className="card-thumb-placeholder">
+                      {card.status === 'searching' ? <Loader2 className="animate-spin" size={24} /> : <HelpCircle size={24} />}
+                    </div>
+                  )}
+                </div>
                 <div className="card-item-body">
-                  <span className="result-name">{card.name}</span>
+                  <div className="card-item-info">
+                    <span className="result-name">{card.name}</span>
+                    {card.status === 'error' && <span className="status-badge error">Non trovata</span>}
+                  </div>
                   <div className="card-item-footer">
                     <div className="qty-control">
                       <button onClick={() => updateCardQty(card.id, card.qty - 1)}>-</button>
