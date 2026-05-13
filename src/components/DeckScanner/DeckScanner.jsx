@@ -53,11 +53,12 @@ const DeckScanner = ({ onAddToQueue }) => {
   };
 
   const parseText = (text) => {
-    const rawChunks = text.split(/[\n|()\[\]\\\/]/);
+    // 1. Split by newlines, pipes, brackets AND double spaces (columns)
+    const rawChunks = text.split(/[\n|()\[\]\\\/]|\s{2,}/);
     const candidateMap = new Map();
     
-    // Basic lands priority list
     const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
+    const priorityShort = ['opt', 'duress', 'shock', 'bolt']; // Common short names
 
     rawChunks.forEach(chunk => {
       let trimmed = chunk.trim();
@@ -65,40 +66,46 @@ const DeckScanner = ({ onAddToQueue }) => {
 
       const lower = trimmed.toLowerCase();
       
-      // PRIORITY: If it looks like a basic land, bypass filters
-      const isLand = basicLands.some(l => lower.includes(l));
+      // Handle OCR spacing artifacts for lands (e.g., "I s l a n d")
+      const compacted = lower.replace(/\s+/g, '');
+      const isLand = basicLands.some(l => compacted.includes(l));
+      const isShort = priorityShort.some(s => lower === s || compacted === s);
       
-      if (!isLand) {
-        // Very relaxed filters
-        if (trimmed.length > 60) return;
-        if (lower.includes('http') || lower.includes('www') || lower.includes('.com')) return;
+      if (!isLand && !isShort) {
+        if (trimmed.length > 50) return;
+        if (lower.includes('http') || lower.includes('www')) return;
       }
 
       let qty = 1;
       let name = trimmed;
 
-      // Extract quantity if present
       if (!trimmed.includes('/')) {
         const startQty = trimmed.match(/^(\d+)\s*[xX]?\s+/);
         const endQty = trimmed.match(/\s+(\d+)\s*[xX]?$/);
         
         if (startQty) {
-          qty = Math.min(parseInt(startQty[1]), 40);
+          qty = parseInt(startQty[1]);
           name = trimmed.replace(startQty[0], '').trim();
         } else if (endQty) {
-          qty = Math.min(parseInt(endQty[1]), 40);
+          qty = parseInt(endQty[1]);
           name = trimmed.replace(endQty[0], '').trim();
         }
       }
 
-      // Clean name but keep it descriptive for Scryfall fuzzy match
+      // Hard limit of 4 for non-lands
+      if (!isLand) {
+        qty = Math.min(qty, 4);
+      } else {
+        qty = Math.min(qty, 60); // Reasonable limit for lands
+      }
+
       name = name.replace(/[^\w\s',-]/g, ' ').replace(/\s+/g, ' ').trim();
-      if (name.length < 3) return;
+      if (name.length < 2) return;
       
       const key = name.toLowerCase();
       if (candidateMap.has(key)) {
         const existing = candidateMap.get(key);
-        existing.qty += qty;
+        existing.qty = Math.min(existing.qty + qty, isLand ? 100 : 4);
       } else {
         candidateMap.set(key, { name, qty });
       }
