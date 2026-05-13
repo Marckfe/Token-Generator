@@ -14,13 +14,17 @@ const DeckScanner = ({ onAddToQueue }) => {
   const [error, setError] = useState(null);
   const [useAI, setUseAI] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('openrouter_key') || '');
+  const [customModel, setCustomModel] = useState(localStorage.getItem('openrouter_model') || '');
   const [showKeyInput, setShowKeyInput] = useState(false);
   const fileInputRef = useRef(null);
 
-  const saveKey = (key) => {
+  const saveSettings = (key, model) => {
     const cleanKey = key.trim();
+    const cleanModel = model.trim();
     setApiKey(cleanKey);
+    setCustomModel(cleanModel);
     localStorage.setItem('openrouter_key', cleanKey);
+    localStorage.setItem('openrouter_model', cleanModel);
   };
 
   const handleImageUpload = (e) => {
@@ -55,14 +59,15 @@ const DeckScanner = ({ onAddToQueue }) => {
     setError(null);
 
     const models = [
+      customModel, 
+      "google/gemini-2.0-flash-exp:free",
       "google/gemini-flash-1.5-8b-exp:free",
-      "mistralai/pixtral-12b:free",
       "google/gemini-pro-1.5-exp:free"
-    ];
+    ].filter(Boolean);
 
     const tryModel = async (index) => {
       if (index >= models.length) {
-        throw new Error("Nessun modello IA gratuito disponibile. Riprova tra poco.");
+        throw new Error("Nessun modello IA gratuito disponibile. Verifica il nome del modello nelle impostazioni.");
       }
 
       const model = models[index];
@@ -72,7 +77,7 @@ const DeckScanner = ({ onAddToQueue }) => {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${apiKey}`,
-            "HTTP-Referer": "https://mtg-proxy-creator.vercel.app",
+            "HTTP-Referer": window.location.origin,
             "X-Title": "MTG Proxy Creator",
             "Content-Type": "application/json"
           },
@@ -82,7 +87,7 @@ const DeckScanner = ({ onAddToQueue }) => {
               {
                 "role": "user",
                 "content": [
-                  { "type": "text", "text": "Extract all Magic: The Gathering card names and their exact quantities from this image. Format the output strictly as a JSON array: [{\"name\": \"Card Name\", \"qty\": 4}]. Count stacked cards by visible headers." },
+                  { "type": "text", "text": "Extract all MTG card names and quantities from this image. Format strictly as JSON array: [{\"name\": \"Card Name\", \"qty\": 4}]. Count stacks by visible headers." },
                   { "type": "image_url", "image_url": { "url": base64Image } }
                 ]
               }
@@ -92,7 +97,7 @@ const DeckScanner = ({ onAddToQueue }) => {
 
         const data = await response.json();
         if (data.error) {
-          if (data.error.code === 404 || data.error.message.includes("No endpoints")) {
+          if (data.error.code === 404 || data.error.message.includes("No endpoints") || data.error.message.includes("not found")) {
             return tryModel(index + 1);
           }
           throw new Error(data.error.message);
@@ -117,7 +122,7 @@ const DeckScanner = ({ onAddToQueue }) => {
           }
         }
       } catch (err) {
-        if (err.message.includes("No endpoints") || err.message.includes("404")) {
+        if (err.message.includes("No endpoints") || err.message.includes("404") || err.message.includes("not found")) {
           return tryModel(index + 1);
         }
         throw err;
@@ -254,7 +259,7 @@ const DeckScanner = ({ onAddToQueue }) => {
                     <Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} />
                     <p className="mode-label">Modalità IA Avanzata</p>
                   </div>
-                  <p className="mode-desc">Precisione massima con Vision AI</p>
+                  <p className="mode-desc">Precisione massima con Vision IA</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
@@ -265,11 +270,17 @@ const DeckScanner = ({ onAddToQueue }) => {
 
             {showKeyInput && (
               <div className="api-key-panel">
-                <div className="flex gap-2">
-                  <input type="password" placeholder="Incolla la tua OpenRouter Key..." className="api-key-input" value={apiKey} onChange={(e) => saveKey(e.target.value)} />
-                  <button className="api-key-save" onClick={() => setShowKeyInput(false)}>OK</button>
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-muted mb-1">OpenRouter API Key</label>
+                    <input type="password" placeholder="sk-or-v1-..." className="api-key-input w-full" value={apiKey} onChange={(e) => saveSettings(e.target.value, customModel)} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-muted mb-1">Modello Vision (Opzionale)</label>
+                    <input type="text" placeholder="es: google/gemini-2.0-flash-exp:free" className="api-key-input w-full" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
+                  </div>
+                  <button className="api-key-save w-full py-2" onClick={() => setShowKeyInput(false)}>Salva Impostazioni</button>
                 </div>
-                <p className="api-key-hint">Necessaria per la modalità IA.</p>
               </div>
             )}
 
