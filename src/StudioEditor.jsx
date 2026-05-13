@@ -284,9 +284,16 @@ export default function StudioEditor() {
       const t = e.touches?.[0] || e;
       const dx = (t.clientX - dragRef.current.startX) / zoom;
       const dy = (t.clientY - dragRef.current.startY) / zoom;
+
+      const layer = layers.find(l => l.id === dragRef.current.id);
+      if (!layer) return;
+
+      const newX = Math.round(dragRef.current.initialX + dx);
+      const newY = Math.round(dragRef.current.initialY + dy);
+
       updateLayer(dragRef.current.id, {
-        x: Math.round(dragRef.current.initialX + dx),
-        y: Math.round(dragRef.current.initialY + dy)
+        x: Math.max(0, Math.min(CW - layer.width, newX)),
+        y: Math.max(0, Math.min(CH - layer.height, newY))
       });
     };
     const onEnd = () => setIsDragging(false);

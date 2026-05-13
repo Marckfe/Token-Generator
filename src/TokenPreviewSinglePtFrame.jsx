@@ -434,35 +434,67 @@ export default function TokenPreviewSinglePtFrame() {
       const snap = dragRef.current.snapshot;
       let next = cloneState(snap);
       let sGuides = { x: null, y: null };
-      
-      // Smart Snapping Logic (snap to center)
       const SNAP_TOLERANCE = 10;
       
-      if (kind === 'name') {
-        const cx = snap.nameStyle.x + dx;
-        if (Math.abs(cx) < SNAP_TOLERANCE) { dx = -snap.nameStyle.x; sGuides.x = CW/2; }
-      }
       if (kind === 'art') {
-        const cx = snap.artTransform.x + dx;
-        const cy = snap.artTransform.y + dy;
-        if (Math.abs(cx) < SNAP_TOLERANCE) { dx = -snap.artTransform.x; sGuides.x = CW/2; }
-        if (Math.abs(cy) < SNAP_TOLERANCE) { dy = -snap.artTransform.y; sGuides.y = CH/2; }
-      }
-      if (kind === 'pt') {
-        // Snap to right edge or something, just let it be free mostly
+        let ax = snap.artTransform.x + dx;
+        let ay = snap.artTransform.y + dy;
+        if (Math.abs(ax) < SNAP_TOLERANCE) { ax = 0; sGuides.x = CW/2; }
+        if (Math.abs(ay) < SNAP_TOLERANCE) { ay = 0; sGuides.y = CH/2; }
+        
+        next.artTransform = { 
+          ...next.artTransform, 
+          x: Math.round(ax), 
+          y: Math.round(ay) 
+        };
+      } else {
+        // Temporary update to calculate metrics
+        if (kind === 'name') {
+          let nx = snap.nameStyle.x + dx;
+          if (Math.abs(nx) < SNAP_TOLERANCE) { nx = 0; sGuides.x = CW/2; }
+          next.nameStyle = { ...next.nameStyle, x: Math.round(nx), y: Math.round(snap.nameStyle.y + dy) };
+        }
+        if (kind === 'type') next.typeStyle = { ...next.typeStyle, x: Math.round(snap.typeStyle.x + dx), y: Math.round(snap.typeStyle.y + dy) };
+        if (kind === 'ability') next.abilityStyle = { ...next.abilityStyle, x: Math.round(snap.abilityStyle.x + dx), y: Math.round(snap.abilityStyle.y + dy) };
+        if (kind === 'pt') next.ptStyle = { ...next.ptStyle, frameX: Math.round(snap.ptStyle.frameX + dx), frameY: Math.round(snap.ptStyle.frameY + dy) };
+        if (kind === 'infoLeft') next.infoLeft = { ...next.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||12) - dy) };
+        if (kind === 'artist') next.artistStyle = { ...next.artistStyle, x: Math.round((snap.artistStyle?.x||18) + dx), y: Math.round((snap.artistStyle?.y||26) - dy) };
+        if (kind === 'copyright') next.copyright = { ...next.copyright, x: Math.round((snap.copyright?.x||18) - dx), y: Math.round((snap.copyright?.y||12) - dy) };
+
+        // Apply clamping based on bounding boxes
+        const boxes = getGuideMetrics(next);
+        const b = boxes[kind];
+        if (b) {
+          if (kind === 'name') {
+            const nameWidth = b.w - 20;
+            const nameSize = b.h / 1.18;
+            const minX = nameWidth/2 - CW/2 + 12;
+            const maxX = CW/2 - nameWidth/2 - 12;
+            next.nameStyle.x = clamp(next.nameStyle.x, minX, maxX);
+            next.nameStyle.y = clamp(next.nameStyle.y, nameSize/2 + 10, CH - nameSize/2 - 10);
+          } else if (kind === 'type') {
+            next.typeStyle.x = clamp(next.typeStyle.x, 20, CW - b.w - 10);
+            next.typeStyle.y = clamp(next.typeStyle.y, 20, CH - 20);
+          } else if (kind === 'ability') {
+            next.abilityStyle.x = clamp(next.abilityStyle.x, 20, CW - b.w - 20);
+            next.abilityStyle.y = clamp(next.abilityStyle.y, 20, CH - b.h - 20);
+          } else if (kind === 'pt') {
+            next.ptStyle.frameX = clamp(next.ptStyle.frameX, 0, CW - next.ptStyle.width);
+            next.ptStyle.frameY = clamp(next.ptStyle.frameY, 0, CH - next.ptStyle.height);
+          } else if (kind === 'infoLeft') {
+            next.infoLeft.x = clamp(next.infoLeft.x, 10, CW - b.w - 10);
+            next.infoLeft.y = clamp(next.infoLeft.y, 10, CH - 20);
+          } else if (kind === 'artist') {
+            next.artistStyle.x = clamp(next.artistStyle.x, 10, CW - b.w - 10);
+            next.artistStyle.y = clamp(next.artistStyle.y, 10, CH - 20);
+          } else if (kind === 'copyright') {
+            next.copyright.x = clamp(next.copyright.x, 10, CW - b.w - 10);
+            next.copyright.y = clamp(next.copyright.y, 10, CH - 20);
+          }
+        }
       }
 
       setSnapGuides(sGuides);
-
-      if (kind === 'art') next.artTransform = { ...next.artTransform, x: Math.round(snap.artTransform.x + dx), y: Math.round(snap.artTransform.y + dy) };
-      if (kind === 'name') next.nameStyle = { ...next.nameStyle, x: Math.round(snap.nameStyle.x + dx), y: Math.round(snap.nameStyle.y + dy) };
-      if (kind === 'type') next.typeStyle = { ...next.typeStyle, x: Math.round(snap.typeStyle.x + dx), y: Math.round(snap.typeStyle.y + dy) };
-      if (kind === 'ability') next.abilityStyle = { ...next.abilityStyle, x: Math.round(snap.abilityStyle.x + dx), y: Math.round(snap.abilityStyle.y + dy) };
-      if (kind === 'pt') next.ptStyle = { ...next.ptStyle, frameX: Math.round(snap.ptStyle.frameX + dx), frameY: Math.round(snap.ptStyle.frameY + dy) };
-      if (kind === 'infoLeft') next.infoLeft = { ...next.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||12) - dy) };
-      if (kind === 'artist') next.artistStyle = { ...next.artistStyle, x: Math.round((snap.artistStyle?.x||18) + dx), y: Math.round((snap.artistStyle?.y||26) - dy) };
-      if (kind === 'copyright') next.copyright = { ...next.copyright, x: Math.round((snap.copyright?.x||18) - dx), y: Math.round((snap.copyright?.y||12) - dy) };
-      
       dragRef.current.lastState = next;
       applyState(next, false);
     };
