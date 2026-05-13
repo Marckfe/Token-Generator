@@ -19,8 +19,9 @@ const DeckScanner = ({ onAddToQueue }) => {
   const fileInputRef = useRef(null);
 
   const saveKey = (key) => {
-    setApiKey(key);
-    localStorage.setItem('openrouter_key', key);
+    const cleanKey = key.trim();
+    setApiKey(cleanKey);
+    localStorage.setItem('openrouter_key', cleanKey);
   };
 
   const handleImageUpload = (e) => {
@@ -62,6 +63,8 @@ const DeckScanner = ({ onAddToQueue }) => {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": window.location.origin, // Required by OpenRouter
+          "X-Title": "MTG Proxy Creator", // Required by OpenRouter
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -104,14 +107,15 @@ const DeckScanner = ({ onAddToQueue }) => {
           setResults(detectedCards);
           searchAllCards(detectedCards);
         } else {
-          throw new Error("L'IA non ha restituito dati validi.");
+          throw new Error("L'IA non ha rilevato carte valide.");
         }
       } else {
-        throw new Error(data.error?.message || "Errore API OpenRouter");
+        const errMsg = data.error?.message || "Errore API OpenRouter. Verifica la tua API Key.";
+        throw new Error(errMsg);
       }
     } catch (err) {
       console.error('AI Error:', err);
-      setError(err.message || 'Errore durante l\'analisi AI.');
+      setError(err.message);
     } finally {
       setIsProcessing(false);
       setProgress(100);
@@ -253,36 +257,34 @@ const DeckScanner = ({ onAddToQueue }) => {
   return (
     <div className="deck-scanner-container">
       <div className="scanner-header">
-        <div className="scanner-title">
-          <div className="flex items-center gap-3">
-            <Wand2 className="text-accent" />
+        <div className="scanner-title-row">
+          <div className="scanner-title-group">
+            <Wand2 className="text-accent" size={24} />
             <h2>Deck Scanner OCR</h2>
           </div>
           <button 
-            className={`p-2 rounded-lg transition-all ${showSettings ? 'bg-accent text-white' : 'bg-surface2 border border-border text-muted'}`}
+            className={`settings-btn ${showSettings ? 'active' : ''}`}
             onClick={() => setShowSettings(!showSettings)}
+            title="Impostazioni API"
           >
-            <Settings size={18} />
+            <Settings size={20} />
           </button>
         </div>
         <p className="scanner-subtitle">Analisi avanzata con IA per mazzi e screenshot.</p>
         
         {showSettings && (
-          <div className="mt-4 p-4 bg-surface border border-accent/20 rounded-xl">
-            <label className="block text-[10px] font-bold uppercase tracking-wider mb-2 text-accent">Configurazione OpenRouter</label>
-            <div className="flex gap-2">
+          <div className="settings-panel">
+            <label>Chiave API OpenRouter (sk-or-v1-...)</label>
+            <div className="settings-input-group">
               <input 
                 type="password" 
-                placeholder="Incolla qui la tua API Key (sk-or-v1-...)" 
-                className="flex-1 bg-black border border-border rounded-lg px-3 py-2 text-xs text-accent focus:border-accent outline-none"
+                placeholder="Incolla la tua chiave qui..." 
                 value={apiKey}
                 onChange={(e) => saveKey(e.target.value)}
               />
-              <button className="bg-accent text-white px-4 py-2 rounded-lg text-xs font-bold" onClick={() => setShowSettings(false)}>
-                Salva
-              </button>
+              <button onClick={() => setShowSettings(false)}>Chiudi</button>
             </div>
-            <p className="text-[10px] mt-2 opacity-50">La chiave viene salvata localmente nel tuo browser.</p>
+            <p className="settings-hint">La chiave viene salvata localmente nel browser.</p>
           </div>
         )}
       </div>
@@ -298,7 +300,7 @@ const DeckScanner = ({ onAddToQueue }) => {
               <img src={preview} alt="Anteprima" className="scanner-preview-img" />
             ) : (
               <div className="dropzone-placeholder">
-                <ImageIcon size={48} className="mb-4 opacity-20" />
+                <ImageIcon size={48} />
                 <p>Trascina un'immagine o clicca per caricare</p>
               </div>
             )}
@@ -311,58 +313,64 @@ const DeckScanner = ({ onAddToQueue }) => {
             )}
           </div>
 
-          <div className="scanner-controls mt-6">
-            <div className="ai-toggle-container mb-4">
-              <div className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border">
-                <div className="flex items-center gap-3">
-                  <Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} />
-                  <div>
-                    <p className="text-sm font-bold">Modalità IA Avanzata</p>
-                    <p className="text-[11px] opacity-60">Precisione massima con Vision AI</p>
-                  </div>
+          <div className="scanner-controls">
+            <div className="ai-mode-card">
+              <div className="ai-mode-info">
+                <Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} />
+                <div>
+                  <p className="mode-label">Modalità IA Avanzata</p>
+                  <p className="mode-desc">Precisione massima con Vision AI</p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />
-                  <div className="w-11 h-6 bg-muted/20 rounded-full peer peer-checked:bg-accent after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
-                </label>
               </div>
+              <label className="switch">
+                <input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />
+                <span className="slider"></span>
+              </label>
             </div>
 
             <button 
-              className={`w-full py-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
-                !image || isProcessing ? 'bg-muted/20 text-muted cursor-not-allowed' : useAI ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'bg-primary text-white'
-              }`}
+              className={`main-process-btn ${useAI ? 'ai' : ''}`}
               onClick={processImage}
               disabled={!image || isProcessing}
             >
-              {isProcessing ? 'Analisi in corso...' : (useAI ? 'Avvia Analisi IA' : 'Inizia Scansione OCR')}
+              {isProcessing ? (
+                <><Loader2 size={18} className="animate-spin" /> Analisi in corso...</>
+              ) : (
+                <>{useAI ? <Wand2 size={18} /> : <Search size={18} />} {useAI ? 'Avvia Analisi IA' : 'Inizia Scansione OCR'}</>
+              )}
             </button>
-            {error && <div className="mt-4 p-3 bg-error/10 text-error text-[11px] rounded-lg border border-error/20">{error}</div>}
+            {error && <div className="error-box"><AlertCircle size={14} /> {error}</div>}
           </div>
         </div>
 
         <div className="scanner-results-section">
           <div className="results-header">
             <h3>Risultati ({results.length})</h3>
-            <button className="btn btn-accent text-xs" onClick={handleAddToQueue} disabled={results.length === 0}>
+            <button className="add-to-queue-btn" onClick={handleAddToQueue} disabled={results.length === 0}>
               <Plus size={14} /> Aggiungi alla Coda
             </button>
           </div>
-          <div className="results-list">
+          <div className="results-grid">
+            {results.length === 0 && !isProcessing && (
+              <div className="empty-results">
+                <Search size={32} />
+                <p>Nessuna carta rilevata.</p>
+              </div>
+            )}
             {results.map((card) => (
               <div key={card.id} className={`result-card-item ${card.status}`}>
                 {card.status === 'found' && card.data?.image_uris?.normal && (
                   <div className="card-thumb"><img src={card.data.image_uris.small} alt={card.name} /></div>
                 )}
                 <div className="card-item-body">
-                  <span className="result-name">{card.name}</span>
+                  <span className="result-name" title={card.name}>{card.name}</span>
                   <div className="card-item-footer">
-                    <div className="result-qty-control">
+                    <div className="qty-control">
                       <button onClick={() => updateCardQty(card.id, card.qty - 1)}>-</button>
                       <input type="number" value={card.qty} readOnly />
                       <button onClick={() => updateCardQty(card.id, card.qty + 1)}>+</button>
                     </div>
-                    <button className="delete-btn" onClick={() => removeCard(card.id)}><Trash2 size={14} /></button>
+                    <button className="del-btn" onClick={() => removeCard(card.id)}><Trash2 size={14} /></button>
                   </div>
                 </div>
               </div>
