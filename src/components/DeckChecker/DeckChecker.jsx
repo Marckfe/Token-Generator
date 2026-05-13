@@ -18,8 +18,13 @@ const FORMATS = [
   { id: 'duel', name: 'Duel Commander' },
   { id: 'modern', name: 'Modern' },
   { id: 'standard', name: 'Standard' },
+  { id: 'pioneer', name: 'Pioneer' },
+  { id: 'pauper', name: 'Pauper' },
   { id: 'legacy', name: 'Legacy' },
-  { id: 'pioneer', name: 'Pioneer' }
+  { id: 'vintage', name: 'Vintage' },
+  { id: 'brawl', name: 'Brawl' },
+  { id: 'premodern', name: 'Premodern' },
+  { id: 'oldschool', name: 'Oldschool' }
 ];
 
 export default function DeckChecker() {
@@ -32,7 +37,7 @@ export default function DeckChecker() {
   
   const searchTimeout = useRef(null);
 
-  const isSingleton = selectedFormat === 'commander' || selectedFormat === 'duel';
+  const isSingleton = selectedFormat === 'commander' || selectedFormat === 'duel' || selectedFormat === 'brawl';
 
   const handleCmdSearch = (val, setter) => {
     setter(val);
@@ -111,18 +116,46 @@ export default function DeckChecker() {
       fetchedCards.forEach(c => { 
         cardInfoMap[c.name.toLowerCase()] = {
           legalities: c.legalities,
-          type: c.type_line
+          type: c.type_line,
+          fullName: c.name
         }; 
       });
 
-      const enrichedMain = mainLines.map(item => ({
-        ...item,
-        type: cardInfoMap[item.name.toLowerCase()]?.type || 'Unknown'
-      }));
-      const enrichedCmd = cmdLines.map(item => ({
-        ...item,
-        type: cardInfoMap[item.name.toLowerCase()]?.type || 'Unknown'
-      }));
+      // FALLBACK for missing cards (Fuzzy search)
+      for (const item of allCards) {
+        if (!cardInfoMap[item.name.toLowerCase()]) {
+          try {
+            const fRes = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(item.name)}`);
+            const fData = await fRes.json();
+            if (fData.object === 'card') {
+              cardInfoMap[item.name.toLowerCase()] = {
+                legalities: fData.legalities,
+                type: fData.type_line,
+                fullName: fData.name
+              };
+            }
+          } catch (e) {
+            console.warn(`Fuzzy lookup failed for ${item.name}`);
+          }
+        }
+      }
+
+      const enrichedMain = mainLines.map(item => {
+        const info = cardInfoMap[item.name.toLowerCase()];
+        return {
+          ...item,
+          name: info ? info.fullName : item.name,
+          type: info ? info.type : 'Unknown'
+        };
+      });
+      const enrichedCmd = cmdLines.map(item => {
+        const info = cardInfoMap[item.name.toLowerCase()];
+        return {
+          ...item,
+          name: info ? info.fullName : item.name,
+          type: info ? info.type : 'Unknown'
+        };
+      });
 
       setParsedDeck({ main: enrichedMain, cmd: enrichedCmd });
 
@@ -138,10 +171,10 @@ export default function DeckChecker() {
         const l = info.legalities[selectedFormat];
         if (l === 'not_legal' || l === 'banned') {
           newResults.status = 'banned';
-          newResults.reasons.push({ name: item.name, reason: l === 'not_legal' ? 'Non legale' : 'Bannata' });
+          newResults.reasons.push({ name: info.fullName, reason: l === 'not_legal' ? 'Non legale' : 'Bannata' });
         } else if (selectedFormat === 'duel' && l === 'restricted') {
           newResults.status = 'banned';
-          newResults.reasons.push({ name: item.name, reason: 'Bannata come Comandante' });
+          newResults.reasons.push({ name: info.fullName, reason: 'Bannata come Comandante' });
         }
       });
 
