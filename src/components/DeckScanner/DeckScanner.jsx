@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
-import { Search, Image as ImageIcon, Trash2, Plus, Loader2, CheckCircle2, AlertCircle, Wand2, Key } from 'lucide-react';
+import { Search, Image as ImageIcon, Trash2, Plus, Loader2, CheckCircle2, AlertCircle, Wand2, Key, Upload } from 'lucide-react';
 import './DeckScanner.css';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
@@ -58,18 +58,17 @@ const DeckScanner = ({ onAddToQueue }) => {
     setProgress(20);
     setError(null);
 
-    // Hardcoded known working models list on OpenRouter
     const models = [
       customModel,
       "google/gemini-2.0-flash-exp:free",
       "google/gemini-flash-1.5-exp:free",
       "google/gemini-pro-1.5-exp:free",
-      "google/gemini-flash-1.5-8b-exp:free"
+      "google/gemini-flash-1.5-8b"
     ].filter(Boolean);
 
     const tryModel = async (index) => {
       if (index >= models.length) {
-        throw new Error("Nessun modello IA disponibile. Controlla il nome del modello nelle impostazioni.");
+        throw new Error("Nessun modello IA disponibile. Controlla la tua chiave o il nome del modello.");
       }
 
       const model = models[index].trim();
@@ -89,7 +88,7 @@ const DeckScanner = ({ onAddToQueue }) => {
               {
                 "role": "user",
                 "content": [
-                  { "type": "text", "text": "List MTG cards in this image as JSON: [{\"name\":\"Card Name\",\"qty\":4}]. Count stacked cards." },
+                  { "type": "text", "text": "List MTG cards in this image as JSON array of objects: [{\"name\":\"Card Name\",\"qty\":4}]. Count stacks." },
                   { "type": "image_url", "image_url": { "url": base64Image } }
                 ]
               }
@@ -100,7 +99,6 @@ const DeckScanner = ({ onAddToQueue }) => {
         const data = await response.json();
         
         if (data.error) {
-          // If model not found, try next one
           if (data.error.code === 404 || data.error.message.includes("model") || data.error.message.includes("not found")) {
             return tryModel(index + 1);
           }
@@ -222,6 +220,7 @@ const DeckScanner = ({ onAddToQueue }) => {
 
   const updateCardQty = (id, newQty) => setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, newQty) } : c));
   const removeCard = (id) => setResults(prev => prev.filter(c => c.id !== id));
+  
   const handleAddToQueue = () => {
     const validCards = results.filter(c => c.status === 'found');
     onAddToQueue(validCards.map(c => ({
@@ -248,10 +247,41 @@ const DeckScanner = ({ onAddToQueue }) => {
 
       <div className="scanner-layout">
         <div className="scanner-upload-section">
-          <div className={`scanner-dropzone ${isProcessing ? 'processing' : ''}`} onClick={() => !isProcessing && fileInputRef.current.click()}>
-            <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-            {preview ? <img src={preview} alt="Anteprima" className="scanner-preview-img" /> : <div className="dropzone-placeholder"><ImageIcon size={48} /><p>Carica un'immagine</p></div>}
-            {isProcessing && <div className="processing-overlay"><Loader2 size={40} className="animate-spin mb-4 text-accent" /><p className="font-bold">Analisi...</p></div>}
+          <div 
+            className={`scanner-dropzone ${isProcessing ? 'processing' : ''}`} 
+            onClick={() => !isProcessing && fileInputRef.current.click()}
+          >
+            {/* Native file input hidden with inline styles for maximum safety */}
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleImageUpload} 
+              accept="image/*" 
+              style={{ display: 'none' }} 
+            />
+            
+            {preview ? (
+              <div className="preview-container">
+                <img src={preview} alt="Anteprima" className="scanner-preview-img" />
+                <div className="preview-overlay">
+                  <Upload size={20} />
+                  <span>Clicca per cambiare immagine</span>
+                </div>
+              </div>
+            ) : (
+              <div className="dropzone-placeholder">
+                <ImageIcon size={48} className="opacity-20 mb-3" />
+                <p>Trascina un'immagine o clicca per caricare</p>
+                <span className="text-[10px] opacity-40">JPG, PNG supportati</span>
+              </div>
+            )}
+            
+            {isProcessing && (
+              <div className="processing-overlay">
+                <Loader2 size={40} className="animate-spin mb-4 text-accent" />
+                <p className="font-bold">Analisi in corso...</p>
+              </div>
+            )}
           </div>
 
           <div className="scanner-controls">
@@ -265,16 +295,21 @@ const DeckScanner = ({ onAddToQueue }) => {
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <button className={`p-2 rounded-lg transition-all ${apiKey ? 'text-success' : 'text-error'}`} onClick={() => setShowKeyInput(!showKeyInput)}><Key size={18} /></button>
-                <label className="switch"><input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} /><span className="slider"></span></label>
+                <button className={`p-2 rounded-lg transition-all ${apiKey ? 'text-success' : 'text-error'}`} onClick={(e) => { e.stopPropagation(); setShowKeyInput(!showKeyInput); }}>
+                  <Key size={18} />
+                </button>
+                <label className="switch" onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />
+                  <span className="slider"></span>
+                </label>
               </div>
             </div>
 
             {showKeyInput && (
-              <div className="api-key-panel">
+              <div className="api-key-panel" onClick={(e) => e.stopPropagation()}>
                 <div className="flex flex-col gap-3">
                   <input type="password" placeholder="API Key..." className="api-key-input" value={apiKey} onChange={(e) => saveSettings(e.target.value, customModel)} />
-                  <input type="text" placeholder="Modello (es: google/gemini-2.0-flash-exp:free)" className="api-key-input" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
+                  <input type="text" placeholder="Modello IA" className="api-key-input" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
                   <button className="api-key-save py-2" onClick={() => setShowKeyInput(false)}>Salva</button>
                 </div>
               </div>

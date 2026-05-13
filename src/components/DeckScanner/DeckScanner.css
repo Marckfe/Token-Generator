@@ -147,6 +147,36 @@
   background: var(--accent-hl);
 }
 
+.preview-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 188, 212, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  backdrop-filter: blur(2px);
+  color: white;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.preview-container:hover .preview-overlay {
+  opacity: 1;
+}
+
 .scanner-preview-img {
   width: 100%;
   height: 100%;
