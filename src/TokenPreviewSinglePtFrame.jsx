@@ -435,7 +435,7 @@ export default function TokenPreviewSinglePtFrame() {
       let next = cloneState(snap);
       let sGuides = { x: null, y: null };
       const SNAP_TOLERANCE = 10;
-      const MARGIN = 28; // Safety margin for rounded corners (26px radius)
+      const MARGIN = 10; // Reduced margin as requested
       
       if (kind === 'art') {
         let ax = snap.artTransform.x + dx;
