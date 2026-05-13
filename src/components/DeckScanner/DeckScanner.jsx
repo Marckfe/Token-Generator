@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
 import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload, Bug, RefreshCw } from 'lucide-react';
 import './DeckScanner.css';
@@ -9,7 +9,7 @@ const DeckScanner = ({ onAddToQueue }) => {
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState('');
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
@@ -28,10 +28,7 @@ const DeckScanner = ({ onAddToQueue }) => {
   };
 
   const resetSettings = () => {
-    localStorage.removeItem('openrouter_key');
-    localStorage.removeItem('openrouter_model');
-    setApiKey('');
-    setCustomModel('');
+    localStorage.clear();
     window.location.reload();
   };
 
@@ -42,7 +39,6 @@ const DeckScanner = ({ onAddToQueue }) => {
       setPreview(URL.createObjectURL(file));
       setResults([]);
       setError(null);
-      setDebugInfo(null);
     }
   };
 
@@ -73,23 +69,6 @@ const DeckScanner = ({ onAddToQueue }) => {
     });
   };
 
-  const fetchAvailableFreeVisionModels = async () => {
-    try {
-      const resp = await fetch("https://openrouter.ai/api/v1/models");
-      const data = await resp.json();
-      if (!data.data) return [];
-      return data.data
-        .filter(m => {
-          const isFree = m.pricing.prompt === "0" && m.pricing.completion === "0";
-          const id = m.id.toLowerCase();
-          return isFree && (id.includes('vision') || id.includes('gemini') || id.includes('pixtral') || id.includes('llava') || id.includes('multimodal'));
-        })
-        .map(m => m.id);
-    } catch (e) {
-      return [];
-    }
-  };
-
   const processWithAI = async () => {
     if (!image) return;
     if (!apiKey) {
@@ -104,31 +83,32 @@ const DeckScanner = ({ onAddToQueue }) => {
 
     try {
       const base64Image = await compressImage(image);
-      
-      // The "openrouter/free" model is a wildcard that routes to any available free model
       let modelsToTry = [
         customModel,
-        "openrouter/free", 
+        "openrouter/free",
         "google/gemini-2.0-flash-exp:free",
         "meta-llama/llama-3.2-11b-vision-instruct:free",
         "google/gemini-flash-1.5-8b-exp:free"
       ].filter(Boolean);
-      
       modelsToTry = [...new Set(modelsToTry)];
 
       let lastError = "";
 
       const tryModel = async (index) => {
         if (index >= modelsToTry.length) {
-          throw new Error(`Nessun modello ha funzionato. Ultimo errore: ${lastError}`);
+          throw new Error(`Nessun modello ha risposto. Ultimo errore: ${lastError}`);
         }
 
         const model = modelsToTry[index];
-        console.log(`Trying model ${index + 1}/${modelsToTry.length}: ${model}`);
+        setStatusMessage(`Analisi con ${model.split('/')[1] || model}...`);
         
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+
           const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
+            signal: controller.signal,
             headers: {
               "Authorization": `Bearer ${apiKey}`,
               "HTTP-Referer": "https://mtg-proxy-creator.vercel.app",
@@ -141,7 +121,7 @@ const DeckScanner = ({ onAddToQueue }) => {
                 {
                   "role": "user",
                   "content": [
-                    { "type": "text", "text": "Extract all MTG card names and quantities from this image. Output ONLY a JSON array: [{\"name\": \"Card Name\", \"qty\": 1}]. Count stacked cards." },
+                    { "type": "text", "text": "List MTG cards in image as JSON array: [{\"name\":\"Card Name\",\"qty\":1}]." },
                     { "type": "image_url", "image_url": { "url": base64Image } }
                   ]
                 }
@@ -149,11 +129,11 @@ const DeckScanner = ({ onAddToQueue }) => {
             })
           });
 
+          clearTimeout(timeoutId);
           const data = await response.json();
           
           if (data.error) {
             lastError = data.error.message;
-            setDebugInfo(`Model: ${model}\nError: ${JSON.stringify(data.error, null, 2)}`);
             if (data.error.code === 404 || lastError.includes("endpoint") || lastError.includes("not found")) {
               return tryModel(index + 1);
             }
@@ -175,12 +155,12 @@ const DeckScanner = ({ onAddToQueue }) => {
               setResults(detected);
               detected.forEach(card => searchCard(card));
             } else {
-              throw new Error("Risposta IA in formato non valido.");
+              throw new Error("Risposta IA non valida.");
             }
           }
         } catch (err) {
-          lastError = err.message;
-          if (lastError.includes("404") || lastError.includes("endpoint") || lastError.includes("not found")) {
+          lastError = err.name === 'AbortError' ? 'Tempo scaduto' : err.message;
+          if (lastError.includes("404") || lastError.includes("endpoint") || lastError.includes("not found") || lastError.includes("Tempo scaduto")) {
             return tryModel(index + 1);
           }
           throw err;
@@ -192,6 +172,7 @@ const DeckScanner = ({ onAddToQueue }) => {
       setError(err.message);
     } finally {
       setIsProcessing(false);
+      setStatusMessage('');
     }
   };
 
@@ -290,7 +271,7 @@ const DeckScanner = ({ onAddToQueue }) => {
         <div className="scanner-title-row">
           <div className="scanner-title-group">
             <Wand2 className="text-accent" size={24} />
-            <h2>Deck Scanner OCR <span className="version-tag">v2.1</span></h2>
+            <h2>Deck Scanner OCR <span className="version-tag">v2.2</span></h2>
           </div>
         </div>
         <p className="scanner-subtitle">Analisi avanzata con IA.</p>
@@ -303,17 +284,22 @@ const DeckScanner = ({ onAddToQueue }) => {
             {preview ? (
               <div className="preview-container">
                 <img src={preview} alt="Anteprima" className="scanner-preview-img" />
-                <div className="preview-overlay"><Upload size={20} /><span>Cambia immagine</span></div>
+                <div className="preview-overlay"><Upload size={20} /><span>Cambia</span></div>
               </div>
             ) : (
               <div className="dropzone-placeholder"><ImageIcon size={48} className="opacity-20 mb-3" /><p>Carica immagine</p></div>
             )}
-            {isProcessing && <div className="processing-overlay"><Loader2 size={40} className="animate-spin mb-4 text-accent" /><p className="font-bold">Analisi...</p></div>}
+            {isProcessing && (
+              <div className="processing-overlay">
+                <Loader2 size={40} className="animate-spin mb-4 text-accent" />
+                <p className="font-bold text-center px-4">{statusMessage || 'Analisi...'}</p>
+              </div>
+            )}
           </div>
 
           <div className="scanner-controls">
             <div className="ai-mode-card">
-              <div className="ai-mode-info"><div className="flex items-center gap-2"><Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} /><p className="mode-label">Modalità IA</p></div></div>
+              <div className="ai-mode-info"><div className="flex items-center gap-2"><Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} /><p className="mode-label">IA Avanzata</p></div></div>
               <div className="flex items-center gap-4">
                 <button className={`p-2 rounded-lg transition-all ${apiKey ? 'text-success' : 'text-error'}`} onClick={() => setShowKeyInput(!showKeyInput)}><Key size={18} /></button>
                 <label className="switch"><input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} /><span className="slider"></span></label>
@@ -324,10 +310,10 @@ const DeckScanner = ({ onAddToQueue }) => {
               <div className="api-key-panel">
                 <div className="flex flex-col gap-3">
                   <input type="password" placeholder="API Key..." className="api-key-input" value={apiKey} onChange={(e) => saveSettings(e.target.value, customModel)} />
-                  <input type="text" placeholder="Modello IA (Opzionale)" className="api-key-input" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
+                  <input type="text" placeholder="Modello IA" className="api-key-input" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
                   <div className="flex gap-2">
                     <button className="api-key-save flex-1 py-2" onClick={() => setShowKeyInput(false)}>Chiudi</button>
-                    <button className="api-key-reset py-2 px-3 bg-error-hl text-error rounded-lg" onClick={resetSettings} title="Reset Tutto"><RefreshCw size={14} /></button>
+                    <button className="api-key-reset py-2 px-3 bg-error-hl text-error rounded-lg" onClick={resetSettings}><RefreshCw size={14} /></button>
                   </div>
                 </div>
               </div>
@@ -336,18 +322,7 @@ const DeckScanner = ({ onAddToQueue }) => {
             <button className={`main-process-btn ${useAI ? 'ai' : ''}`} onClick={processImage} disabled={!image || isProcessing}>
               {isProcessing ? <><Loader2 size={18} className="animate-spin" /> Analisi...</> : <>{useAI ? <Wand2 size={18} /> : <Search size={18} />} {useAI ? 'Analisi IA' : 'Scansione OCR'}</>}
             </button>
-            
-            {error && (
-              <div className="error-box">
-                <AlertCircle size={14} /> 
-                <span className="flex-1 text-[10px] leading-tight">{error}</span>
-                {debugInfo && (
-                  <button className="ml-2 opacity-50 hover:opacity-100" onClick={() => alert(debugInfo)}>
-                    <Bug size={14} />
-                  </button>
-                )}
-              </div>
-            )}
+            {error && <div className="error-box"><AlertCircle size={14} /><span className="flex-1 text-[10px]">{error}</span></div>}
           </div>
         </div>
 
