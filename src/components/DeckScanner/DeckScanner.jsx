@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
-import { Search, Image as ImageIcon, Trash2, Plus, Loader2, CheckCircle2, AlertCircle, Wand2, Key, Upload } from 'lucide-react';
+import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload } from 'lucide-react';
 import './DeckScanner.css';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
@@ -37,12 +37,40 @@ const DeckScanner = ({ onAddToQueue }) => {
     }
   };
 
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
+  // Compress image before sending to AI
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = error => reject(error);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+      };
     });
   };
 
@@ -62,23 +90,25 @@ const DeckScanner = ({ onAddToQueue }) => {
       customModel,
       "google/gemini-2.0-flash-exp:free",
       "google/gemini-flash-1.5-exp:free",
-      "google/gemini-pro-1.5-exp:free",
-      "google/gemini-flash-1.5-8b"
+      "google/gemini-flash-1.5-8b-exp:free",
+      "mistralai/pixtral-12b:free"
     ].filter(Boolean);
+
+    let lastError = "";
 
     const tryModel = async (index) => {
       if (index >= models.length) {
-        throw new Error("Nessun modello IA disponibile. Controlla la tua chiave o il nome del modello.");
+        throw new Error(`Errore: ${lastError || "Nessun modello disponibile."}`);
       }
 
       const model = models[index].trim();
       try {
-        const base64Image = await fileToBase64(image);
+        const base64Image = await compressImage(image);
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${apiKey}`,
-            "HTTP-Referer": window.location.origin,
+            "HTTP-Referer": "https://mtg-proxy-creator.vercel.app",
             "X-Title": "MTG Proxy Creator",
             "Content-Type": "application/json"
           },
@@ -88,7 +118,7 @@ const DeckScanner = ({ onAddToQueue }) => {
               {
                 "role": "user",
                 "content": [
-                  { "type": "text", "text": "List MTG cards in this image as JSON array of objects: [{\"name\":\"Card Name\",\"qty\":4}]. Count stacks." },
+                  { "type": "text", "text": "List MTG card names and quantities from this image as JSON array: [{\"name\":\"Card Name\",\"qty\":4}]. Only card names." },
                   { "type": "image_url", "image_url": { "url": base64Image } }
                 ]
               }
@@ -99,10 +129,11 @@ const DeckScanner = ({ onAddToQueue }) => {
         const data = await response.json();
         
         if (data.error) {
-          if (data.error.code === 404 || data.error.message.includes("model") || data.error.message.includes("not found")) {
+          lastError = data.error.message;
+          if (data.error.code === 404 || lastError.includes("model") || lastError.includes("not found")) {
             return tryModel(index + 1);
           }
-          throw new Error(data.error.message);
+          throw new Error(lastError);
         }
 
         if (data.choices?.[0]?.message?.content) {
@@ -120,11 +151,12 @@ const DeckScanner = ({ onAddToQueue }) => {
             setResults(detected);
             detected.forEach(card => searchCard(card));
           } else {
-            throw new Error("L'IA non ha rilevato carte.");
+            throw new Error("Formato risposta IA non valido.");
           }
         }
       } catch (err) {
-        if (err.message.includes("not found") || err.message.includes("404")) {
+        lastError = err.message;
+        if (lastError.includes("not found") || lastError.includes("404")) {
           return tryModel(index + 1);
         }
         throw err;
@@ -220,7 +252,6 @@ const DeckScanner = ({ onAddToQueue }) => {
 
   const updateCardQty = (id, newQty) => setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, newQty) } : c));
   const removeCard = (id) => setResults(prev => prev.filter(c => c.id !== id));
-  
   const handleAddToQueue = () => {
     const validCards = results.filter(c => c.status === 'found');
     onAddToQueue(validCards.map(c => ({
@@ -247,61 +278,29 @@ const DeckScanner = ({ onAddToQueue }) => {
 
       <div className="scanner-layout">
         <div className="scanner-upload-section">
-          <div 
-            className={`scanner-dropzone ${isProcessing ? 'processing' : ''}`} 
-            onClick={() => !isProcessing && fileInputRef.current.click()}
-          >
-            {/* Native file input hidden with inline styles for maximum safety */}
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleImageUpload} 
-              accept="image/*" 
-              style={{ display: 'none' }} 
-            />
-            
+          <div className={`scanner-dropzone ${isProcessing ? 'processing' : ''}`} onClick={() => !isProcessing && fileInputRef.current.click()}>
+            <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" style={{ display: 'none' }} />
             {preview ? (
               <div className="preview-container">
                 <img src={preview} alt="Anteprima" className="scanner-preview-img" />
-                <div className="preview-overlay">
-                  <Upload size={20} />
-                  <span>Clicca per cambiare immagine</span>
-                </div>
+                <div className="preview-overlay"><Upload size={20} /><span>Cambia immagine</span></div>
               </div>
             ) : (
-              <div className="dropzone-placeholder">
-                <ImageIcon size={48} className="opacity-20 mb-3" />
-                <p>Trascina un'immagine o clicca per caricare</p>
-                <span className="text-[10px] opacity-40">JPG, PNG supportati</span>
-              </div>
+              <div className="dropzone-placeholder"><ImageIcon size={48} className="opacity-20 mb-3" /><p>Carica immagine</p></div>
             )}
-            
-            {isProcessing && (
-              <div className="processing-overlay">
-                <Loader2 size={40} className="animate-spin mb-4 text-accent" />
-                <p className="font-bold">Analisi in corso...</p>
-              </div>
-            )}
+            {isProcessing && <div className="processing-overlay"><Loader2 size={40} className="animate-spin mb-4 text-accent" /><p className="font-bold">Analisi...</p></div>}
           </div>
 
           <div className="scanner-controls">
             <div className="ai-mode-card">
               <div className="ai-mode-info">
                 <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} />
-                    <p className="mode-label">Modalità IA Avanzata</p>
-                  </div>
+                  <div className="flex items-center gap-2"><Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} /><p className="mode-label">Modalità IA</p></div>
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <button className={`p-2 rounded-lg transition-all ${apiKey ? 'text-success' : 'text-error'}`} onClick={(e) => { e.stopPropagation(); setShowKeyInput(!showKeyInput); }}>
-                  <Key size={18} />
-                </button>
-                <label className="switch" onClick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />
-                  <span className="slider"></span>
-                </label>
+                <button className={`p-2 rounded-lg transition-all ${apiKey ? 'text-success' : 'text-error'}`} onClick={(e) => { e.stopPropagation(); setShowKeyInput(!showKeyInput); }}><Key size={18} /></button>
+                <label className="switch" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} /><span className="slider"></span></label>
               </div>
             </div>
 
