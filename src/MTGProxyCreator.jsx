@@ -3,6 +3,7 @@ import ProxyCreatorMain from "./components/ProxyCreator/ProxyCreatorMain";
 import TokenPreviewSinglePtFrame from "./TokenPreviewSinglePtFrame";
 import StudioEditor from "./StudioEditor";
 import DeckChecker from "./components/DeckChecker/DeckChecker";
+import DeckScanner from "./components/DeckScanner/DeckScanner";
 
 function Icon({ d, size = 16, className = "" }) {
   return (
@@ -16,12 +17,18 @@ function Icon({ d, size = 16, className = "" }) {
 export default function MTGProxyCreator() {
   const [tab, setTab] = useState("proxy");
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 700);
+  const [globalQueue, setGlobalQueue] = useState([]);
 
   useEffect(() => {
     const fn = () => setIsMobile(window.innerWidth < 700);
     window.addEventListener("resize", fn);
     return () => window.removeEventListener("resize", fn);
   }, []);
+
+  const addToGlobalQueue = (newItems) => {
+    setGlobalQueue(prev => [...prev, ...newItems]);
+    setTab("proxy"); // Switch to proxy tab to show results
+  };
 
   return (
     <div className="shell">
@@ -34,6 +41,7 @@ export default function MTGProxyCreator() {
             </div>
             {[
               { id: "proxy", icon: "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7", label: "Proxy Stampa" },
+              { id: "ocr", icon: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5", label: "Scanner OCR" },
               { id: "token", icon: "M12 5v14M5 12h14", label: "Token Creator" },
               { id: "studio", icon: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5", label: "Studio Design" },
               { id: "checker", icon: "M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z", label: "Deck Checker" },
@@ -49,7 +57,8 @@ export default function MTGProxyCreator() {
             ))}
           </aside>
           <main className="main-content">
-            {tab === "proxy" && <ProxyCreatorMain isMobile={false} />}
+            {tab === "proxy" && <ProxyCreatorMain isMobile={false} externalQueue={globalQueue} setExternalQueue={setGlobalQueue} />}
+            {tab === "ocr" && <DeckScanner onAddToQueue={addToGlobalQueue} />}
             {tab === "token" && <TokenPreviewSinglePtFrame />}
             {tab === "studio" && <StudioEditor />}
             {tab === "checker" && <DeckChecker />}
@@ -63,6 +72,7 @@ export default function MTGProxyCreator() {
           <div className="mobile-tabs">
             {[
               { id: "proxy", label: "🖨 Stampa" }, 
+              { id: "ocr", label: "👁️ OCR" },
               { id: "token", label: "🃏 Token" },
               { id: "studio", label: "🎨 Studio" },
               { id: "checker", label: "🔍 Check" }
@@ -77,7 +87,8 @@ export default function MTGProxyCreator() {
             ))}
           </div>
           <div className="mobile-content" style={tab === 'studio' ? { padding: 0, overflow: 'hidden', gap: 0 } : {}}>
-            {tab === "proxy" && <ProxyCreatorMain isMobile={true} />}
+            {tab === "proxy" && <ProxyCreatorMain isMobile={true} externalQueue={globalQueue} setExternalQueue={setGlobalQueue} />}
+            {tab === "ocr" && <DeckScanner onAddToQueue={addToGlobalQueue} />}
             {tab === "token" && <TokenPreviewSinglePtFrame />}
             {tab === "studio" && <StudioEditor />}
             {tab === "checker" && <DeckChecker />}

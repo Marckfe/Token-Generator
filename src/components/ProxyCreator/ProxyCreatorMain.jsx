@@ -14,8 +14,8 @@ function Icon({ d, size = 16, className = "" }) {
   );
 }
 
-export default function ProxyCreatorMain({ isMobile }) {
-  const [images, setImages] = useState([]);
+export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQueue }) {
+  const [images, setImages] = useState(externalQueue || []);
   const [dragIdx, setDragIdx] = useState(null);
   const [isDrop, setIsDrop] = useState(false);
   const [isGen, setIsGen] = useState(false);
@@ -32,6 +32,20 @@ export default function ProxyCreatorMain({ isMobile }) {
   const [showDatabase, setShowDatabase] = useState(false);
   
   const inputRef = useRef();
+
+  // Sync with global queue if provided
+  useEffect(() => {
+    if (externalQueue && externalQueue.length !== images.length) {
+      setImages(externalQueue);
+    }
+  }, [externalQueue]);
+
+  // Update global queue when local changes
+  useEffect(() => {
+    if (setExternalQueue) {
+      setExternalQueue(images);
+    }
+  }, [images, setExternalQueue]);
 
   const toast = useCallback((msg, type = "s") => {
     setSnack({ show: true, msg, type });
