@@ -19,7 +19,7 @@ const DeckScanner = ({ onAddToQueue }) => {
   const fileInputRef = useRef(null);
 
   const saveSettings = (key, model) => {
-    const cleanKey = key.trim();
+    const cleanKey = key.replace(/\s/g, ''); // Remove ANY whitespace
     const cleanModel = model.trim();
     setApiKey(cleanKey);
     setCustomModel(cleanModel);
@@ -37,7 +37,6 @@ const DeckScanner = ({ onAddToQueue }) => {
     }
   };
 
-  // Compress image before sending to AI
   const compressImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -47,28 +46,18 @@ const DeckScanner = ({ onAddToQueue }) => {
         img.src = event.target.result;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1200;
-          const MAX_HEIGHT = 1200;
+          const MAX_WIDTH = 1000;
           let width = img.width;
           let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
           }
-
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.8));
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
         };
       };
     });
@@ -90,15 +79,17 @@ const DeckScanner = ({ onAddToQueue }) => {
       customModel,
       "google/gemini-2.0-flash-exp:free",
       "google/gemini-flash-1.5-exp:free",
+      "google/gemini-pro-1.5-exp:free",
       "google/gemini-flash-1.5-8b-exp:free",
+      "google/gemini-flash-1.5",
       "mistralai/pixtral-12b:free"
     ].filter(Boolean);
 
-    let lastError = "";
+    let lastErrorMsg = "";
 
     const tryModel = async (index) => {
       if (index >= models.length) {
-        throw new Error(`Errore: ${lastError || "Nessun modello disponibile."}`);
+        throw new Error(`Tutti i modelli hanno fallito. Ultimo errore: ${lastErrorMsg}`);
       }
 
       const model = models[index].trim();
@@ -108,8 +99,6 @@ const DeckScanner = ({ onAddToQueue }) => {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${apiKey}`,
-            "HTTP-Referer": "https://mtg-proxy-creator.vercel.app",
-            "X-Title": "MTG Proxy Creator",
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
@@ -118,7 +107,7 @@ const DeckScanner = ({ onAddToQueue }) => {
               {
                 "role": "user",
                 "content": [
-                  { "type": "text", "text": "List MTG card names and quantities from this image as JSON array: [{\"name\":\"Card Name\",\"qty\":4}]. Only card names." },
+                  { "type": "text", "text": "Extract MTG card names and quantities as JSON array: [{\"name\":\"Card Name\",\"qty\":4}]." },
                   { "type": "image_url", "image_url": { "url": base64Image } }
                 ]
               }
@@ -129,11 +118,11 @@ const DeckScanner = ({ onAddToQueue }) => {
         const data = await response.json();
         
         if (data.error) {
-          lastError = data.error.message;
-          if (data.error.code === 404 || lastError.includes("model") || lastError.includes("not found")) {
+          lastErrorMsg = data.error.message;
+          if (data.error.code === 404 || lastErrorMsg.includes("not found") || lastErrorMsg.includes("endpoint")) {
             return tryModel(index + 1);
           }
-          throw new Error(lastError);
+          throw new Error(lastErrorMsg);
         }
 
         if (data.choices?.[0]?.message?.content) {
@@ -151,12 +140,12 @@ const DeckScanner = ({ onAddToQueue }) => {
             setResults(detected);
             detected.forEach(card => searchCard(card));
           } else {
-            throw new Error("Formato risposta IA non valido.");
+            throw new Error("Risposta IA non valida.");
           }
         }
       } catch (err) {
-        lastError = err.message;
-        if (lastError.includes("not found") || lastError.includes("404")) {
+        lastErrorMsg = err.message;
+        if (lastErrorMsg.includes("not found") || lastErrorMsg.includes("404") || lastErrorMsg.includes("endpoint")) {
           return tryModel(index + 1);
         }
         throw err;
@@ -169,7 +158,6 @@ const DeckScanner = ({ onAddToQueue }) => {
       setError(err.message);
     } finally {
       setIsProcessing(false);
-      setProgress(100);
     }
   };
 
@@ -252,6 +240,7 @@ const DeckScanner = ({ onAddToQueue }) => {
 
   const updateCardQty = (id, newQty) => setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, newQty) } : c));
   const removeCard = (id) => setResults(prev => prev.filter(c => c.id !== id));
+  
   const handleAddToQueue = () => {
     const validCards = results.filter(c => c.status === 'found');
     onAddToQueue(validCards.map(c => ({
