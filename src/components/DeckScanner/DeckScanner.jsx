@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
-import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload } from 'lucide-react';
+import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload, Bug } from 'lucide-react';
 import './DeckScanner.css';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
@@ -12,14 +12,15 @@ const DeckScanner = ({ onAddToQueue }) => {
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
   const [useAI, setUseAI] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('openrouter_key') || '');
-  const [customModel, setCustomModel] = useState(localStorage.getItem('openrouter_model') || 'google/gemini-2.0-flash-exp:free');
+  const [customModel, setCustomModel] = useState(localStorage.getItem('openrouter_model') || 'meta-llama/llama-3.2-11b-vision-instruct:free');
   const [showKeyInput, setShowKeyInput] = useState(false);
   const fileInputRef = useRef(null);
 
   const saveSettings = (key, model) => {
-    const cleanKey = key.replace(/\s/g, ''); // Remove ANY whitespace
+    const cleanKey = key.replace(/\s/g, '');
     const cleanModel = model.trim();
     setApiKey(cleanKey);
     setCustomModel(cleanModel);
@@ -34,6 +35,7 @@ const DeckScanner = ({ onAddToQueue }) => {
       setPreview(URL.createObjectURL(file));
       setResults([]);
       setError(null);
+      setDebugInfo(null);
     }
   };
 
@@ -46,18 +48,19 @@ const DeckScanner = ({ onAddToQueue }) => {
         img.src = event.target.result;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1000;
+          const MAX_SIZE = 800; // Even smaller for safety
           let width = img.width;
           let height = img.height;
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
+          if (width > height) {
+            if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+          } else {
+            if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
           }
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.7));
+          resolve(canvas.toDataURL('image/jpeg', 0.6));
         };
       };
     });
@@ -66,30 +69,29 @@ const DeckScanner = ({ onAddToQueue }) => {
   const processWithAI = async () => {
     if (!image) return;
     if (!apiKey) {
-      setError("Inserisci la tua API Key.");
+      setError("Configura la chiave API.");
       setShowKeyInput(true);
       return;
     }
 
     setIsProcessing(true);
-    setProgress(20);
+    setProgress(10);
     setError(null);
+    setDebugInfo(null);
 
     const models = [
       customModel,
+      "meta-llama/llama-3.2-11b-vision-instruct:free",
       "google/gemini-2.0-flash-exp:free",
       "google/gemini-flash-1.5-exp:free",
-      "google/gemini-pro-1.5-exp:free",
-      "google/gemini-flash-1.5-8b-exp:free",
-      "google/gemini-flash-1.5",
       "mistralai/pixtral-12b:free"
     ].filter(Boolean);
 
-    let lastErrorMsg = "";
+    let finalError = "";
 
     const tryModel = async (index) => {
       if (index >= models.length) {
-        throw new Error(`Tutti i modelli hanno fallito. Ultimo errore: ${lastErrorMsg}`);
+        throw new Error("Tutti i modelli IA hanno fallito. Clicca l'icona insetto per i dettagli.");
       }
 
       const model = models[index].trim();
@@ -107,7 +109,7 @@ const DeckScanner = ({ onAddToQueue }) => {
               {
                 "role": "user",
                 "content": [
-                  { "type": "text", "text": "Extract MTG card names and quantities as JSON array: [{\"name\":\"Card Name\",\"qty\":4}]." },
+                  { "type": "text", "text": "List MTG cards in this image as JSON: [{\"name\":\"Name\",\"qty\":1}]." },
                   { "type": "image_url", "image_url": { "url": base64Image } }
                 ]
               }
@@ -118,11 +120,12 @@ const DeckScanner = ({ onAddToQueue }) => {
         const data = await response.json();
         
         if (data.error) {
-          lastErrorMsg = data.error.message;
-          if (data.error.code === 404 || lastErrorMsg.includes("not found") || lastErrorMsg.includes("endpoint")) {
+          finalError = JSON.stringify(data.error, null, 2);
+          setDebugInfo(finalError);
+          if (data.error.code === 404 || finalError.toLowerCase().includes("not found") || finalError.toLowerCase().includes("endpoint")) {
             return tryModel(index + 1);
           }
-          throw new Error(lastErrorMsg);
+          throw new Error(data.error.message || "Errore API");
         }
 
         if (data.choices?.[0]?.message?.content) {
@@ -132,7 +135,7 @@ const DeckScanner = ({ onAddToQueue }) => {
             const parsed = JSON.parse(jsonMatch[0]);
             const detected = parsed.map(item => ({
               id: Math.random().toString(36).substr(2, 9),
-              qty: item.qty,
+              qty: item.qty || 1,
               name: item.name,
               status: 'pending',
               data: null
@@ -140,12 +143,13 @@ const DeckScanner = ({ onAddToQueue }) => {
             setResults(detected);
             detected.forEach(card => searchCard(card));
           } else {
-            throw new Error("Risposta IA non valida.");
+            throw new Error("L'IA ha risposto ma non ha trovato dati validi.");
           }
         }
       } catch (err) {
-        lastErrorMsg = err.message;
-        if (lastErrorMsg.includes("not found") || lastErrorMsg.includes("404") || lastErrorMsg.includes("endpoint")) {
+        finalError = err.message;
+        setDebugInfo(finalError);
+        if (finalError.toLowerCase().includes("not found") || finalError.toLowerCase().includes("404") || finalError.toLowerCase().includes("endpoint")) {
           return tryModel(index + 1);
         }
         throw err;
@@ -168,9 +172,7 @@ const DeckScanner = ({ onAddToQueue }) => {
     setProgress(0);
     setError(null);
     try {
-      const worker = await createWorker('eng+ita', 1, {
-        logger: m => m.status === 'recognizing text' && setProgress(Math.round(m.progress * 100))
-      });
+      const worker = await createWorker('eng+ita', 1);
       const { data: { text } } = await worker.recognize(image);
       await worker.terminate();
       parseText(text);
@@ -240,7 +242,6 @@ const DeckScanner = ({ onAddToQueue }) => {
 
   const updateCardQty = (id, newQty) => setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, newQty) } : c));
   const removeCard = (id) => setResults(prev => prev.filter(c => c.id !== id));
-  
   const handleAddToQueue = () => {
     const validCards = results.filter(c => c.status === 'found');
     onAddToQueue(validCards.map(c => ({
@@ -282,19 +283,15 @@ const DeckScanner = ({ onAddToQueue }) => {
 
           <div className="scanner-controls">
             <div className="ai-mode-card">
-              <div className="ai-mode-info">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2"><Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} /><p className="mode-label">Modalità IA</p></div>
-                </div>
-              </div>
+              <div className="ai-mode-info"><div className="flex items-center gap-2"><Wand2 size={18} className={useAI ? 'text-accent' : 'text-muted'} /><p className="mode-label">Modalità IA</p></div></div>
               <div className="flex items-center gap-4">
-                <button className={`p-2 rounded-lg transition-all ${apiKey ? 'text-success' : 'text-error'}`} onClick={(e) => { e.stopPropagation(); setShowKeyInput(!showKeyInput); }}><Key size={18} /></button>
-                <label className="switch" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} /><span className="slider"></span></label>
+                <button className={`p-2 rounded-lg transition-all ${apiKey ? 'text-success' : 'text-error'}`} onClick={() => setShowKeyInput(!showKeyInput)}><Key size={18} /></button>
+                <label className="switch"><input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} /><span className="slider"></span></label>
               </div>
             </div>
 
             {showKeyInput && (
-              <div className="api-key-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="api-key-panel">
                 <div className="flex flex-col gap-3">
                   <input type="password" placeholder="API Key..." className="api-key-input" value={apiKey} onChange={(e) => saveSettings(e.target.value, customModel)} />
                   <input type="text" placeholder="Modello IA" className="api-key-input" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
@@ -306,7 +303,18 @@ const DeckScanner = ({ onAddToQueue }) => {
             <button className={`main-process-btn ${useAI ? 'ai' : ''}`} onClick={processImage} disabled={!image || isProcessing}>
               {isProcessing ? <><Loader2 size={18} className="animate-spin" /> Analisi...</> : <>{useAI ? <Wand2 size={18} /> : <Search size={18} />} {useAI ? 'Analisi IA' : 'Scansione OCR'}</>}
             </button>
-            {error && <div className="error-box"><AlertCircle size={14} /> {error}</div>}
+            
+            {error && (
+              <div className="error-box">
+                <AlertCircle size={14} /> 
+                <span>{error}</span>
+                {debugInfo && (
+                  <button className="ml-auto" onClick={() => alert(debugInfo)} title="Debug Info">
+                    <Bug size={14} />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
