@@ -53,33 +53,63 @@ const DeckScanner = ({ onAddToQueue }) => {
   };
 
   const parseText = (text) => {
-    // Regex to find patterns like "4 Lightning Bolt" or "1x Sol Ring" or just "Black Lotus"
-    const lines = text.split('\n');
-    const detectedCards = [];
+    // 1. Split text into potential chunks using common OCR separators
+    // OCR often puts symbols like |, (, ), [, ] between cards in a grid
+    const rawChunks = text.split(/[\n|()\[\]\\\/]/);
+    
+    const candidateMap = new Map(); // Use Map to deduplicate and sum quantities
 
-    lines.forEach(line => {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.length < 3) return;
+    rawChunks.forEach(chunk => {
+      let trimmed = chunk.trim();
+      if (!trimmed || trimmed.length < 3 || trimmed.length > 50) return;
 
-      // Try to extract quantity and name
-      // Pattern: optional number, optional 'x', then name
-      const match = trimmed.match(/^(\d+)?\s*[xX]?\s*(.+)$/);
-      if (match) {
-        const qty = parseInt(match[1]) || 1;
-        const name = match[2].trim();
-        
-        // Basic filtering to avoid common OCR noise
-        if (name.length > 3 && !name.includes('http') && !name.includes('www')) {
-          detectedCards.push({
-            id: Math.random().toString(36).substr(2, 9),
-            qty,
-            name,
-            status: 'pending', // pending, searching, found, error
-            data: null
-          });
+      // 2. Extract Quantity and Name
+      // Try patterns: "4x Card Name", "4 Card Name", "Card Name 4x"
+      let qty = 1;
+      let name = trimmed;
+
+      const qtyMatch = trimmed.match(/^(\d+)\s*[xX]?\s+(.+)$/) || trimmed.match(/^(.+)\s+(\d+)\s*[xX]?$/);
+      
+      if (qtyMatch) {
+        if (qtyMatch[1] && !isNaN(qtyMatch[1])) {
+          qty = parseInt(qtyMatch[1]);
+          name = qtyMatch[2].trim();
+        } else if (qtyMatch[2] && !isNaN(qtyMatch[2])) {
+          qty = parseInt(qtyMatch[2]);
+          name = qtyMatch[1].trim();
         }
       }
+
+      // 3. Heuristic filtering for "Card-like" names
+      // - Must start with a letter or number
+      // - Shouldn't have too many small words or weird punctuation
+      // - Most MTG card names start with capital letters
+      if (!/^[A-Za-z0-9]/.test(name)) return;
+      if (name.split(' ').length > 7) return; // Names are rarely > 7 words
+      if (/[{}<>]/.test(name)) return; // Likely ability text with symbols
+      
+      // Clean up common OCR artifacts
+      name = name.replace(/[^\w\s',-]/g, '').trim();
+      if (name.length < 3) return;
+
+      // 4. Group by name (lowercase for comparison)
+      const key = name.toLowerCase();
+      if (candidateMap.has(key)) {
+        const existing = candidateMap.get(key);
+        existing.qty += qty;
+      } else {
+        candidateMap.set(key, { name, qty });
+      }
     });
+
+    // 5. Convert map back to list of candidates
+    const detectedCards = Array.from(candidateMap.values()).map(item => ({
+      id: Math.random().toString(36).substr(2, 9),
+      qty: item.qty,
+      name: item.name,
+      status: 'pending',
+      data: null
+    }));
 
     setResults(detectedCards);
     // Auto-search for found cards
