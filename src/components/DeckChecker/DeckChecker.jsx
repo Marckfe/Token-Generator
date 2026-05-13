@@ -249,19 +249,50 @@ export default function DeckChecker() {
   return (
     <div className="deck-checker-container">
       <div className="deck-checker-sidebar">
+        {/* 1. DATI TORNEO (IN ALTO) */}
+        <div className="sidebar-panel-title flex items-center gap-2">
+          <FileText size={18} />
+          <span>Dati Torneo</span>
+        </div>
+        <div className="p-4 bg-[var(--surface2)] rounded-xl border border-[var(--border)] mb-6">
+          <div className="flex gap-2 mb-2">
+            <input type="text" className="control-input" placeholder="Cognome" value={playerData.lastName} onChange={e => setPlayerData({...playerData, lastName: e.target.value})} />
+            <input type="text" className="control-input" placeholder="Nome" value={playerData.firstName} onChange={e => setPlayerData({...playerData, firstName: e.target.value})} />
+          </div>
+          <div className="flex gap-2 mb-2">
+            <input type="text" className="control-input" placeholder="Player ID (ex DCI)" value={playerData.playerId} onChange={e => setPlayerData({...playerData, playerId: e.target.value})} />
+            <input type="date" className="control-input" value={playerData.date} onChange={e => setPlayerData({...playerData, date: e.target.value})} />
+          </div>
+          <div className="mb-2">
+            <input type="text" className="control-input" placeholder="Nome Evento" value={playerData.event} onChange={e => setPlayerData({...playerData, event: e.target.value})} />
+          </div>
+          <div className="flex gap-2 mb-4">
+            <input type="text" className="control-input" placeholder="Nome Mazzo" value={playerData.deckName} onChange={e => setPlayerData({...playerData, deckName: e.target.value})} />
+            <input type="text" className="control-input" placeholder="Designer" value={playerData.deckDesigner} onChange={e => setPlayerData({...playerData, deckDesigner: e.target.value})} />
+          </div>
+          <button className="btn btn-ghost w-full border border-[var(--border)] text-xs" onClick={generatePDF}>
+            <Download size={14} className="mr-2" />
+            Export PDF Sheet
+          </button>
+        </div>
+
+        {/* 2. SELEZIONE FORMATO */}
         <div className="sidebar-panel-title flex items-center gap-2">
           <ShieldCheck size={18} />
           <span>Analisi Legalità</span>
         </div>
 
-        <div className="control-field mb-6">
-          <label className="control-label">Seleziona Formato</label>
+        <div className="control-field mb-6 px-1">
+          <label className="control-label mb-2">Seleziona Formato</label>
           <div className="format-selector">
             {FORMATS.map(f => (
               <button 
                 key={f.id} 
                 className={`format-btn ${selectedFormat === f.id ? 'active' : ''}`}
-                onClick={() => setSelectedFormat(f.id)}
+                onClick={() => {
+                  setSelectedFormat(f.id);
+                  setResults(null); // Reset results when changing format
+                }}
               >
                 {f.name}
               </button>
@@ -269,6 +300,7 @@ export default function DeckChecker() {
           </div>
         </div>
         
+        {/* 3. INSERIMENTO CARTE */}
         <div className="control-field mb-4">
           <label className="control-label">Lista Carte (Maindeck)</label>
           <textarea 
@@ -322,34 +354,9 @@ export default function DeckChecker() {
           </div>
         )}
 
-        <button className="btn btn-primary w-full py-4 text-lg font-bold" onClick={handleCheck} disabled={checking}>
+        <button className="btn btn-primary w-full py-4 text-lg font-bold shadow-lg" onClick={handleCheck} disabled={checking}>
           {checking ? <Clock className="animate-spin mr-2" /> : <ShieldCheck className="mr-2" />}
           {checking ? 'Analisi in corso...' : 'Verifica Mazzo'}
-        </button>
-
-        <div className="sidebar-panel-title mt-8 flex items-center gap-2">
-          <FileText size={18} />
-          <span>Export Torneo</span>
-        </div>
-        <div className="flex gap-2 mb-2">
-          <input type="text" className="control-input" placeholder="Cognome" value={playerData.lastName} onChange={e => setPlayerData({...playerData, lastName: e.target.value})} />
-          <input type="text" className="control-input" placeholder="Nome" value={playerData.firstName} onChange={e => setPlayerData({...playerData, firstName: e.target.value})} />
-        </div>
-        <div className="flex gap-2 mb-2">
-          <input type="text" className="control-input" placeholder="Player ID (ex DCI)" value={playerData.playerId} onChange={e => setPlayerData({...playerData, playerId: e.target.value})} />
-          <input type="date" className="control-input" value={playerData.date} onChange={e => setPlayerData({...playerData, date: e.target.value})} />
-        </div>
-        <div className="mb-2">
-          <input type="text" className="control-input" placeholder="Nome Evento" value={playerData.event} onChange={e => setPlayerData({...playerData, event: e.target.value})} />
-        </div>
-        <div className="flex gap-2 mb-4">
-          <input type="text" className="control-input" placeholder="Nome Mazzo" value={playerData.deckName} onChange={e => setPlayerData({...playerData, deckName: e.target.value})} />
-          <input type="text" className="control-input" placeholder="Designer" value={playerData.deckDesigner} onChange={e => setPlayerData({...playerData, deckDesigner: e.target.value})} />
-        </div>
-        
-        <button className="btn btn-ghost w-full border border-[var(--border)]" onClick={generatePDF}>
-          <Download size={16} className="mr-2" />
-          Scarica PDF Registration Sheet
         </button>
       </div>
 
