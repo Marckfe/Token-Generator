@@ -58,15 +58,15 @@ const DeckScanner = ({ onAddToQueue }) => {
     
     // Keywords that suggest this is ability text, not a name
     const blacklist = ['untap', 'draw', 'damage', 'creature', 'target', 'each', 'turn', 'whenever', 'enters', 'battlefield', 'flying', 'haste', 'lifelink', 'trample', 'vigilance', 'scry', 'surveil', 'token'];
+    const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes'];
 
     rawChunks.forEach(chunk => {
       let trimmed = chunk.trim();
       if (!trimmed || trimmed.length < 4 || trimmed.length > 45) return;
 
-      // Card names in MTG always start with a Capital letter (or number for some tokens)
+      // Card names in MTG always start with a Capital letter
       if (!/^[A-Z0-9]/.test(trimmed)) return;
       
-      // If it contains too many lowercase words or MTG keywords, it's likely ability text
       const lower = trimmed.toLowerCase();
       if (blacklist.some(word => lower.includes(word))) return;
       if (trimmed.split(' ').length > 6) return;
@@ -74,16 +74,24 @@ const DeckScanner = ({ onAddToQueue }) => {
       let qty = 1;
       let name = trimmed;
 
-      // Smarter Quantity: Only at the very start or end, followed/preceded by space or x
-      const startQty = trimmed.match(/^(\d+)\s*[xX]?\s+/);
-      const endQty = trimmed.match(/\s+(\d+)\s*[xX]?$/);
-      
-      if (startQty) {
-        qty = parseInt(startQty[1]);
-        name = trimmed.replace(startQty[0], '').trim();
-      } else if (endQty) {
-        qty = parseInt(endQty[1]);
-        name = trimmed.replace(endQty[0], '').trim();
+      // Smarter Quantity: Only at the very start or end
+      // Also avoid collector numbers like 264/280
+      if (!trimmed.includes('/')) {
+        const startQty = trimmed.match(/^(\d+)\s*[xX]?\s+/);
+        const endQty = trimmed.match(/\s+(\d+)\s*[xX]?$/);
+        
+        if (startQty) {
+          let q = parseInt(startQty[1]);
+          // Cap quantity to avoid misreading collector numbers
+          if (q > 20 && !basicLands.some(l => lower.includes(l))) q = 1;
+          qty = q;
+          name = trimmed.replace(startQty[0], '').trim();
+        } else if (endQty) {
+          let q = parseInt(endQty[1]);
+          if (q > 20 && !basicLands.some(l => lower.includes(l))) q = 1;
+          qty = q;
+          name = trimmed.replace(endQty[0], '').trim();
+        }
       }
 
       if (name.length < 3) return;
