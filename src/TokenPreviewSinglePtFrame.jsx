@@ -435,6 +435,7 @@ export default function TokenPreviewSinglePtFrame() {
       let next = cloneState(snap);
       let sGuides = { x: null, y: null };
       const SNAP_TOLERANCE = 10;
+      const MARGIN = 28; // Safety margin for rounded corners (26px radius)
       
       if (kind === 'art') {
         let ax = snap.artTransform.x + dx;
@@ -442,55 +443,64 @@ export default function TokenPreviewSinglePtFrame() {
         if (Math.abs(ax) < SNAP_TOLERANCE) { ax = 0; sGuides.x = CW/2; }
         if (Math.abs(ay) < SNAP_TOLERANCE) { ay = 0; sGuides.y = CH/2; }
         
-        next.artTransform = { 
-          ...next.artTransform, 
-          x: Math.round(ax), 
-          y: Math.round(ay) 
-        };
+        next.artTransform = { ...next.artTransform, x: Math.round(ax), y: Math.round(ay) };
       } else {
-        // Temporary update to calculate metrics
+        // 1. Initial position update
         if (kind === 'name') {
           let nx = snap.nameStyle.x + dx;
           if (Math.abs(nx) < SNAP_TOLERANCE) { nx = 0; sGuides.x = CW/2; }
           next.nameStyle = { ...next.nameStyle, x: Math.round(nx), y: Math.round(snap.nameStyle.y + dy) };
+        } else if (kind === 'type') {
+          next.typeStyle = { ...next.typeStyle, x: Math.round(snap.typeStyle.x + dx), y: Math.round(snap.typeStyle.y + dy) };
+        } else if (kind === 'ability') {
+          next.abilityStyle = { ...next.abilityStyle, x: Math.round(snap.abilityStyle.x + dx), y: Math.round(snap.abilityStyle.y + dy) };
+        } else if (kind === 'pt') {
+          next.ptStyle = { ...next.ptStyle, frameX: Math.round(snap.ptStyle.frameX + dx), frameY: Math.round(snap.ptStyle.frameY + dy) };
+        } else if (kind === 'infoLeft') {
+          next.infoLeft = { ...next.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||12) - dy) };
+        } else if (kind === 'artist') {
+          next.artistStyle = { ...next.artistStyle, x: Math.round((snap.artistStyle?.x||18) + dx), y: Math.round((snap.artistStyle?.y||26) - dy) };
+        } else if (kind === 'copyright') {
+          next.copyright = { ...next.copyright, x: Math.round((snap.copyright?.x||18) - dx), y: Math.round((snap.copyright?.y||12) - dy) };
         }
-        if (kind === 'type') next.typeStyle = { ...next.typeStyle, x: Math.round(snap.typeStyle.x + dx), y: Math.round(snap.typeStyle.y + dy) };
-        if (kind === 'ability') next.abilityStyle = { ...next.abilityStyle, x: Math.round(snap.abilityStyle.x + dx), y: Math.round(snap.abilityStyle.y + dy) };
-        if (kind === 'pt') next.ptStyle = { ...next.ptStyle, frameX: Math.round(snap.ptStyle.frameX + dx), frameY: Math.round(snap.ptStyle.frameY + dy) };
-        if (kind === 'infoLeft') next.infoLeft = { ...next.infoLeft, x: Math.round((snap.infoLeft?.x||18) + dx), y: Math.round((snap.infoLeft?.y||12) - dy) };
-        if (kind === 'artist') next.artistStyle = { ...next.artistStyle, x: Math.round((snap.artistStyle?.x||18) + dx), y: Math.round((snap.artistStyle?.y||26) - dy) };
-        if (kind === 'copyright') next.copyright = { ...next.copyright, x: Math.round((snap.copyright?.x||18) - dx), y: Math.round((snap.copyright?.y||12) - dy) };
 
-        // Apply clamping based on bounding boxes
-        const boxes = getGuideMetrics(next);
-        const b = boxes[kind];
-        if (b) {
-          if (kind === 'name') {
-            const nameWidth = b.w - 20;
-            const nameSize = b.h / 1.18;
-            const minX = nameWidth/2 - CW/2 + 12;
-            const maxX = CW/2 - nameWidth/2 - 12;
-            next.nameStyle.x = clamp(next.nameStyle.x, minX, maxX);
-            next.nameStyle.y = clamp(next.nameStyle.y, nameSize/2 + 10, CH - nameSize/2 - 10);
-          } else if (kind === 'type') {
-            next.typeStyle.x = clamp(next.typeStyle.x, 20, CW - b.w - 10);
-            next.typeStyle.y = clamp(next.typeStyle.y, 20, CH - 20);
-          } else if (kind === 'ability') {
-            next.abilityStyle.x = clamp(next.abilityStyle.x, 20, CW - b.w - 20);
-            next.abilityStyle.y = clamp(next.abilityStyle.y, 20, CH - b.h - 20);
-          } else if (kind === 'pt') {
-            next.ptStyle.frameX = clamp(next.ptStyle.frameX, 0, CW - next.ptStyle.width);
-            next.ptStyle.frameY = clamp(next.ptStyle.frameY, 0, CH - next.ptStyle.height);
-          } else if (kind === 'infoLeft') {
-            next.infoLeft.x = clamp(next.infoLeft.x, 10, CW - b.w - 10);
-            next.infoLeft.y = clamp(next.infoLeft.y, 10, CH - 20);
-          } else if (kind === 'artist') {
-            next.artistStyle.x = clamp(next.artistStyle.x, 10, CW - b.w - 10);
-            next.artistStyle.y = clamp(next.artistStyle.y, 10, CH - 20);
-          } else if (kind === 'copyright') {
-            next.copyright.x = clamp(next.copyright.x, 10, CW - b.w - 10);
-            next.copyright.y = clamp(next.copyright.y, 10, CH - 20);
+        // 2. Strict Clamping Logic
+        if (kind === 'name') {
+          const nSize = state.autoFitName ? fitTextBox((state.name||"TOKEN").toUpperCase(), state.nameStyle.fontSize, 16, CW-90, 1, state.nameStyle.fontFamily||FT_DEFAULT) : state.nameStyle.fontSize;
+          const nWidth = measureTextWidth((state.name||"TOKEN").toUpperCase(), nSize, state.nameStyle.fontFamily||FT_DEFAULT, "bold");
+          const offset = state.nameStyle.align === "left" ? 10 : state.nameStyle.align === "right" ? CW - 10 : CW/2;
+          const minX = MARGIN - offset + nWidth/2;
+          const maxX = CW - MARGIN - offset - nWidth/2;
+          next.nameStyle.x = Math.max(minX, Math.min(maxX, next.nameStyle.x));
+          next.nameStyle.y = Math.max(MARGIN + 10, Math.min(CH/2, next.nameStyle.y)); // Keep name in upper half
+        } else if (kind === 'type') {
+          const tSize = state.autoFitType ? fitTextBox(state.type||"Token", state.typeStyle.fontSize, 14, CW-state.typeStyle.x-40, 1, state.typeStyle.fontFamily||FT_DEFAULT) : state.typeStyle.fontSize;
+          const tWidth = measureTextWidth(state.type||"Token", tSize, state.typeStyle.fontFamily||FT_DEFAULT, "bold");
+          next.typeStyle.x = Math.max(MARGIN + 15, Math.min(CW - tWidth - MARGIN - 15, next.typeStyle.x));
+          next.typeStyle.y = Math.max(CH/2, Math.min(CH - MARGIN - 40, next.typeStyle.y));
+        } else if (kind === 'ability') {
+          const aSize = state.autoFitRules ? fitTextBox(state.ability||"", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, state.abilityStyle.fontFamily || FB_DEFAULT) : state.abilityStyle.fontSize;
+          const aLines = Math.max(1, String(state.ability || '').split('\n').length);
+          const aHeight = aLines * (aSize * 1.45);
+          next.abilityStyle.x = Math.max(MARGIN + 15, Math.min(CW - (next.abilityStyle.width||400) - MARGIN - 15, next.abilityStyle.x));
+          next.abilityStyle.y = Math.max(CH/2 - 100, Math.min(CH - aHeight - MARGIN - 60, next.abilityStyle.y));
+        } else if (kind === 'pt') {
+          next.ptStyle.frameX = Math.max(MARGIN, Math.min(CW - next.ptStyle.width - MARGIN, next.ptStyle.frameX));
+          next.ptStyle.frameY = Math.max(CH/2, Math.min(CH - next.ptStyle.height - MARGIN, next.ptStyle.frameY));
+        } else if (kind === 'infoLeft' || kind === 'artist' || kind === 'copyright') {
+          const isInfo = kind === 'infoLeft';
+          const isArtist = kind === 'artist';
+          const target = isInfo ? next.infoLeft : isArtist ? next.artistStyle : next.copyright;
+          const text = isInfo ? state.infoLeft.text : isArtist ? "Illus. " + state.artist : state.copyright.text;
+          const fSize = target.fontSize || 11;
+          const tWidth = measureTextWidth(text, fSize, target.fontFamily || FT_DEFAULT, 'normal');
+          
+          if (kind === 'copyright') {
+            target.x = Math.max(MARGIN, Math.min(CW - tWidth - MARGIN, target.x));
+          } else {
+            target.x = Math.max(MARGIN, Math.min(CW - tWidth - MARGIN, target.x));
           }
+          target.y = Math.max(10, Math.min(60, target.y)); // Clamp vertical offset from bottom
         }
       }
 
