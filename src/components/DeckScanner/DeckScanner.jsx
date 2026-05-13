@@ -53,46 +53,41 @@ const DeckScanner = ({ onAddToQueue }) => {
   };
 
   const parseText = (text) => {
-    // 1. Split text into potential chunks using common OCR separators
-    // OCR often puts symbols like |, (, ), [, ] between cards in a grid
     const rawChunks = text.split(/[\n|()\[\]\\\/]/);
+    const candidateMap = new Map();
     
-    const candidateMap = new Map(); // Use Map to deduplicate and sum quantities
+    // Keywords that suggest this is ability text, not a name
+    const blacklist = ['untap', 'draw', 'damage', 'creature', 'target', 'each', 'turn', 'whenever', 'enters', 'battlefield', 'flying', 'haste', 'lifelink', 'trample', 'vigilance', 'scry', 'surveil', 'token'];
 
     rawChunks.forEach(chunk => {
       let trimmed = chunk.trim();
-      if (!trimmed || trimmed.length < 3 || trimmed.length > 50) return;
+      if (!trimmed || trimmed.length < 4 || trimmed.length > 45) return;
 
-      // 2. Extract Quantity and Name
-      // Try patterns: "4x Card Name", "4 Card Name", "Card Name 4x"
+      // Card names in MTG always start with a Capital letter (or number for some tokens)
+      if (!/^[A-Z0-9]/.test(trimmed)) return;
+      
+      // If it contains too many lowercase words or MTG keywords, it's likely ability text
+      const lower = trimmed.toLowerCase();
+      if (blacklist.some(word => lower.includes(word))) return;
+      if (trimmed.split(' ').length > 6) return;
+
       let qty = 1;
       let name = trimmed;
 
-      const qtyMatch = trimmed.match(/^(\d+)\s*[xX]?\s+(.+)$/) || trimmed.match(/^(.+)\s+(\d+)\s*[xX]?$/);
+      // Smarter Quantity: Only at the very start or end, followed/preceded by space or x
+      const startQty = trimmed.match(/^(\d+)\s*[xX]?\s+/);
+      const endQty = trimmed.match(/\s+(\d+)\s*[xX]?$/);
       
-      if (qtyMatch) {
-        if (qtyMatch[1] && !isNaN(qtyMatch[1])) {
-          qty = parseInt(qtyMatch[1]);
-          name = qtyMatch[2].trim();
-        } else if (qtyMatch[2] && !isNaN(qtyMatch[2])) {
-          qty = parseInt(qtyMatch[2]);
-          name = qtyMatch[1].trim();
-        }
+      if (startQty) {
+        qty = parseInt(startQty[1]);
+        name = trimmed.replace(startQty[0], '').trim();
+      } else if (endQty) {
+        qty = parseInt(endQty[1]);
+        name = trimmed.replace(endQty[0], '').trim();
       }
 
-      // 3. Heuristic filtering for "Card-like" names
-      // - Must start with a letter or number
-      // - Shouldn't have too many small words or weird punctuation
-      // - Most MTG card names start with capital letters
-      if (!/^[A-Za-z0-9]/.test(name)) return;
-      if (name.split(' ').length > 7) return; // Names are rarely > 7 words
-      if (/[{}<>]/.test(name)) return; // Likely ability text with symbols
-      
-      // Clean up common OCR artifacts
-      name = name.replace(/[^\w\s',-]/g, '').trim();
       if (name.length < 3) return;
-
-      // 4. Group by name (lowercase for comparison)
+      
       const key = name.toLowerCase();
       if (candidateMap.has(key)) {
         const existing = candidateMap.get(key);
@@ -102,7 +97,6 @@ const DeckScanner = ({ onAddToQueue }) => {
       }
     });
 
-    // 5. Convert map back to list of candidates
     const detectedCards = Array.from(candidateMap.values()).map(item => ({
       id: Math.random().toString(36).substr(2, 9),
       qty: item.qty,
@@ -112,7 +106,6 @@ const DeckScanner = ({ onAddToQueue }) => {
     }));
 
     setResults(detectedCards);
-    // Auto-search for found cards
     searchAllCards(detectedCards);
   };
 
@@ -124,17 +117,30 @@ const DeckScanner = ({ onAddToQueue }) => {
       const data = await response.json();
 
       if (data.object === 'card') {
-        setResults(prev => prev.map(c => c.id === card.id ? { 
-          ...c, 
-          status: 'found', 
-          name: data.name, 
-          data: data 
-        } : c));
+        setResults(prev => {
+          // Check if this card (by Scryfall ID) already exists in our results as 'found'
+          const existingIdx = prev.findIndex(c => c.status === 'found' && c.data?.id === data.id && c.id !== card.id);
+          
+          if (existingIdx !== -1) {
+            // If it exists, merge the quantity and remove the current duplicate-to-be
+            const newResults = [...prev];
+            newResults[existingIdx].qty += card.qty;
+            return newResults.filter(c => c.id !== card.id);
+          }
+
+          // Otherwise, update the current card to 'found'
+          return prev.map(c => c.id === card.id ? { 
+            ...c, 
+            status: 'found', 
+            name: data.name, 
+            data: data 
+          } : c);
+        });
       } else {
-        setResults(prev => prev.map(c => c.id === card.id ? { ...c, status: 'error' } : c));
+        setResults(prev => prev.filter(c => c.id !== card.id));
       }
     } catch (err) {
-      setResults(prev => prev.map(c => c.id === card.id ? { ...c, status: 'error' } : c));
+      setResults(prev => prev.filter(c => c.id !== card.id));
     }
   };
 
