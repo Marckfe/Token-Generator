@@ -15,17 +15,16 @@ const DeckScanner = ({ onAddToQueue }) => {
   const [debugInfo, setDebugInfo] = useState(null);
   const [useAI, setUseAI] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('openrouter_key') || '');
-  const [customModel, setCustomModel] = useState(localStorage.getItem('openrouter_model') || 'meta-llama/llama-3.2-11b-vision-instruct:free');
+  const [customModel, setCustomModel] = useState(localStorage.getItem('openrouter_model') || '');
   const [showKeyInput, setShowKeyInput] = useState(false);
   const fileInputRef = useRef(null);
 
   const saveSettings = (key, model) => {
     const cleanKey = key.replace(/\s/g, '');
-    const cleanModel = model.trim();
     setApiKey(cleanKey);
-    setCustomModel(cleanModel);
+    setCustomModel(model.trim());
     localStorage.setItem('openrouter_key', cleanKey);
-    localStorage.setItem('openrouter_model', cleanModel);
+    localStorage.setItem('openrouter_model', model.trim());
   };
 
   const handleImageUpload = (e) => {
@@ -48,7 +47,7 @@ const DeckScanner = ({ onAddToQueue }) => {
         img.src = event.target.result;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 800; // Even smaller for safety
+          const MAX_SIZE = 800;
           let width = img.width;
           let height = img.height;
           if (width > height) {
@@ -66,10 +65,31 @@ const DeckScanner = ({ onAddToQueue }) => {
     });
   };
 
+  const fetchAvailableFreeVisionModels = async () => {
+    try {
+      const resp = await fetch("https://openrouter.ai/api/v1/models");
+      const data = await resp.json();
+      if (!data.data) return [];
+      
+      // Filter for free models that likely support vision
+      return data.data
+        .filter(m => {
+          const isFree = m.pricing.prompt === "0" && m.pricing.completion === "0";
+          const name = m.id.toLowerCase();
+          const isVision = name.includes('vision') || name.includes('gemini') || name.includes('pixtral') || name.includes('llava');
+          return isFree && isVision;
+        })
+        .map(m => m.id);
+    } catch (e) {
+      console.error("Model fetch failed", e);
+      return [];
+    }
+  };
+
   const processWithAI = async () => {
     if (!image) return;
     if (!apiKey) {
-      setError("Configura la chiave API.");
+      setError("Inserisci l'API Key.");
       setShowKeyInput(true);
       return;
     }
@@ -79,84 +99,89 @@ const DeckScanner = ({ onAddToQueue }) => {
     setError(null);
     setDebugInfo(null);
 
-    const models = [
-      customModel,
-      "meta-llama/llama-3.2-11b-vision-instruct:free",
-      "google/gemini-2.0-flash-exp:free",
-      "google/gemini-flash-1.5-exp:free",
-      "mistralai/pixtral-12b:free"
-    ].filter(Boolean);
+    try {
+      const base64Image = await compressImage(image);
+      
+      // 1. Get the list of models to try
+      let modelsToTry = [customModel].filter(Boolean);
+      const freeModels = await fetchAvailableFreeVisionModels();
+      modelsToTry = [...modelsToTry, ...freeModels, "google/gemini-pro-1.5-exp:free", "google/gemini-flash-1.5-exp:free"];
+      
+      // Deduplicate
+      modelsToTry = [...new Set(modelsToTry)];
 
-    let finalError = "";
+      let lastError = "";
 
-    const tryModel = async (index) => {
-      if (index >= models.length) {
-        throw new Error("Tutti i modelli IA hanno fallito. Clicca l'icona insetto per i dettagli.");
-      }
+      const tryModel = async (index) => {
+        if (index >= modelsToTry.length) {
+          throw new Error(`Nessun modello disponibile. Errore: ${lastError}`);
+        }
 
-      const model = models[index].trim();
-      try {
-        const base64Image = await compressImage(image);
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${apiKey}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            "model": model,
-            "messages": [
-              {
-                "role": "user",
-                "content": [
-                  { "type": "text", "text": "List MTG cards in this image as JSON: [{\"name\":\"Name\",\"qty\":1}]." },
-                  { "type": "image_url", "image_url": { "url": base64Image } }
-                ]
-              }
-            ]
-          })
-        });
-
-        const data = await response.json();
+        const model = modelsToTry[index];
+        console.log(`Trying model: ${model}`);
         
-        if (data.error) {
-          finalError = JSON.stringify(data.error, null, 2);
-          setDebugInfo(finalError);
-          if (data.error.code === 404 || finalError.toLowerCase().includes("not found") || finalError.toLowerCase().includes("endpoint")) {
+        try {
+          const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${apiKey}`,
+              "HTTP-Referer": "https://mtg-proxy-creator.vercel.app",
+              "X-Title": "MTG Proxy Creator",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              "model": model,
+              "messages": [
+                {
+                  "role": "user",
+                  "content": [
+                    { "type": "text", "text": "Extract all MTG card names and quantities from this image. Output ONLY a JSON array: [{\"name\": \"Card Name\", \"qty\": 1}]. Count stacked cards." },
+                    { "type": "image_url", "image_url": { "url": base64Image } }
+                  ]
+                }
+              ]
+            })
+          });
+
+          const data = await response.json();
+          
+          if (data.error) {
+            lastError = data.error.message;
+            setDebugInfo(JSON.stringify(data.error, null, 2));
+            // Try next if model issue
+            if (data.error.code === 404 || lastError.includes("endpoint") || lastError.includes("not found")) {
+              return tryModel(index + 1);
+            }
+            throw new Error(lastError);
+          }
+
+          if (data.choices?.[0]?.message?.content) {
+            const content = data.choices[0].message.content;
+            const jsonMatch = content.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              const detected = parsed.map(item => ({
+                id: Math.random().toString(36).substr(2, 9),
+                qty: item.qty || 1,
+                name: item.name,
+                status: 'pending',
+                data: null
+              }));
+              setResults(detected);
+              detected.forEach(card => searchCard(card));
+            } else {
+              throw new Error("Formato risposta IA non valido.");
+            }
+          }
+        } catch (err) {
+          lastError = err.message;
+          if (lastError.includes("404") || lastError.includes("endpoint") || lastError.includes("not found")) {
             return tryModel(index + 1);
           }
-          throw new Error(data.error.message || "Errore API");
+          throw err;
         }
+      };
 
-        if (data.choices?.[0]?.message?.content) {
-          const content = data.choices[0].message.content;
-          const jsonMatch = content.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            const detected = parsed.map(item => ({
-              id: Math.random().toString(36).substr(2, 9),
-              qty: item.qty || 1,
-              name: item.name,
-              status: 'pending',
-              data: null
-            }));
-            setResults(detected);
-            detected.forEach(card => searchCard(card));
-          } else {
-            throw new Error("L'IA ha risposto ma non ha trovato dati validi.");
-          }
-        }
-      } catch (err) {
-        finalError = err.message;
-        setDebugInfo(finalError);
-        if (finalError.toLowerCase().includes("not found") || finalError.toLowerCase().includes("404") || finalError.toLowerCase().includes("endpoint")) {
-          return tryModel(index + 1);
-        }
-        throw err;
-      }
-    };
-
-    try {
       await tryModel(0);
     } catch (err) {
       setError(err.message);
@@ -294,7 +319,7 @@ const DeckScanner = ({ onAddToQueue }) => {
               <div className="api-key-panel">
                 <div className="flex flex-col gap-3">
                   <input type="password" placeholder="API Key..." className="api-key-input" value={apiKey} onChange={(e) => saveSettings(e.target.value, customModel)} />
-                  <input type="text" placeholder="Modello IA" className="api-key-input" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
+                  <input type="text" placeholder="Modello IA (Opzionale)" className="api-key-input" value={customModel} onChange={(e) => saveSettings(apiKey, e.target.value)} />
                   <button className="api-key-save py-2" onClick={() => setShowKeyInput(false)}>Salva</button>
                 </div>
               </div>
@@ -307,9 +332,9 @@ const DeckScanner = ({ onAddToQueue }) => {
             {error && (
               <div className="error-box">
                 <AlertCircle size={14} /> 
-                <span>{error}</span>
+                <span className="flex-1 text-[10px] leading-tight">{error}</span>
                 {debugInfo && (
-                  <button className="ml-auto" onClick={() => alert(debugInfo)} title="Debug Info">
+                  <button className="ml-2 opacity-50 hover:opacity-100" onClick={() => alert(debugInfo)}>
                     <Bug size={14} />
                   </button>
                 )}
