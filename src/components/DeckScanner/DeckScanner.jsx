@@ -56,44 +56,43 @@ const DeckScanner = ({ onAddToQueue }) => {
     const rawChunks = text.split(/[\n|()\[\]\\\/]/);
     const candidateMap = new Map();
     
-    // Keywords that suggest this is ability text, not a name
-    const blacklist = ['untap', 'draw', 'damage', 'creature', 'target', 'each', 'turn', 'whenever', 'enters', 'battlefield', 'flying', 'haste', 'lifelink', 'trample', 'vigilance', 'scry', 'surveil', 'token'];
-    const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes'];
+    // Basic lands priority list
+    const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
 
     rawChunks.forEach(chunk => {
       let trimmed = chunk.trim();
-      if (!trimmed || trimmed.length < 4 || trimmed.length > 45) return;
+      if (!trimmed || trimmed.length < 2) return;
 
-      // Card names in MTG always start with a Capital letter
-      if (!/^[A-Z0-9]/.test(trimmed)) return;
-      
       const lower = trimmed.toLowerCase();
-      if (blacklist.some(word => lower.includes(word))) return;
-      if (trimmed.split(' ').length > 6) return;
+      
+      // PRIORITY: If it looks like a basic land, bypass filters
+      const isLand = basicLands.some(l => lower.includes(l));
+      
+      if (!isLand) {
+        // Very relaxed filters
+        if (trimmed.length > 60) return;
+        if (lower.includes('http') || lower.includes('www') || lower.includes('.com')) return;
+      }
 
       let qty = 1;
       let name = trimmed;
 
-      // Smarter Quantity: Only at the very start or end
-      // Also avoid collector numbers like 264/280
+      // Extract quantity if present
       if (!trimmed.includes('/')) {
         const startQty = trimmed.match(/^(\d+)\s*[xX]?\s+/);
         const endQty = trimmed.match(/\s+(\d+)\s*[xX]?$/);
         
         if (startQty) {
-          let q = parseInt(startQty[1]);
-          // Cap quantity to avoid misreading collector numbers
-          if (q > 20 && !basicLands.some(l => lower.includes(l))) q = 1;
-          qty = q;
+          qty = Math.min(parseInt(startQty[1]), 40);
           name = trimmed.replace(startQty[0], '').trim();
         } else if (endQty) {
-          let q = parseInt(endQty[1]);
-          if (q > 20 && !basicLands.some(l => lower.includes(l))) q = 1;
-          qty = q;
+          qty = Math.min(parseInt(endQty[1]), 40);
           name = trimmed.replace(endQty[0], '').trim();
         }
       }
 
+      // Clean name but keep it descriptive for Scryfall fuzzy match
+      name = name.replace(/[^\w\s',-]/g, ' ').replace(/\s+/g, ' ').trim();
       if (name.length < 3) return;
       
       const key = name.toLowerCase();
