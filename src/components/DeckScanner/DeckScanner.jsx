@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
 import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload, Bug, RefreshCw, HelpCircle } from 'lucide-react';
 import './DeckScanner.css';
+import { useAuth } from '../../context/AuthContext';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
 

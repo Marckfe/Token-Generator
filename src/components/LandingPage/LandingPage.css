@@ -74,24 +74,50 @@
   line-height: 1.6;
 }
 
+.cta-wrapper {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
 .login-cta {
-  background: white;
-  color: black;
-  border: none;
-  padding: 18px 36px;
+  background: rgba(255, 255, 255, 0.03);
+  color: white;
+  border: 1px solid rgba(0, 188, 212, 0.5);
+  padding: 16px 32px;
   border-radius: 12px;
-  font-size: 1.1rem;
-  font-weight: 800;
+  font-size: 1rem;
+  font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 12px;
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  gap: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+}
+
+.google-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .login-cta:hover {
-  transform: scale(1.05);
-  box-shadow: 0 10px 30px rgba(255, 255, 255, 0.2);
+  background: rgba(0, 188, 212, 0.1);
+  border-color: #00bcd4;
+  transform: translateY(-4px);
+  box-shadow: 0 10px 40px rgba(0, 188, 212, 0.2);
+}
+
+.login-error-msg {
+  color: #ff5252;
+  margin-top: 24px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: rgba(255, 82, 82, 0.1);
+  padding: 8px 20px;
+  border-radius: 20px;
+  display: inline-block;
 }
 
 .features-grid {
