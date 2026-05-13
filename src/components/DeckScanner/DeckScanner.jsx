@@ -69,7 +69,7 @@ const DeckScanner = ({ onAddToQueue }) => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          "model": "google/gemini-flash-1.5:free",
+          "model": "google/gemini-pro-1.5-exp:free",
           "messages": [
             {
               "role": "user",
