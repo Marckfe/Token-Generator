@@ -55,9 +55,9 @@ const DeckScanner = ({ onAddToQueue }) => {
     setError(null);
 
     const models = [
-      "google/gemini-pro-1.5-exp:free",
-      "google/gemini-flash-1.5-exp:free",
-      "haotian-liu/llava-13b:free"
+      "google/gemini-flash-1.5-8b-exp:free",
+      "mistralai/pixtral-12b:free",
+      "google/gemini-pro-1.5-exp:free"
     ];
 
     const tryModel = async (index) => {
