@@ -178,11 +178,11 @@ function renderCardSync(canvas, state, withBleed = false) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, TW, TH);
 
-  // Checkerboard background for transparency/missing art
-  const size = 20;
+  // Elegant dark checkerboard for transparency/missing art
+  const size = 40;
   for (let y = 0; y < TH; y += size) {
     for (let x = 0; x < TW; x += size) {
-      ctx.fillStyle = (Math.floor(x / size) + Math.floor(y / size)) % 2 === 0 ? "#f8f8f8" : "#ffffff";
+      ctx.fillStyle = (Math.floor(x / size) + Math.floor(y / size)) % 2 === 0 ? "#1a1a1a" : "#2a2a2a";
       ctx.fillRect(x, y, size, size);
     }
   }
@@ -1012,10 +1012,36 @@ export default function TokenPreviewSinglePtFrame() {
               </div>
             )}
 
-            <div className="canvas-wrapper" style={{ width: CW * pScale, height: CH * pScale }}>
-              <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', borderRadius: 16 * (pScale/0.5), background: '#0d0d0d' }} />
+            <div className="canvas-wrapper" style={{ 
+              width: CW * pScale, 
+              height: CH * pScale,
+              boxShadow: '0 50px 100px rgba(0,0,0,0.8)',
+              borderRadius: 26 * pScale,
+              background: '#1a1a1a'
+            }}>
+              <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', background: 'transparent' }} />
               
-              {/* Smart Snapping Lines overlay */}
+              {!state.artUrl && (
+                <div style={{ 
+                  position: 'absolute', 
+                  inset: 0, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  textAlign: 'center',
+                  padding: '0 40px',
+                  color: 'var(--muted)',
+                  fontWeight: 'bold',
+                  opacity: 0.3,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.2em',
+                  pointerEvents: 'none',
+                  fontSize: `${1.2 * pScale}rem`,
+                  zIndex: 5
+                }}>
+                  Carica immagine principale
+                </div>
+              )}
               <div className={`snap-line vertical ${snapGuides.x !== null ? 'visible' : ''}`} style={{ left: (snapGuides.x || 0) * pScale }} />
               <div className={`snap-line horizontal ${snapGuides.y !== null ? 'visible' : ''}`} style={{ top: (snapGuides.y || 0) * pScale }} />
 
