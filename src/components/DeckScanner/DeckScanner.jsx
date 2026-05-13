@@ -69,17 +69,27 @@ const DeckScanner = ({ onAddToQueue }) => {
       // Handle OCR spacing artifacts for lands (e.g., "I s l a n d")
       const compacted = lower.replace(/\s+/g, '');
       const isLand = basicLands.some(l => compacted.includes(l));
-      const isShort = priorityShort.some(s => lower === s || compacted === s);
       
-      if (!isLand && !isShort) {
+      // HEURISTIC: If it's very short but contains "op" or "is", it might be Opt or Island
+      let name = trimmed;
+      if (compacted.includes('opt')) name = 'Opt';
+      else if (compacted.includes('isla') || compacted.includes('isol')) name = 'Island';
+      else if (compacted.includes('moun') || compacted.includes('mont')) name = 'Mountain';
+      else if (compacted.includes('swam') || compacted.includes('palu')) name = 'Swamp';
+      else if (compacted.includes('fore')) name = 'Forest';
+      else if (compacted.includes('plai') || compacted.includes('pian')) name = 'Plains';
+
+      const isShort = priorityShort.some(s => lower === s || compacted === s) || name === 'Opt';
+      const isActualLand = basicLands.some(l => name.toLowerCase().includes(l));
+      
+      if (!isActualLand && !isShort) {
         if (trimmed.length > 50) return;
         if (lower.includes('http') || lower.includes('www')) return;
       }
 
       let qty = 1;
-      let name = trimmed;
-
-      if (!trimmed.includes('/')) {
+      // If we didn't force the name above, try to extract quantity
+      if (name === trimmed && !trimmed.includes('/')) {
         const startQty = trimmed.match(/^(\d+)\s*[xX]?\s+/);
         const endQty = trimmed.match(/\s+(\d+)\s*[xX]?$/);
         
@@ -93,19 +103,21 @@ const DeckScanner = ({ onAddToQueue }) => {
       }
 
       // Hard limit of 4 for non-lands
-      if (!isLand) {
+      if (!isActualLand) {
         qty = Math.min(qty, 4);
       } else {
-        qty = Math.min(qty, 60); // Reasonable limit for lands
+        qty = Math.min(qty, 60); 
       }
 
-      name = name.replace(/[^\w\s',-]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (name === trimmed) {
+        name = name.replace(/[^\w\s',-]/g, ' ').replace(/\s+/g, ' ').trim();
+      }
       if (name.length < 2) return;
       
       const key = name.toLowerCase();
       if (candidateMap.has(key)) {
         const existing = candidateMap.get(key);
-        existing.qty = Math.min(existing.qty + qty, isLand ? 100 : 4);
+        existing.qty = Math.min(existing.qty + qty, isActualLand ? 100 : 4);
       } else {
         candidateMap.set(key, { name, qty });
       }
@@ -138,7 +150,9 @@ const DeckScanner = ({ onAddToQueue }) => {
           if (existingIdx !== -1) {
             // If it exists, merge the quantity and remove the current duplicate-to-be
             const newResults = [...prev];
-            newResults[existingIdx].qty += card.qty;
+            const isLand = basicLands.some(l => data.name.toLowerCase().includes(l));
+            const newQty = newResults[existingIdx].qty + card.qty;
+            newResults[existingIdx].qty = isLand ? newQty : Math.min(newQty, 4);
             return newResults.filter(c => c.id !== card.id);
           }
 
@@ -266,32 +280,40 @@ const DeckScanner = ({ onAddToQueue }) => {
             )}
 
             {results.map((card) => (
-              <div key={card.id} className={`result-item ${card.status}`}>
-                <div className="result-qty-control">
-                  <input 
-                    type="number" 
-                    value={card.qty} 
-                    onChange={(e) => updateCardQty(card.id, parseInt(e.target.value))}
-                    min="1"
-                  />
-                </div>
-                
-                <div className="result-info">
-                  <span className="result-name">{card.name}</span>
-                  <div className="result-status-tag">
-                    {card.status === 'searching' && <Loader2 size={12} className="animate-spin" />}
-                    {card.status === 'found' && <CheckCircle2 size={12} className="text-success" />}
-                    {card.status === 'error' && <AlertCircle size={12} className="text-error" />}
-                    <span className="ml-1 text-[10px] uppercase font-bold">
-                      {card.status === 'searching' ? 'Ricerca...' : card.status === 'found' ? 'Trovata' : card.status === 'error' ? 'Non Trovata' : 'In attesa'}
-                    </span>
+              <div key={card.id} className={`result-card-item ${card.status}`}>
+                {card.status === 'found' && card.data?.image_uris?.normal && (
+                  <div className="card-thumb">
+                    <img src={card.data.image_uris.small || card.data.image_uris.normal} alt={card.name} />
                   </div>
-                </div>
+                )}
+                
+                <div className="card-item-body">
+                  <div className="card-item-main">
+                    <span className="result-name" title={card.name}>{card.name}</span>
+                    <div className="result-status-tag">
+                      {card.status === 'searching' && <Loader2 size={10} className="animate-spin" />}
+                      {card.status === 'found' && <CheckCircle2 size={10} className="text-success" />}
+                      <span className="ml-1 text-[9px] uppercase font-bold opacity-70">
+                        {card.status === 'searching' ? 'Ricerca...' : 'Confermata'}
+                      </span>
+                    </div>
+                  </div>
 
-                <div className="result-actions">
-                  <button className="text-error hover:opacity-100 opacity-50 transition-opacity" onClick={() => removeCard(card.id)}>
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="card-item-footer">
+                    <div className="result-qty-control">
+                      <button onClick={() => updateCardQty(card.id, card.qty - 1)}>-</button>
+                      <input 
+                        type="number" 
+                        value={card.qty} 
+                        onChange={(e) => updateCardQty(card.id, parseInt(e.target.value))}
+                        min="1"
+                      />
+                      <button onClick={() => updateCardQty(card.id, card.qty + 1)}>+</button>
+                    </div>
+                    <button className="delete-btn" onClick={() => removeCard(card.id)}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
