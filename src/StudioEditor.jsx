@@ -525,7 +525,7 @@ export default function StudioEditor() {
                   onClick={() => handleSaveCloud(true)}
                   disabled={isSaving}
                 >
-                  {saveStatus === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  {saveStatus === 'saving' ? <Loader2 size={14} className="loading-spin" /> : <Save size={14} />}
                   <span className="ml-2">Bozza</span>
                 </button>
                 <button 

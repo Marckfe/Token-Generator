@@ -1,3 +1,6 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Loader2, Trash2, HelpCircle, 
   ShieldCheck, Printer, CheckCircle2, XCircle, Cloud, Save
 } from 'lucide-react';
 import './DeckScanner.css';
