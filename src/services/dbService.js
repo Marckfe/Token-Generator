@@ -44,8 +44,15 @@ export const getUserQueue = async (userId) => {
   if (!userId) return [];
   try {
     const queueRef = doc(db, "users", userId, "settings", "printQueue");
-    const docSnap = await getDoc(queueRef);
-    return docSnap.exists() ? docSnap.data().items : [];
+    // Proviamo dal server
+    try {
+      const docSnap = await getDocFromServer(queueRef);
+      return docSnap.exists() ? docSnap.data().items : [];
+    } catch (serverErr) {
+      console.warn("Server offline, provo cache per la coda...");
+      const cacheSnap = await getDocFromCache(queueRef);
+      return cacheSnap.exists() ? cacheSnap.data().items : [];
+    }
   } catch (error) {
     console.error("Errore recupero coda:", error);
     return [];

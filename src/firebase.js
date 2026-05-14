@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-import { initializeFirestore } from "firebase/firestore";
+import { initializeFirestore, enableNetwork, setLogLevel } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCR-fXANI8vZL_R2kI8VhJ0EDTxdZwBT0w",
@@ -16,7 +16,13 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
+  experimentalAutoDetectLongPolling: false,
 });
+
+// Attiviamo i log di debug per vedere cosa succede "sotto il cofano"
+setLogLevel('debug');
+enableNetwork(db).catch(() => {});
+
 export const googleProvider = new GoogleAuthProvider();
 
 export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);
