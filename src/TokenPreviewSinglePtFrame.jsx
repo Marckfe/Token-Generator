@@ -429,8 +429,8 @@ export default function TokenPreviewSinglePtFrame() {
   // DRAG LOGIC WITH SMART SNAPPING
   const beginDrag = (kind, e) => {
     e.preventDefault(); e.stopPropagation();
-    const t = e.touches?.[0] || e;
-    dragRef.current = { kind, startX: t.clientX, startY: t.clientY, snapshot: cloneState(state) };
+    const touch = e.touches?.[0] || e;
+    dragRef.current = { kind, startX: touch.clientX, startY: touch.clientY, snapshot: cloneState(state) };
     setActiveLayer(kind);
     if (!isMobile) {
       if (kind === 'name' || kind === 'type' || kind === 'ability') setActiveTab('text');
@@ -722,8 +722,8 @@ export default function TokenPreviewSinglePtFrame() {
                         });
                       }}
                     >
-                      <div className="template-icon">{t.icon}</div>
-                      <div className="template-name">{t.name}</div>
+                      <div className="template-icon">{item.icon}</div>
+                      <div className="template-name">{item.name}</div>
                     </div>
                   ))}
                 </div>
