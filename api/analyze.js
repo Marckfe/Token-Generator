@@ -10,11 +10,12 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: '[MTG-AI] Chiave API non configurata su Vercel.' });
   }
 
-  // List of models to try. 1.5 Flash is more stable for free tier quotas.
+  // List of models to try, in priority order.
+  // gemini-2.0-flash is the current stable default.
   const models = [
-    "gemini-1.5-flash",
     "gemini-2.0-flash",
-    "gemini-1.5-pro"
+    "gemini-2.5-flash-preview-05-20",
+    "gemini-1.5-flash"
   ];
 
   let lastError = "";
