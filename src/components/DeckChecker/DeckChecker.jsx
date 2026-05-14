@@ -3,10 +3,12 @@ import { jsPDF } from 'jspdf';
 import {
   ShieldCheck, AlertTriangle, FileText, Download,
   Search, CheckCircle2, XCircle, Clock, Plus,
-  CheckCircle, ShieldAlert
+  CheckCircle, ShieldAlert, Save, Library, Trash2
 } from 'lucide-react';
 import './DeckChecker.css';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
+import { saveUserDeck, getUserDecks, deleteUserDeck } from '../../services/dbService';
 
 const FORMATS = [
   { id: 'commander',  name: 'Commander' },
@@ -23,6 +25,7 @@ const FORMATS = [
 
 export default function DeckChecker({ onAddToQueue, initialDeck }) {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [selectedFormat, setSelectedFormat] = useState('commander');
   const [maindeck, setMaindeck] = useState('');
   const [sideboard, setSideboard] = useState('');
@@ -36,6 +39,9 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
   const [results, setResults] = useState(null);
   const [parsedDeck, setParsedDeck] = useState({ main: [], cmd: [] });
   const [importedBanner, setImportedBanner] = useState(false);
+  const [savedDecks, setSavedDecks] = useState([]);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [saving, setSaving] = useState(false);
   const searchTimeout = useRef(null);
 
   const isSingleton = ['commander', 'duel', 'brawl'].includes(selectedFormat);
@@ -49,6 +55,63 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
       setTimeout(() => setImportedBanner(false), 4000);
     }
   }, [initialDeck]);
+
+  // ── Fetch saved decks ─────────────────────────────────────────────
+  useEffect(() => {
+    if (user) {
+      getUserDecks(user.uid).then(setSavedDecks);
+    }
+  }, [user]);
+
+  const handleSaveDeck = async () => {
+    if (!user) {
+      alert("Accedi con il tuo account per salvare le liste.");
+      return;
+    }
+    if (!maindeck.trim() && !commander1.trim()) return;
+    
+    setSaving(true);
+    try {
+      const deckData = {
+        name: playerData.deckName || "Nuovo Mazzo",
+        format: selectedFormat,
+        maindeck,
+        sideboard,
+        commander1,
+        commander2,
+        playerData: { ...playerData }
+      };
+      await saveUserDeck(user.uid, deckData);
+      const updated = await getUserDecks(user.uid);
+      setSavedDecks(updated);
+      alert("Mazzo salvato correttamente!");
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLoadDeck = (deck) => {
+    setSelectedFormat(deck.format);
+    setMaindeck(deck.maindeck);
+    setSideboard(deck.sideboard || '');
+    setCommander1(deck.commander1 || '');
+    setCommander2(deck.commander2 || '');
+    if (deck.playerData) setPlayerData(deck.playerData);
+    setShowLibrary(false);
+    setResults(null);
+  };
+
+  const handleDeleteDeck = async (id) => {
+    if (!window.confirm("Sei sicuro di voler eliminare questo mazzo?")) return;
+    try {
+      await deleteUserDeck(user.uid, id);
+      setSavedDecks(prev => prev.filter(d => d.id !== id));
+    } catch (error) {
+      alert("Errore durante l'eliminazione.");
+    }
+  };
 
   // ── Commander autocomplete ────────────────────────────────────────
   const handleCmdSearch = (val, setter) => {
@@ -78,11 +141,13 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
     ];
 
     return text.split('\n')
-      .map(line => line.trim())
+      .map(line => line.trim().replace(/[\u200B-\u200D\uFEFF]/g, '')) // Remove zero-width spaces
       .filter(line => line && !line.startsWith('//') && !line.startsWith('#'))
       .map(line => {
-        // Remove set info like (M21) or collector numbers
-        const clean = line.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
+        // Remove set info like (M21) or collector numbers, and trailing punctuation
+        const clean = line.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '')
+                          .replace(/[.,;:]\s*$/, '')
+                          .trim();
         const m = clean.match(/^(\d+)x?\s+(.+)$/i);
         const name = (m ? m[2] : clean).split(/\s*\/\/??\s*/)[0].trim();
         const qty = m ? parseInt(m[1], 10) : 1;
@@ -124,7 +189,18 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
 
     try {
       const allCards = [...mainLines, ...cmdLines];
-      const uniqueNames = [...new Set(allCards.map(c => c.name))];
+      
+      // Clean names for lookup (remove leading qty from commanders if present)
+      const cleanAllCards = allCards.map(c => {
+        const m = c.name.match(/^(\d+)x?\s+(.+)$/i);
+        return { ...c, name: m ? m[2].trim() : c.name.trim() };
+      });
+
+      const uniqueNames = [...new Set(cleanAllCards.map(c => c.name))].filter(n => n.length >= 2);
+      if (uniqueNames.length === 0) {
+        setChecking(false);
+        return;
+      }
 
       // Batch lookup
       let fetchedCards = [];
@@ -135,6 +211,7 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ identifiers: chunk })
         });
+        if (!res.ok) throw new Error(t('checker.api_error'));
         const data = await res.json();
         if (data.data) fetchedCards = fetchedCards.concat(data.data);
       }
@@ -145,19 +222,22 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
       });
 
       // Fuzzy fallback for not found
-      const missing = allCards.filter(c => !cardMap[c.name.toLowerCase()]);
-      await Promise.all(missing.map(async item => {
+      const missing = cleanAllCards.filter(c => !cardMap[c.name.toLowerCase()]);
+      await Promise.all(missing.slice(0, 10).map(async item => {
         try {
           const res = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(item.name)}`);
-          const d = await res.json();
-          if (d.object === 'card') {
+          if (res.ok) {
+            const d = await res.json();
             cardMap[item.name.toLowerCase()] = { legalities: d.legalities, type: d.type_line, fullName: d.name };
           }
         } catch { /* ignore */ }
       }));
 
       const enrich = (items) => items.map(item => {
-        const info = cardMap[item.name.toLowerCase()];
+        // Clean item name before lookup
+        const m = item.name.match(/^(\d+)x?\s+(.+)$/i);
+        const searchName = m ? m[2].trim() : item.name.trim();
+        const info = cardMap[searchName.toLowerCase()];
         return { ...item, name: info ? info.fullName : item.name, type: info?.type || 'Unknown' };
       });
 
@@ -178,11 +258,15 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
       const enrichedCmd = mergeItems(enrich(cmdLines));
       setParsedDeck({ main: enrichedMain, cmd: enrichedCmd });
 
+      const verdict = { status: 'legal', reasons: [] };
       const isSingletonFormat = selectedFormat === 'commander' || selectedFormat === 'duel';
       const allEnriched = [...enrichedMain, ...enrichedCmd];
       
       allEnriched.forEach(item => {
-        const info = cardMap[item.name.toLowerCase()];
+        const m = item.name.match(/^(\d+)x?\s+(.+)$/i);
+        const searchName = m ? m[2].trim() : item.name.trim();
+        const info = cardMap[searchName.toLowerCase()];
+        
         if (!info) {
           verdict.status = 'banned';
           verdict.reasons.push({ name: item.name, reason: t('checker.not_found') });
@@ -208,6 +292,7 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
       setResults(verdict);
     } catch (e) {
       console.error(e);
+      alert(e.message || "Errore durante la verifica");
     }
     setChecking(false);
   };
@@ -220,29 +305,27 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
     // Header with MTG Logo or Fallback
     const logoUrl = '/assets/mtg-logo.png';
     try {
-      doc.addImage(logoUrl, 'PNG', 15, 10, 12, 12);
+      doc.addImage(logoUrl, 'PNG', 15, 8, 25, 8);
     } catch (e) {
       // Premium Fallback Logo
       doc.setFillColor(30, 30, 30);
-      doc.roundedRect(15, 10, 12, 12, 2, 2, 'F');
+      doc.roundedRect(15, 8, 12, 10, 2, 2, 'F');
       doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
-      doc.text('MTG', 21, 17.5, { align: 'center' });
+      doc.text('MTG', 21, 14, { align: 'center' });
     }
 
     // Official Title
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
-    doc.text(t('checker.official_sheet').toUpperCase(), 105, 17, { align: 'center' });
+    doc.text(t('checker.official_sheet').toUpperCase(), 105, 15, { align: 'center' });
 
     // Table Number in Top Right
-    if (playerData.tableNumber) {
-      doc.setFontSize(10);
-      doc.setFillColor(0, 0, 0); doc.rect(175, 10, 20, 12, 'F');
-      doc.setTextColor(255);
-      doc.text(t('checker.table').toUpperCase(), 185, 14.5, { align: 'center' });
-      doc.setFontSize(14);
-      doc.text(String(playerData.tableNumber), 185, 20.5, { align: 'center' });
-      doc.setTextColor(0);
-    }
+    doc.setFontSize(10);
+    doc.setFillColor(0, 0, 0); doc.rect(170, 8, 25, 12, 'F');
+    doc.setTextColor(255);
+    doc.text(t('checker.table').toUpperCase(), 182.5, 12.5, { align: 'center' });
+    doc.setFontSize(14);
+    doc.text(String(playerData.tableNumber || '---'), 182.5, 18.5, { align: 'center' });
+    doc.setTextColor(0);
 
     const drawField = (label, val, x, y, w) => {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
@@ -366,9 +449,50 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
         {/* Tournament data */}
         <div className="dc-panel">
           <div className="dc-panel-title">
-            <FileText size={16} />
-            {t('checker.tournament_data')}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+              <FileText size={16} />
+              {t('checker.tournament_data')}
+            </div>
+            <div className="dc-panel-actions">
+              <button className="dc-icon-btn" onClick={() => setShowLibrary(true)} title="Libreria Mazzi">
+                <Library size={18} />
+                {savedDecks.length > 0 && <span className="dc-badge">{savedDecks.length}</span>}
+              </button>
+              <button className={`dc-icon-btn ${saving ? 'spinning' : ''}`} onClick={handleSaveDeck} title="Salva Mazzo">
+                <Save size={18} />
+              </button>
+            </div>
           </div>
+          
+          {/* Library Overlay */}
+          {showLibrary && (
+            <div className="dc-library-overlay" onClick={() => setShowLibrary(false)}>
+              <div className="dc-library-content" onClick={e => e.stopPropagation()}>
+                <div className="dc-library-header">
+                  <h3><Library size={20} /> {t('checker.saved_decks')} ({savedDecks.length}/10)</h3>
+                  <button className="dc-close-btn" onClick={() => setShowLibrary(false)}><XCircle size={20} /></button>
+                </div>
+                <div className="dc-library-list">
+                  {savedDecks.length === 0 ? (
+                    <div className="dc-empty-library">Non hai ancora salvato alcun mazzo.</div>
+                  ) : (
+                    savedDecks.map(deck => (
+                      <div key={deck.id} className="dc-library-item">
+                        <div className="dc-lib-info" onClick={() => handleLoadDeck(deck)}>
+                          <span className="dc-lib-name">{deck.name}</span>
+                          <span className="dc-lib-meta">{deck.format.toUpperCase()} • {new Date(deck.updatedAt?.seconds * 1000).toLocaleDateString()}</span>
+                        </div>
+                        <button className="dc-lib-delete" onClick={() => handleDeleteDeck(deck.id)}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="dc-fields">
             <div className="dc-field-row">
               <input className="dc-input" placeholder={t('checker.last_name')}

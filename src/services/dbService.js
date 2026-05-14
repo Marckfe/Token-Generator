@@ -118,3 +118,68 @@ export const deleteUserToken = async (userId, tokenId) => {
     console.error("Errore eliminazione token:", error);
   }
 };
+// --- GESTIONE MAZZI (DECK LISTS) ---
+
+/**
+ * Salva una lista mazzo (limite 10)
+ */
+export const saveUserDeck = async (userId, deckData) => {
+  if (!userId) return;
+  try {
+    const decksRef = collection(db, "users", userId, "decks");
+    
+    // Controllo limiti (solo per nuovi mazzi)
+    if (!deckData.id) {
+      const snap = await getDocs(decksRef);
+      if (snap.size >= 10) {
+        throw new Error("Limite raggiunto: puoi salvare al massimo 10 mazzi sul tuo account.");
+      }
+    }
+
+    const data = {
+      ...deckData,
+      updatedAt: new Date(),
+      createdAt: deckData.createdAt || new Date()
+    };
+
+    if (deckData.id) {
+      await setDoc(doc(decksRef, deckData.id), data);
+      return deckData.id;
+    } else {
+      const docRef = await addDoc(decksRef, data);
+      return docRef.id;
+    }
+  } catch (error) {
+    console.error("Errore salvataggio mazzo:", error);
+    throw error;
+  }
+};
+
+/**
+ * Recupera tutti i mazzi salvati dall'utente
+ */
+export const getUserDecks = async (userId) => {
+  if (!userId) return [];
+  try {
+    const decksRef = collection(db, "users", userId, "decks");
+    const q = query(decksRef);
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error("Errore recupero mazzi:", error);
+    return [];
+  }
+};
+
+/**
+ * Elimina un mazzo salvato
+ */
+export const deleteUserDeck = async (userId, deckId) => {
+  if (!userId) return;
+  try {
+    await deleteDoc(doc(db, "users", userId, "decks", deckId));
+  } catch (error) {
+    console.error("Errore eliminazione mazzo:", error);
+    throw error;
+  }
+};
