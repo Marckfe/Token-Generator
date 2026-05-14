@@ -82,10 +82,10 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
         playerData: { ...playerData }
       };
 
-      // Safety Timeout to prevent infinite hang
+      // Safety Timeout to prevent infinite hang (10s)
       const savePromise = saveUserDeck(user.uid, deckData);
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Timeout: Il database non risponde. Controlla la connessione.")), 5000)
+        setTimeout(() => reject(new Error("Timeout: Il database non risponde. Controlla la connessione.")), 10000)
       );
 
       await Promise.race([savePromise, timeoutPromise]);
@@ -318,20 +318,22 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
     });
     const logo = await getLogoDim();
 
-    // Top Right Boxes (Safe margins)
+    // Top Right Boxes (HARDCODED COORDS TO AVOID OVERLAP)
     doc.setDrawColor(0); doc.setLineWidth(0.3);
-    // Initial Box (Safe x=190)
-    doc.setFontSize(6); doc.setTextColor(0); doc.setFont('helvetica', 'normal');
-    doc.text('First Letter of\nLast Name', 188, 12, { align: 'right' });
+    
+    // Initial Box
+    doc.setFontSize(5); doc.setFont('helvetica', 'normal');
+    doc.text('First Letter of Last Name', 195, 8, { align: 'center' });
     doc.rect(190, 10, 10, 10);
     doc.setFontSize(12); doc.setFont('helvetica', 'bold');
     doc.text((playerData.lastName?.[0] || '').toUpperCase(), 195, 17, { align: 'center' });
-    // Table Box
-    doc.setFontSize(6); doc.setFont('helvetica', 'normal');
-    doc.text('TAVOLO', 176, 12, { align: 'right' });
-    doc.rect(178, 10, 10, 10);
+    
+    // Table Box (Shifted more to the left)
+    doc.setFontSize(5); doc.setFont('helvetica', 'normal');
+    doc.text('TAVOLO', 175, 8, { align: 'center' });
+    doc.rect(170, 10, 10, 10);
     doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-    doc.text(String(playerData.tableNumber || ''), 183, 17, { align: 'center' });
+    doc.text(String(playerData.tableNumber || ''), 175, 17, { align: 'center' });
 
     // Main Title
     doc.setFont('helvetica', 'normal'); doc.setFontSize(14);
@@ -374,8 +376,8 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
     let curY1 = 62;
     let curY2 = 62;
 
-    const drawWotCRow = (qty, name, x, y) => {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+    const drawWotCRow = (qty, name, x, y, fSize = 8) => {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(fSize);
       doc.text(String(qty), x + 2, y);
       doc.setFont('helvetica', 'normal'); doc.text(name.substring(0, 45), x + 12, y);
       doc.setDrawColor(220); doc.line(x, y + 1, x + 85, y + 1);
@@ -383,11 +385,8 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
 
     const drawWotCHeader = (title, subtitle, x, y) => {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-      doc.text(title, x, y);
-      if (subtitle) {
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-        doc.text(subtitle, x + doc.getTextWidth(title) + 2, y);
-      }
+      const fullTitle = subtitle ? `${title}  ${subtitle}` : title;
+      doc.text(fullTitle, x, y);
       doc.setFontSize(7); doc.setTextColor(100);
       doc.text('# in deck:', x, y + 5); doc.text('Card Name:', x + 12, y + 5);
       doc.setDrawColor(0); doc.line(x, y + 6, x + 85, y + 6);
@@ -397,44 +396,56 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
 
     const mainList = parsedDeck.main;
     const sideList = parsedDeck.cmd;
+    const totalCount = mainList.reduce((s, i) => s + i.qty, 0) + sideList.reduce((s, i) => s + i.qty, 0);
+    const useLargeFont = totalCount < 85;
 
     if (isSingleton) {
-      const lineH = 3.8;
+      const lineH = 3.6;
+      // Commanders
       curY1 = drawWotCHeader('Commanders:', '', col1X, curY1);
-      sideList.forEach(item => { drawWotCRow(item.qty, item.name, col1X, curY1); curY1 += lineH; });
-      curY1 += 8;
-      curY1 = drawWotCHeader('Main Deck:', `(${mainList.length + sideList.length} Total)`, col1X, curY1);
+      sideList.forEach(item => { drawWotCRow(item.qty, item.name, col1X, curY1, 8); curY1 += lineH; });
+      
+      // Main Deck (LARGE GAP TO PREVENT OVERLAP)
+      curY1 += 18;
+      curY1 = drawWotCHeader('Main Deck:', `(${totalCount} Total)`, col1X, curY1);
       const main1 = mainList.slice(0, 45);
-      main1.forEach(item => { drawWotCRow(item.qty, item.name, col1X, curY1); curY1 += lineH; });
+      main1.forEach(item => { drawWotCRow(item.qty, item.name, col1X, curY1, 8); curY1 += lineH; });
+      
+      // Col 2
       curY2 = drawWotCHeader('Main Deck Continued:', '', col2X, curY2);
       const main2 = mainList.slice(45);
       main2.forEach(item => { drawWotCRow(item.qty, item.name, col2X, curY2); curY2 += lineH; });
     } else {
-      const lineH = 4.5;
+      const lineH = useLargeFont ? 6.5 : 4.5;
+      const fSize = useLargeFont ? 10 : 8;
+      
       curY1 = drawWotCHeader('Main Deck:', '(60 Minimum)', col1X, curY1);
-      const main1 = mainList.slice(0, 38);
-      main1.forEach(item => { drawWotCRow(item.qty, item.name, col1X, curY1); curY1 += lineH; });
+      const main1 = mainList.slice(0, 32);
+      main1.forEach(item => { drawWotCRow(item.qty, item.name, col1X, curY1, fSize); curY1 += lineH; });
+      
       curY2 = drawWotCHeader('Main Deck Continued:', '', col2X, curY2);
-      const main2 = mainList.slice(38);
-      main2.forEach(item => { drawWotCRow(item.qty, item.name, col2X, curY2); curY2 += lineH; });
+      const main2 = mainList.slice(32);
+      main2.forEach(item => { drawWotCRow(item.qty, item.name, col2X, curY2, fSize); curY2 += lineH; });
+      
       curY2 += 12;
       curY2 = drawWotCHeader('Sideboard:', '(15 Maximum)', col2X, curY2);
-      sideList.forEach(item => { drawWotCRow(item.qty, item.name, col2X, curY2); curY2 += lineH; });
+      sideList.forEach(item => { drawWotCRow(item.qty, item.name, col2X, curY2, fSize); curY2 += lineH; });
     }
 
-    // Footer
-    const totalAll = mainList.reduce((s, i) => s + i.qty, 0) + sideList.reduce((s, i) => s + i.qty, 0);
-    const footerY = 282;
+    // Footer (REPOSITIONED TO AVOID BOX OVERLAP)
+    const footerY = 285;
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text(isSingleton ? 'Total Number of Cards in Deck:' : 'Total Number of Cards in Main Deck:', 40, footerY);
+    // Start text from x=15 to have plenty of room before box at 93
+    const footerText = isSingleton ? 'Total Number of Cards in Deck:' : 'Total Number of Cards in Main Deck:';
+    doc.text(footerText, 15, footerY);
     doc.rect(93, footerY - 5, 12, 7);
-    doc.setFont('helvetica', 'bold'); doc.text(String(totalAll), 99, footerY, { align: 'center' });
+    doc.setFont('helvetica', 'bold'); doc.text(String(totalCount), 99, footerY, { align: 'center' });
 
     // Official Box
-    doc.rect(120, 270, 80, 15);
+    doc.rect(120, 275, 80, 12);
     doc.setFontSize(7); doc.setFont('helvetica', 'normal');
-    doc.text('FOR OFFICIAL USE ONLY', 122, 274);
-    doc.line(120, 276, 200, 276);
+    doc.text('FOR OFFICIAL USE ONLY', 122, 279);
+    doc.line(120, 281, 200, 281);
 
     doc.setFontSize(6); doc.setTextColor(150);
     doc.text('TM & © 2024 Wizards of the Coast LLC. Generated via MTG Tools.', 200, 292, { align: 'right' });

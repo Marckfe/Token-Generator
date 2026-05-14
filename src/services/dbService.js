@@ -126,38 +126,37 @@ export const deleteUserToken = async (userId, tokenId) => {
  */
 export const saveUserDeck = async (userId, deckData) => {
   if (!userId) throw new Error("ID Utente mancante. Effettua il login.");
-  console.log("Tentativo salvataggio mazzo...", { userId, deckName: deckData.name });
+  console.log(">>> Inizio salvataggio Firestore per:", userId);
   
   try {
-    const decksRef = collection(db, "users", userId, "decks");
-    
-    const data = {
+    // Ensure data is a plain object for Firestore
+    const rawData = {
       ...deckData,
       updatedAt: new Date(),
       createdAt: deckData.createdAt || new Date()
     };
+    
+    const data = JSON.parse(JSON.stringify(rawData));
+    console.log(">>> Dati serializzati correttamente");
 
     let finalId;
-    if (deckData.id) {
-      console.log("Aggiornamento mazzo esistente:", deckData.id);
-      finalId = deckData.id;
+    if (data.id) {
+      finalId = data.id;
+      console.log(">>> Aggiornamento mazzo esistente:", finalId);
       await setDoc(doc(db, "users", userId, "decks", finalId), data);
     } else {
-      console.log("Creazione nuovo mazzo...");
+      console.log(">>> Creazione riferimento nuovo mazzo...");
       const newDocRef = doc(collection(db, "users", userId, "decks"));
       finalId = newDocRef.id;
+      console.log(">>> Salvataggio nuovo mazzo con ID:", finalId);
       await setDoc(newDocRef, data);
     }
     
-    console.log("✅ Mazzo salvato! ID:", finalId);
+    console.log(">>> ✅ Operazione completata con successo!");
     return finalId;
   } catch (error) {
-    console.error("❌ Errore critico salvataggio Firestore:", error);
-    // Rethrow a more user-friendly message
-    if (error.code === 'permission-denied') {
-      throw new Error("Permessi database insufficienti. Contatta il supporto.");
-    }
-    throw new Error(`Errore database: ${error.message || 'Unknown error'}`);
+    console.error(">>> ❌ Errore critico Firestore:", error);
+    throw new Error(`Errore database: ${error.message}`);
   }
 };
 
