@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Loader2, Trash2, HelpCircle, 
-  ShieldCheck, Printer, CheckCircle2, XCircle, Cloud, Save
+  ShieldCheck, Printer, CheckCircle2, XCircle, Cloud, Save,
+  Wand2, LayoutGrid, RefreshCw, Image as ImageIcon, Layers, AlertCircle
 } from 'lucide-react';
 import './DeckScanner.css';
 import { useAuth } from '../../context/AuthContext';
@@ -376,7 +377,7 @@ const DeckScanner = ({ onAddToQueue, onValidateDeck }) => {
             disabled={(!mainImage && !sideImage) || isProcessing}
           >
             {isProcessing ? (
-              <><Loader2 size={18} className="animate-spin" /> {statusMessage}</>
+              <><Loader2 size={18} className="loading-spin" /> {statusMessage}</>
             ) : (
               <><Wand2 size={18} /> {t('scanner.start_btn')}</>
             )}

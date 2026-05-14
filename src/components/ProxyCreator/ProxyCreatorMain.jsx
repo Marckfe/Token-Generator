@@ -303,12 +303,13 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
                  <h2 className="queue-title">📦 {t('proxy.queue')} <span className="queue-count">{images.length}</span></h2>
                  <input 
                    type="text" 
-                   className="control-input py-1 px-3 text-xs w-48" 
+                   className="control-input" 
+                   style={{ padding: '4px 12px', fontSize: '0.75rem', width: '180px' }}
                    placeholder={t('proxy.deck_name_placeholder')} 
                    value={currentDeckName}
                    onChange={e => setCurrentDeckName(e.target.value)}
                  />
-                 <button className="btn btn-accent py-1 px-3 text-xs gap-1" onClick={saveQueueAsDeck} disabled={isSavingDeck}>
+                 <button className="btn btn-accent" style={{ padding: '4px 12px', fontSize: '0.75rem', gap: '4px' }} onClick={saveQueueAsDeck} disabled={isSavingDeck}>
                    {isSavingDeck ? <Loader2 size={12} className="loading-spin" /> : <Save size={12} />}
                    {t('proxy.save_to_cloud')}
                  </button>

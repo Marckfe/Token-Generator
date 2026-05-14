@@ -135,7 +135,6 @@ export const deleteUserToken = async (userId, tokenId) => {
  */
 export const saveUserDeck = async (userId, deckData) => {
   if (!userId) throw new Error("ID Utente mancante. Effettua il login.");
-  console.log(">>> Inizio salvataggio Firestore per:", userId);
   
   try {
     // Ensure data is a plain object for Firestore
@@ -154,22 +153,17 @@ export const saveUserDeck = async (userId, deckData) => {
     };
     
     const data = JSON.parse(JSON.stringify(rawData));
-    console.log(">>> Dati serializzati correttamente");
 
     let finalId;
     if (data.id) {
       finalId = data.id;
-      console.log(">>> Aggiornamento mazzo esistente:", finalId);
       await setDoc(doc(db, "users", userId, "decks", finalId), data);
     } else {
-      console.log(">>> Creazione riferimento nuovo mazzo...");
       const newDocRef = doc(collection(db, "users", userId, "decks"));
       finalId = newDocRef.id;
-      console.log(">>> Salvataggio nuovo mazzo con ID:", finalId);
       await setDoc(newDocRef, data);
     }
     
-    console.log(">>> ✅ Operazione completata con successo!");
     return finalId;
   } catch (error) {
     console.error(">>> ❌ Errore critico Firestore:", error);
