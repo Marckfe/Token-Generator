@@ -108,6 +108,7 @@ export default {
     last_name: "Last Name",
     first_name: "First Name",
     player_id: "Player ID (ex DCI)",
+    location: "Location",
     date: "Date",
     event_name: "Event Name",
     deck_name: "Deck Name",

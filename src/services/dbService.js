@@ -140,12 +140,13 @@ export const saveUserDeck = async (userId, deckData) => {
     let finalId;
     if (deckData.id) {
       console.log("Aggiornamento mazzo esistente:", deckData.id);
-      await setDoc(doc(decksRef, deckData.id), data);
       finalId = deckData.id;
+      await setDoc(doc(db, "users", userId, "decks", finalId), data);
     } else {
       console.log("Creazione nuovo mazzo...");
-      const docRef = await addDoc(decksRef, data);
-      finalId = docRef.id;
+      const newDocRef = doc(collection(db, "users", userId, "decks"));
+      finalId = newDocRef.id;
+      await setDoc(newDocRef, data);
     }
     
     console.log("✅ Mazzo salvato! ID:", finalId);
