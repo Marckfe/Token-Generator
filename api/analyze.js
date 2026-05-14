@@ -8,6 +8,8 @@ export default async function handler(req, res) {
   
   // Try providers in order: Groq (if available), then Gemini, then Mistral
   
+  const errors = [];
+  
   // 1. TRY GROQ (Llama 3.2 Vision - Ultra Fast & Generous Free Tier)
   const groqKey = process.env.GROQ_API_KEY;
   if (groqKey) {
@@ -25,7 +27,7 @@ export default async function handler(req, res) {
             messages: [{
               role: "user",
               content: [
-                { type: "text", text: "ACT AS A PROFESSIONAL MTG OCR. Identify every card in this image. Be precise. Return ONLY JSON array like [{\"name\":\"Card Name\",\"qty\":4}]." },
+                { type: "text", text: "ACT AS A PROFESSIONAL MTG OCR. Identify every card in this image. COUNT STACKED CARDS. Return ONLY JSON array like [{\"name\":\"Card Name\",\"qty\":4}]." },
                 { type: "image_url", image_url: { url: image } }
               ]
             }],
@@ -40,9 +42,11 @@ export default async function handler(req, res) {
           let parsed = JSON.parse(content);
           let cards = Array.isArray(parsed) ? parsed : (parsed.cards || parsed.items || []);
           if (cards.length > 0) return res.status(200).json({ cards, provider: "Groq", model });
+        } else if (data.error) {
+          errors.push(`Groq ${model}: ${data.error.message || JSON.stringify(data.error)}`);
         }
       } catch (e) {
-        console.warn(`[MTG-AI] Groq ${model} failed:`, e.message);
+        errors.push(`Groq ${model} exception: ${e.message}`);
       }
     }
   }
@@ -50,7 +54,7 @@ export default async function handler(req, res) {
   // 2. TRY GEMINI (Google - 2.0 Flash is much better at OCR)
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey) {
-    const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
+    const models = ["gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash"];
     for (const model of models) {
       try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${geminiKey}`, {
@@ -59,7 +63,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             contents: [{
               parts: [
-                { text: "ACT AS A PROFESSIONAL MTG OCR SYSTEM. Scan this image and list EVERY card. Be extremely precise with names. Group duplicates. Return ONLY JSON array: [{\"name\":\"Card Name\",\"qty\":4}]." },
+                { text: "ACT AS A PROFESSIONAL MTG OCR SYSTEM. Scan this image and list EVERY card. COUNT STACKED CARDS CAREFULLY. Be extremely precise with names. Return ONLY JSON array: [{\"name\":\"Card Name\",\"qty\":4}]." },
                 { inline_data: { mime_type: "image/jpeg", data: base64Data } }
               ]
             }],
@@ -68,6 +72,10 @@ export default async function handler(req, res) {
         });
 
         const data = await response.json();
+        if (data.error) {
+          errors.push(`Gemini ${model}: ${data.error.message}`);
+          continue;
+        }
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
@@ -75,7 +83,7 @@ export default async function handler(req, res) {
           if (parsed.length > 0) return res.status(200).json({ cards: parsed, provider: "Google", model });
         }
       } catch (e) {
-        console.warn(`[MTG-AI] Gemini ${model} failed:`, e.message);
+        errors.push(`Gemini ${model} exception: ${e.message}`);
       }
     }
   }
@@ -96,7 +104,7 @@ export default async function handler(req, res) {
           messages: [{
             role: "user",
             content: [
-              { type: "text", text: "Return a JSON array of MTG cards in this image: [{\"name\":string, \"qty\":number}]." },
+              { type: "text", text: "Identify every MTG card in this image. IMPORTANT: Some cards are stacked/overlapping, count them carefully! Return a JSON array of MTG cards: [{\"name\":string, \"qty\":number}]." },
               { type: "image_url", image_url: image }
             ]
           }],
@@ -109,13 +117,15 @@ export default async function handler(req, res) {
         let parsed = JSON.parse(content);
         let cards = Array.isArray(parsed) ? parsed : (parsed.cards || []);
         if (cards.length > 0) return res.status(200).json({ cards, provider: "Mistral", model });
+      } else if (data.error) {
+        errors.push(`Mistral: ${data.error.message}`);
       }
     } catch (e) {
-      console.warn("[MTG-AI] Mistral failed:", e.message);
+      errors.push(`Mistral exception: ${e.message}`);
     }
   }
 
   return res.status(500).json({ 
-    error: "[MTG-AI-HUB-V2] Tutti i servizi AI sono al momento non disponibili o le chiavi API sono errate. Per favore controlla le impostazioni di Vercel." 
+    error: `[MTG-AI-HUB-V3] Fallimento totale. Log: ${errors.join(" | ")}` 
   });
 }
