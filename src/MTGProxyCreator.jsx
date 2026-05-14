@@ -6,8 +6,8 @@ import DeckChecker from "./components/DeckChecker/DeckChecker";
 import DeckScanner from "./components/DeckScanner/DeckScanner";
 import { useAuth } from "./context/AuthContext";
 import { useLanguage } from "./context/LanguageContext";
-import { LogOut, User as UserIcon } from "lucide-react";
-import { getUserQueue, saveUserQueue } from "./services/dbService";
+import { LogOut, User as UserIcon, Save, Cloud, Loader2 } from "lucide-react";
+import { getUserQueue, saveUserQueue, saveUserDeck } from "./services/dbService";
 
 // ── Icon helper ────────────────────────────────────────────────────────
 function Icon({ d, size = 16 }) {
@@ -89,10 +89,16 @@ export default function MTGProxyCreator() {
   // Cloud sync — load
   useEffect(() => {
     if (user && !hasLoadedCloud) {
-      getUserQueue(user.uid).then(cloudQueue => {
-        if (cloudQueue?.length > 0) setGlobalQueue(cloudQueue);
-        setHasLoadedCloud(true);
-      });
+      const timer = setTimeout(() => {
+        getUserQueue(user.uid).then(cloudQueue => {
+          if (cloudQueue?.length > 0) setGlobalQueue(cloudQueue);
+          setHasLoadedCloud(true);
+        }).catch(err => {
+          console.error(">>> [Firestore] Fallback fetch error:", err);
+          setHasLoadedCloud(true); // Don't block UI
+        });
+      }, 1000); // 1s delay to let firestore warm up
+      return () => clearTimeout(timer);
     }
   }, [user, hasLoadedCloud]);
 

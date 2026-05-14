@@ -16,7 +16,7 @@ const LANGUAGES = [
   { code: 'ru', name: 'Russo' },
 ];
 
-export default function BulkImportPanel({ onAddCards, toast }) {
+export default function BulkImportPanel({ onAddCards, toast, initialText = "", onClearInitial }) {
   const { t } = useLanguage();
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,6 +25,13 @@ export default function BulkImportPanel({ onAddCards, toast }) {
   const [resolved, setResolved] = useState(false);
   const [expandedArt, setExpandedArt] = useState(null);
   const [modalLang, setModalLang] = useState('en');
+  
+  React.useEffect(() => {
+    if (initialText) {
+      setText(initialText);
+      if (onClearInitial) onClearInitial();
+    }
+  }, [initialText]);
 
   const parseList = (raw) =>
     raw.split("\n").map(l => l.trim()).filter(Boolean).map(line => {

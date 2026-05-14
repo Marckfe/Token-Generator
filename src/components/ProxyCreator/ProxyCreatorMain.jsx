@@ -3,8 +3,12 @@ import CardSearchPanel from "./CardSearchPanel";
 import BulkImportPanel from "./BulkImportPanel";
 import PrintQueue from "./PrintQueue";
 import PdfSettings from "./PdfSettings";
+import CloudDeckPanel from "./CloudDeckPanel";
 import { generatePDF } from "../../utils/pdfGenerator";
 import { useLanguage } from "../../context/LanguageContext";
+import { useAuth } from "../../context/AuthContext";
+import { saveUserDeck } from "../../services/dbService";
+import { Loader2, Save } from "lucide-react";
 
 function Icon({ d, size = 16, className = "" }) {
   return (
@@ -17,6 +21,7 @@ function Icon({ d, size = 16, className = "" }) {
 
 export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQueue }) {
   const { t, lang } = useLanguage();
+  const { user } = useAuth();
   const [images, setImages] = useState(externalQueue || []);
   const [dragIdx, setDragIdx] = useState(null);
   const [isDrop, setIsDrop] = useState(false);
@@ -31,7 +36,10 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
   const [cutMarks, setCutMarks] = useState(true);
   const [bleedPDF, setBleedPDF] = useState(false);
   const [showDatabase, setShowDatabase] = useState(false);
-  const [dbType, setDbType] = useState('single'); // 'single' or 'bulk'
+  const [dbType, setDbType] = useState('single'); // 'single', 'bulk', or 'cloud'
+  const [bulkInitialText, setBulkInitialText] = useState("");
+  const [currentDeckName, setCurrentDeckName] = useState("");
+  const [isSavingDeck, setIsSavingDeck] = useState(false);
   
   const inputRef = useRef();
 
@@ -131,8 +139,28 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
     toast(t('proxy.toast_reduced'));
   };
 
-  const perPage = printCols * printRows;
   const pages = Math.max(1, Math.ceil(images.length / perPage));
+  
+  const saveQueueAsDeck = async () => {
+    if (!user) { toast(t('studio.login_required'), "e"); return; }
+    if (!images.length) return;
+    
+    setIsSavingDeck(true);
+    try {
+      const maindeck = images.map(img => `1 ${img.name}`).join('\n');
+      await saveUserDeck(user.uid, {
+        name: currentDeckName || `Queue ${new Date().toLocaleDateString()}`,
+        maindeck: maindeck,
+        sideboard: "",
+        format: 'custom'
+      });
+      toast(t('proxy.cloud_sync_success'), "s");
+    } catch (err) {
+      toast(t('common.error') + ": " + err.message, "e");
+    } finally {
+      setIsSavingDeck(false);
+    }
+  };
 
   const handleGenPDF = async () => {
     if (!images.length) { toast(t('proxy.toast_no_valid'), "w"); return; }
@@ -207,6 +235,13 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
             {t('proxy.bulk_tab')}
           </button>
           <button 
+            className={`toolbox-tab ${dbType === 'cloud' ? 'active' : ''}`} 
+            onClick={() => { setDbType('cloud'); setShowDatabase(true); }}
+          >
+            <Icon d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" size={16} />
+            {t('proxy.cloud_tab')}
+          </button>
+          <button 
             className="toolbox-tab" 
             onClick={() => inputRef.current.click()}
           >
@@ -218,10 +253,24 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
         <div className="toolbox-content">
           <input type="file" ref={inputRef} style={{ display: "none" }} multiple onChange={e => handleFiles(e.target.files)} accept="image/*" />
           
-          {dbType === 'single' ? (
+          {dbType === 'single' && (
             <CardSearchPanel onAddCards={cards => { setImages(prev => [...prev, ...cards]); toast(t('proxy.toast_loaded', { count: cards.length })); }} />
-          ) : (
-            <BulkImportPanel onAddCards={cards => { setImages(prev => [...prev, ...cards]); toast(t('proxy.toast_loaded', { count: cards.length })); }} toast={toast} />
+          )}
+          {dbType === 'bulk' && (
+            <BulkImportPanel 
+              onAddCards={cards => { setImages(prev => [...prev, ...cards]); toast(t('proxy.toast_loaded', { count: cards.length })); }} 
+              toast={toast} 
+              initialText={bulkInitialText}
+              onClearInitial={() => setBulkInitialText("")}
+            />
+          )}
+          {dbType === 'cloud' && (
+            <CloudDeckPanel onImport={(text) => { setDbType('bulk'); /* Indirectly use BulkImportPanel's logic? No, better use a direct method if possible */ 
+              // We'll set the bulk tab active with the text. But BulkImportPanel needs to handle it.
+              // Let's pass the text to BulkImportPanel.
+              setBulkInitialText(text);
+              setDbType('bulk');
+            }} toast={toast} />
           )}
         </div>
       </div>
@@ -249,7 +298,20 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
         ) : (
           <div className="queue-container">
             <div className="queue-header">
-               <h2 className="queue-title">📦 {t('proxy.queue')} <span className="queue-count">{images.length}</span></h2>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+                 <h2 className="queue-title">📦 {t('proxy.queue')} <span className="queue-count">{images.length}</span></h2>
+                 <input 
+                   type="text" 
+                   className="control-input py-1 px-3 text-xs w-48" 
+                   placeholder={t('proxy.deck_name_placeholder')} 
+                   value={currentDeckName}
+                   onChange={e => setCurrentDeckName(e.target.value)}
+                 />
+                 <button className="btn btn-accent py-1 px-3 text-xs gap-1" onClick={saveQueueAsDeck} disabled={isSavingDeck}>
+                   {isSavingDeck ? <Loader2 size={12} className="loading-spin" /> : <Save size={12} />}
+                   {t('proxy.save_to_cloud')}
+                 </button>
+               </div>
                <div className="queue-pages">({pages} {pages === 1 ? t('proxy.page') : t('proxy.pages')})</div>
                
                <button className={`btn ml-auto ${printOpen ? 'btn-primary' : 'btn-accent'}`} onClick={() => setPrintOpen(v => !v)}>

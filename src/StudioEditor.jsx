@@ -62,11 +62,21 @@ export default function StudioEditor() {
     setIsSaving(true);
     setSaveStatus('saving');
     try {
+      // GENERATE THUMBNAIL using html2canvas
+      const thumbCanvas = await html2canvas(canvasRef.current, {
+        scale: 0.2, 
+        useCORS: true,
+        backgroundColor: null,
+        logging: false
+      });
+      const previewUrl = thumbCanvas.toDataURL("image/webp", 0.5);
+
       const tokenData = {
         name: projectName,
         layers: layers,
         bgArt: bgArt,
-        isDraft: isDraft
+        isDraft: isDraft,
+        previewUrl
       };
       await saveUserToken(user.uid, tokenData, isDraft, 'studio');
       setSaveStatus('success');
@@ -695,7 +705,8 @@ function CloudLibrary({ user, onLoad }) {
     if (!user) return;
     setLoading(true);
     const data = await getUserTokens(user.uid);
-    setTokens(data);
+    // Filtriamo solo i progetti dello Studio
+    setTokens(data.filter(t => t.tool === 'studio'));
     setLoading(false);
   };
 
@@ -748,6 +759,11 @@ function CloudLibrary({ user, onLoad }) {
         ) : (
           tokens.map(item => (
             <div key={item.id} className="token-item-card" onClick={() => onLoad(item)}>
+              {item.previewUrl && (
+                <div className="token-item-preview" style={{ width: '40px', height: '56px', background: 'var(--surf-off)', borderRadius: '4px', overflow: 'hidden', flexShrink: 0, border: '1px solid var(--border)' }}>
+                  <img src={item.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              )}
               <div className="token-item-info">
                 <div className="token-item-name">{item.name}</div>
                 <div className={`token-item-badge ${item.isDraft ? 'draft' : 'final'}`}>

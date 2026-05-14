@@ -93,6 +93,11 @@ export default {
     queue: "Queue",
     page: "page",
     pages: "pages",
+    cloud_tab: "Cloud",
+    save_to_cloud: "Save Cloud",
+    deck_name_placeholder: "Deck Name...",
+    saving_to_cloud: "Saving...",
+    cloud_sync_success: "✅ Deck saved to Cloud!",
   },
   pdf_settings: {
     columns: "Columns",
@@ -180,6 +185,7 @@ export default {
     no_layers: "No elements added",
     save_success: "✓ Successfully saved to Cloud!",
     login_required: "You must be logged in to save to Cloud.",
+    refresh_lib: "Refresh Library",
   },
   scanner: {
     title: "AI Deck Scanner",
@@ -207,7 +213,9 @@ export default {
     add_all: "Add all to queue",
     validate_btn: "Validate Deck",
     print_btn: "Print ({count} cards)",
-    error_generic: "Scan error. Please try again."
+    error_generic: "Scan error. Please try again.",
+    save_cloud: "Save Cloud",
+    status_syncing: "Cloud Sync..."
   },
   landing: {
     hero_badge: "AI-Powered MTG Tools",

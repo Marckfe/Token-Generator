@@ -1,12 +1,9 @@
-import React, { useState, useRef } from 'react';
-import {
-  Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle,
-  Wand2, RefreshCw, HelpCircle, LayoutGrid, Layers,
-  ShieldCheck, Printer, CheckCircle2, XCircle
+  ShieldCheck, Printer, CheckCircle2, XCircle, Cloud, Save
 } from 'lucide-react';
 import './DeckScanner.css';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { saveUserDeck } from '../../services/dbService';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'wastes'];
 
@@ -23,7 +20,7 @@ const ResultCard = ({ card, onUpdateQty, onRemove }) => (
       ) : (
         <div className="sc-card-placeholder">
           {card.status === 'searching'
-            ? <Loader2 className="animate-spin" size={24} />
+            ? <Loader2 className="loading-spin" size={24} />
             : <HelpCircle size={24} />}
         </div>
       )}
@@ -196,11 +193,35 @@ const DeckScanner = ({ onAddToQueue, onValidateDeck }) => {
       for (let i = 0; i < allCards.length; i += 10) chunks.push(allCards.slice(i, i + 10));
       for (const chunk of chunks) await Promise.all(chunk.map(card => searchCard(card)));
       setStatusMessage(t('scanner.status_done'));
-    } catch (err) {
-      setError(err.message || t('scanner.error_generic'));
     } finally {
       setIsProcessing(false);
       setTimeout(() => setStatusMessage(''), 2000);
+    }
+  };
+  
+  // ── Save to Cloud ──────────────────────────────────────────────────
+  const handleSaveToCloud = async () => {
+    if (!user) { alert(t('studio.login_required')); return; }
+    const mainCards = results.filter(c => !c.isSide && c.status === 'found');
+    const sideCards = results.filter(c => c.isSide && c.status === 'found');
+    const toList = (arr) => arr.map(c => `${c.qty} ${c.name}`).join('\n');
+    
+    try {
+      setIsProcessing(true);
+      setStatusMessage(t('scanner.status_syncing'));
+      const deckName = `Scan ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      await saveUserDeck(user.uid, {
+        name: deckName,
+        maindeck: toList(mainCards),
+        sideboard: toList(sideCards),
+        format: 'standard'
+      });
+      setStatusMessage(t('proxy.cloud_sync_success'));
+      setTimeout(() => setStatusMessage(''), 2000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -264,6 +285,14 @@ const DeckScanner = ({ onAddToQueue, onValidateDeck }) => {
                 {t('scanner.validate_btn')}
               </button>
             )}
+            <button
+              className="sc-btn sc-btn-cloud"
+              onClick={handleSaveToCloud}
+              disabled={isProcessing || foundCount === 0}
+            >
+              <Cloud size={16} />
+              {t('scanner.save_cloud')}
+            </button>
             <button
               className="sc-btn sc-btn-queue"
               onClick={handleAddToQueue}

@@ -137,6 +137,14 @@ export const saveUserDeck = async (userId, deckData) => {
   
   try {
     // Ensure data is a plain object for Firestore
+    // Controllo limite 10 mazzi (solo per nuovi salvataggi)
+    if (!deckData.id) {
+      const snap = await getDocs(collection(db, "users", userId, "decks"));
+      if (snap.size >= 10) {
+        throw new Error("Limite raggiunto: puoi salvare al massimo 10 mazzi. Elimina un vecchio mazzo per salvarne uno nuovo.");
+      }
+    }
+
     const rawData = {
       ...deckData,
       updatedAt: new Date(),

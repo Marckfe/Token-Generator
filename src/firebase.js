@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-import { initializeFirestore, enableNetwork, setLogLevel } from "firebase/firestore";
+import { initializeFirestore, enableNetwork, setLogLevel, doc, getDocFromCache } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCR-fXANI8vZL_R2kI8VhJ0EDTxdZwBT0w",
@@ -14,14 +14,21 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+
+// Inizializzazione Firestore con impostazioni di compatibilità massima
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
   experimentalAutoDetectLongPolling: false,
+  useFetchStreams: false, // Disabilita i flussi di fetch che a volte danno problemi su certi browser
 });
 
-// Attiviamo i log di debug per vedere cosa succede "sotto il cofano"
+// Attiviamo i log di debug
 setLogLevel('debug');
-enableNetwork(db).catch(() => {});
+
+// Test di connettività iniziale
+enableNetwork(db)
+  .then(() => console.log(">>> [Firestore] Rete abilitata correttamente"))
+  .catch(err => console.error(">>> [Firestore] Errore abilitazione rete:", err));
 
 export const googleProvider = new GoogleAuthProvider();
 

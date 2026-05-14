@@ -93,6 +93,11 @@ export default {
     queue: "Coda",
     page: "pagina",
     pages: "pagine",
+    cloud_tab: "Cloud",
+    save_to_cloud: "Salva Cloud",
+    deck_name_placeholder: "Nome Mazzo...",
+    saving_to_cloud: "Salvataggio...",
+    cloud_sync_success: "✅ Mazzo salvato nel Cloud!",
   },
   pdf_settings: {
     columns: "Colonne",
@@ -180,6 +185,7 @@ export default {
     no_layers: "Nessun elemento aggiunto",
     save_success: "✓ Salvato con successo nel Cloud!",
     login_required: "Devi essere loggato per salvare sul Cloud.",
+    refresh_lib: "Aggiorna Libreria",
   },
   scanner: {
     title: "Scanner OCR",
@@ -207,7 +213,9 @@ export default {
     add_all: "Aggiungi tutto alla coda",
     validate_btn: "Valida Mazzo",
     print_btn: "Stampa ({count} carte)",
-    error_generic: "Errore durante la scansione. Riprova."
+    error_generic: "Errore durante la scansione. Riprova.",
+    save_cloud: "Salva Cloud",
+    status_syncing: "Cloud Sync..."
   },
   landing: {
     hero_badge: "AI-Powered MTG Tools",

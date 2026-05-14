@@ -90,6 +90,10 @@ input, select, textarea { font: inherit; color: inherit; outline: none; }
   animation: spin-center 0.7s linear infinite;
   flex-shrink: 0;
 }
+.loading-spin {
+  animation: spin-center 0.8s linear infinite;
+}
+
 .spinner-small.absolute-right {
   position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
   animation: spin 0.7s linear infinite;

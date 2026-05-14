@@ -700,8 +700,16 @@ export default function TokenPreviewSinglePtFrame() {
     setIsSaving(true);
     setSaveStatus('saving');
     try {
+      // GENERATE THUMBNAIL
+      const thumbCanvas = document.createElement('canvas');
+      thumbCanvas.width = 150; 
+      thumbCanvas.height = 215; 
+      renderCardSync(thumbCanvas, state, false);
+      const previewUrl = thumbCanvas.toDataURL('image/webp', 0.6);
+
       const tokenData = {
         name: state.name || "Senza nome",
+        previewUrl,
         ...state
       };
       await saveUserToken(user.uid, tokenData, isDraft, 'token');
@@ -844,13 +852,17 @@ export default function TokenPreviewSinglePtFrame() {
                     <div key={item.id} className="asset-item group relative">
                       <div 
                         className="template-icon" 
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}
                         onClick={() => {
-                          const { id, name, tool, isDraft, updatedAt, createdAt, ...loadedState } = item;
-                          applyState({ ...state, ...loadedState });
+                          const { id, tool, isDraft, updatedAt, createdAt, previewUrl, ...loadedState } = item;
+                          applyState(loadedState); // Replace current state with loaded state
                         }}
                       >
-                        {item.isDraft ? "📝" : "⭐"}
+                        {item.previewUrl ? (
+                          <img src={item.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          item.isDraft ? "📝" : "⭐"
+                        )}
                       </div>
                       <div className="template-name">{item.name}</div>
                       <button 
