@@ -79,7 +79,9 @@ export default {
     toast_reduced: "Ridotto a 1 copia per carta",
     toast_pdf_success: "✅ PDF scaricato!",
     toast_pdf_error: "Errore PDF: {error}",
-    cards_added: "✅ {count} cop{suffix} aggiunte!"
+    cards_added: "✅ {count} cop{suffix} aggiunte!",
+    empty_queue: "Nessuna carta nella coda",
+    empty_subtitle: "Cerca carte nel database, importa una lista o carica immagini locali",
   },
   pdf_settings: {
     columns: "Colonne",
@@ -230,6 +232,7 @@ export default {
     name_size: "Dim. Nome ({size}px)",
     type_size: "Dim. Tipo ({size}px)",
     artist_size: "Dim. Artista ({size}px)",
-    pt_size: "Dim. P/T ({size}px)"
+    pt_size: "Dim. P/T ({size}px)",
+    invalid_json: "File JSON non valido."
   }
 };

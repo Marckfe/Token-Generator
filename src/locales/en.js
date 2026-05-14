@@ -79,7 +79,9 @@ export default {
     toast_reduced: "Reduced to 1 copy per card",
     toast_pdf_success: "✅ PDF downloaded!",
     toast_pdf_error: "PDF Error: {error}",
-    cards_added: "✅ {count} cop{{suffix}} added!"
+    cards_added: "✅ {count} cop{{suffix}} added!",
+    empty_queue: "No cards in queue",
+    empty_subtitle: "Search cards in the database, import a list or upload local images",
   },
   pdf_settings: {
     columns: "Columns",
@@ -230,6 +232,7 @@ export default {
     name_size: "Name Size ({size}px)",
     type_size: "Type Size ({size}px)",
     artist_size: "Artist Size ({size}px)",
-    pt_size: "P/T Size ({size}px)"
+    pt_size: "P/T Size ({size}px)",
+    invalid_json: "Invalid JSON file."
   }
 };

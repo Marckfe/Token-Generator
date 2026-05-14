@@ -605,7 +605,7 @@ export default function TokenPreviewSinglePtFrame() {
         const loaded = JSON.parse(ev.target.result);
         applyState({ ...DEFAULT_STATE, ...loaded });
       } catch (err) {
-        alert("File JSON non valido.");
+        alert(t('token.invalid_json'));
       }
     };
     reader.readAsText(file);
@@ -680,13 +680,13 @@ export default function TokenPreviewSinglePtFrame() {
                  { id: 'pt', label: '⚔️ P/T' },
                  { id: 'info', label: '📜 ' + t('token.artist') },
                  { id: 'settings', label: '⚙️ ' + t('common.settings') }
-               ].map(t => (
+               ].map(item => (
                  <button 
-                   key={t.id} 
-                   className={`px-3 py-1 text-sm rounded whitespace-nowrap font-semibold ${activeTab === t.id ? 'bg-[var(--primary)] text-[var(--bg)]' : 'bg-[var(--surf-off)] text-[var(--text)]'}`} 
-                   onClick={() => setActiveTab(t.id)}
+                   key={item.id} 
+                   className={`px-3 py-1 text-sm rounded whitespace-nowrap font-semibold ${activeTab === item.id ? 'bg-[var(--primary)] text-[var(--bg)]' : 'bg-[var(--surf-off)] text-[var(--text)]'}`} 
+                   onClick={() => setActiveTab(item.id)}
                  >
-                   {t.label}
+                   {item.label}
                  </button>
                ))}
              </div>
@@ -699,22 +699,22 @@ export default function TokenPreviewSinglePtFrame() {
               <div className="control-group">
                 <p className="text-xs text-muted mb-4">{t('token.templates')}</p>
                 <div className="template-grid">
-                  {TOKEN_TEMPLATES.map(t => (
+                  {TOKEN_TEMPLATES.map(item => (
                     <div 
-                      key={t.id} 
+                      key={item.id} 
                       className="template-item" 
                       onClick={() => {
-                        const frameObj = FRAME_MAP[t.frameSet]?.find(f => f.name === t.frame);
-                        const ptFrameObj = PT_FRAMES.find(f => f.name === t.ptFrame) || state.ptFrame;
+                        const frameObj = FRAME_MAP[item.frameSet]?.find(f => f.name === item.frame);
+                        const ptFrameObj = PT_FRAMES.find(f => f.name === item.ptFrame) || state.ptFrame;
                         applyState({
                           ...DEFAULT_STATE,
-                          name: t.name,
-                          type: t.type,
-                          ability: t.ability,
-                          showAbility: !!t.ability,
-                          showPT: t.showPT,
-                          pt: t.pt || DEFAULT_STATE.pt,
-                          frameSet: t.frameSet,
+                          name: item.name,
+                          type: item.type,
+                          ability: item.ability,
+                          showAbility: !!item.ability,
+                          showPT: item.showPT,
+                          pt: item.pt || DEFAULT_STATE.pt,
+                          frameSet: item.frameSet,
                           frame: frameObj || state.frame,
                           ptFrame: ptFrameObj,
                           artUrl: state.artUrl,

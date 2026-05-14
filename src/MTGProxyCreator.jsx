@@ -162,13 +162,13 @@ export default function MTGProxyCreator() {
               { id: "token", label: "🃏 " + t('nav.token') },
               { id: "studio", label: "🎨 " + t('nav.studio') },
               { id: "checker", label: "🔍 " + t('nav.checker') }
-            ].map(t => (
+            ].map(item => (
               <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`mobile-tab-btn ${tab === t.id ? "active" : ""}`}
+                key={item.id}
+                onClick={() => setTab(item.id)}
+                className={`mobile-tab-btn ${tab === item.id ? "active" : ""}`}
               >
-                {t.label}
+                {item.label}
               </button>
             ))}
           </div>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useLanguage } from "../../context/LanguageContext";
 
 export default function PrintQueue({
   images,
@@ -9,15 +10,16 @@ export default function PrintQueue({
   dup,
   isMobile
 }) {
+  const { t } = useLanguage();
   const [dropTargetIdx, setDropTargetIdx] = useState(null);
 
   if (images.length === 0) {
     return (
       <div className="empty-state">
         <div className="empty-icon">🃏</div>
-        <div className="empty-title">Nessuna carta nella coda</div>
+        <div className="empty-title">{t('proxy.empty_queue')}</div>
         <div className="empty-subtitle">
-          Cerca carte nel database, importa una lista o carica immagini locali
+          {t('proxy.empty_subtitle')}
         </div>
       </div>
     );
@@ -37,7 +39,7 @@ export default function PrintQueue({
           onDragEnd={() => { setDragIdx(null); setDropTargetIdx(null); }}
           className={`queue-card ${dragIdx === idx ? 'dragging' : ''} ${dropTargetIdx === idx && dragIdx !== idx ? 'drop-target' : ''}`}
         >
-          <img src={img.url} alt={img.name || "Carta"} className="queue-card-img" />
+          <img src={img.url} alt={img.name || t('common.name')} className="queue-card-img" />
 
           {/* Drop placeholder line indicator */}
           {dropTargetIdx === idx && dragIdx !== null && dragIdx !== idx && (
@@ -45,11 +47,11 @@ export default function PrintQueue({
           )}
 
           <div className="card-overlay">
-            <button title="Duplica" onClick={e => { e.stopPropagation(); dup(idx); }} className="overlay-btn">
-              ⧉ Duplica
+            <button title={t('common.duplicate')} onClick={e => { e.stopPropagation(); dup(idx); }} className="overlay-btn">
+              ⧉ {t('common.duplicate')}
             </button>
-            <button title="Rimuovi" onClick={e => { e.stopPropagation(); remove(idx); }} className="overlay-btn danger">
-              ✕ Rimuovi
+            <button title={t('common.remove')} onClick={e => { e.stopPropagation(); remove(idx); }} className="overlay-btn danger">
+              ✕ {t('common.remove')}
             </button>
           </div>
 

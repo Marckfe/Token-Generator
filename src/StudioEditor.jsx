@@ -56,7 +56,7 @@ export default function StudioEditor() {
 
   const handleSaveCloud = async (isDraft = true) => {
     if (!user) {
-      alert("Devi essere loggato per salvare sul Cloud.");
+      alert(t('studio.login_required'));
       return;
     }
     setIsSaving(true);
@@ -687,6 +687,7 @@ export default function StudioEditor() {
 }
 
 function CloudLibrary({ user, onLoad }) {
+  const { t } = useLanguage();
   const [tokens, setTokens] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -745,15 +746,15 @@ function CloudLibrary({ user, onLoad }) {
         ) : tokens.length === 0 ? (
           <div className="text-center py-4 opacity-50 text-xs italic">Nessun progetto salvato</div>
         ) : (
-          tokens.map(t => (
-            <div key={t.id} className="token-item-card" onClick={() => onLoad(t)}>
+          tokens.map(item => (
+            <div key={item.id} className="token-item-card" onClick={() => onLoad(item)}>
               <div className="token-item-info">
-                <div className="token-item-name">{t.name}</div>
-                <div className={`token-item-badge ${t.isDraft ? 'draft' : 'final'}`}>
-                  {t.isDraft ? t('studio.save_draft') : t('studio.save_final')}
+                <div className="token-item-name">{item.name}</div>
+                <div className={`token-item-badge ${item.isDraft ? 'draft' : 'final'}`}>
+                  {item.isDraft ? t('studio.save_draft') : t('studio.save_final')}
                 </div>
               </div>
-              <button className="token-item-delete" onClick={(e) => handleDelete(e, t.id)}>
+              <button className="token-item-delete" onClick={(e) => handleDelete(e, item.id)}>
                 <Trash2 size={12} />
               </button>
             </div>
