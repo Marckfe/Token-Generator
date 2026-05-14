@@ -74,7 +74,7 @@ export default function BulkImportPanel({ onAddCards, toast, initialText = "", o
     const parsed = parseList(text);
     if (!parsed.length) return;
     setLoading(true); setResolved(false); setEntries([]);
-    setLoadMsg("Verifico la lista nel database in bulk...");
+    setLoadMsg(t('common.loading'));
     let fetchedCards = [];
     try {
       const identifiers = parsed.map(p => ({ name: p.name }));
@@ -89,7 +89,7 @@ export default function BulkImportPanel({ onAddCards, toast, initialText = "", o
         if (data.data) fetchedCards = fetchedCards.concat(data.data);
       }
     } catch (e) {
-      setLoadMsg("Errore di rete durante la verifica.");
+      setLoadMsg(t('common.error'));
       setLoading(false);
       return;
     }
