@@ -112,6 +112,7 @@ export default {
     event_name: "Nome Evento",
     deck_name: "Nome Mazzo",
     designer: "Designer",
+    table: "Tavolo",
     export_pdf: "⬇ Esporta Scheda PDF",
     singleton_violation: "Più copie in formato Singleton",
     legality_analysis: "Analisi Legalità",

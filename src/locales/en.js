@@ -112,6 +112,7 @@ export default {
     event_name: "Event Name",
     deck_name: "Deck Name",
     designer: "Designer",
+    table: "Table",
     export_pdf: "⬇ Export PDF Sheet",
     singleton_violation: "Multiple copies in Singleton format",
     legality_analysis: "Legality Analysis",

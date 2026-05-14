@@ -30,7 +30,7 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
   const [commander2, setCommander2] = useState('');
   const [cmdSuggestions, setCmdSuggestions] = useState([]);
   const [playerData, setPlayerData] = useState({
-    lastName: '', firstName: '', playerId: '', date: '', event: '', deckName: '', deckDesigner: ''
+    lastName: '', firstName: '', playerId: '', date: '', event: '', deckName: '', deckDesigner: '', tableNumber: ''
   });
   const [checking, setChecking] = useState(false);
   const [results, setResults] = useState(null);
@@ -217,18 +217,32 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
     // Header with MTG Logo
-    const logoUrl = 'https://raw.githubusercontent.com/filipekiss/mtg-icons/master/png/128/mtg.png';
+    // Header with MTG Logo or Fallback
+    const logoUrl = '/assets/mtg-logo.png';
     try {
-      doc.addImage(logoUrl, 'PNG', 15, 10, 10, 10);
+      doc.addImage(logoUrl, 'PNG', 15, 10, 12, 12);
     } catch (e) {
-      doc.setFillColor(0, 0, 0);
-      doc.rect(15, 10, 10, 10, 'F');
-      doc.setTextColor(255); doc.setFontSize(8);
-      doc.text('MTG', 20, 16.5, { align: 'center' });
+      // Premium Fallback Logo
+      doc.setFillColor(30, 30, 30);
+      doc.roundedRect(15, 10, 12, 12, 2, 2, 'F');
+      doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+      doc.text('MTG', 21, 17.5, { align: 'center' });
     }
 
+    // Official Title
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
     doc.text(t('checker.official_sheet').toUpperCase(), 105, 17, { align: 'center' });
+
+    // Table Number in Top Right
+    if (playerData.tableNumber) {
+      doc.setFontSize(10);
+      doc.setFillColor(0, 0, 0); doc.rect(175, 10, 20, 12, 'F');
+      doc.setTextColor(255);
+      doc.text(t('checker.table').toUpperCase(), 185, 14.5, { align: 'center' });
+      doc.setFontSize(14);
+      doc.text(String(playerData.tableNumber), 185, 20.5, { align: 'center' });
+      doc.setTextColor(0);
+    }
 
     const drawField = (label, val, x, y, w) => {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
@@ -368,6 +382,10 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
               <input className="dc-input" placeholder={t('checker.player_id')}
                 value={playerData.playerId}
                 onChange={e => setPlayerData({ ...playerData, playerId: e.target.value })} />
+              <input className="dc-input" placeholder={t('checker.table')}
+                style={{ flex: '0 0 80px' }}
+                value={playerData.tableNumber}
+                onChange={e => setPlayerData({ ...playerData, tableNumber: e.target.value })} />
               <input type="date" className="dc-input"
                 value={playerData.date}
                 onChange={e => setPlayerData({ ...playerData, date: e.target.value })} />
