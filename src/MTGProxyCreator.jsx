@@ -63,15 +63,25 @@ export default function MTGProxyCreator() {
   };
 
   const LanguageToggle = ({ className = "" }) => (
-    <div className={`flex items-center gap-2 p-1.5 bg-black/20 rounded-xl border border-[var(--border)] ${className}`}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px', backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid var(--border)' }} className={className}>
       <button 
-        className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-300 ${lang === 'it' ? 'bg-[var(--accent)] text-black shadow-lg shadow-[var(--accent-hl)]' : 'opacity-40 hover:opacity-100'}`}
+        style={{ 
+          display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '11px', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.3s',
+          backgroundColor: lang === 'it' ? 'var(--accent)' : 'transparent',
+          color: lang === 'it' ? '#000' : 'var(--muted)',
+          border: 'none'
+        }}
         onClick={() => setLang('it')}
       >
         <span style={{ fontSize: '14px' }}>🇮🇹</span> IT
       </button>
       <button 
-        className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-300 ${lang === 'en' ? 'bg-[var(--accent)] text-black shadow-lg shadow-[var(--accent-hl)]' : 'opacity-40 hover:opacity-100'}`}
+        style={{ 
+          display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '11px', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.3s',
+          backgroundColor: lang === 'en' ? 'var(--accent)' : 'transparent',
+          color: lang === 'en' ? '#000' : 'var(--muted)',
+          border: 'none'
+        }}
         onClick={() => setLang('en')}
       >
         <span style={{ fontSize: '14px' }}>🇺🇸</span> EN
@@ -107,7 +117,7 @@ export default function MTGProxyCreator() {
               ))}
             </div>
 
-            <div className="user-profile-section">
+            <div className="user-profile-section" style={{ paddingBottom: '10px' }}>
               <div className="user-info">
                 {user?.photoURL ? (
                   <img src={user.photoURL} alt="User" className="user-avatar" />
@@ -119,13 +129,12 @@ export default function MTGProxyCreator() {
                   <span className="user-email">{user?.email}</span>
                 </div>
               </div>
-              <button className="logout-btn" onClick={logout} title={t('common.logout')}>
-                <LogOut size={18} />
-              </button>
-            </div>
-
-            <div className="mt-4 px-4">
-              <LanguageToggle />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '12px', width: '100%', gap: '10px' }}>
+                <LanguageToggle />
+                <button className="logout-btn" onClick={logout} title={t('common.logout')} style={{ marginLeft: 'auto' }}>
+                  <LogOut size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="sidebar-credits">

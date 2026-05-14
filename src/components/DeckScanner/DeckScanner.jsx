@@ -16,6 +16,7 @@ const DeckScanner = ({ onAddToQueue }) => {
   const [statusMessage, setStatusMessage] = useState('');
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
   const { user } = useAuth();
   const { t } = useLanguage();
   
