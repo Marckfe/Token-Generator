@@ -74,7 +74,7 @@ const DeckScanner = ({ onAddToQueue }) => {
     const data = await response.json();
     if (data.error) throw new Error(data.error);
     
-    setDebugInfo({ provider: data.provider, model: data.model });
+    setDebugInfo({ provider: data.provider, model: data.model, logs: data.debugLogs });
     return (data.cards || data).map(item => ({
       id: Math.random().toString(36).substr(2, 9),
       qty: item.qty || 1,
@@ -243,11 +243,18 @@ const DeckScanner = ({ onAddToQueue }) => {
 
         <div className="scanner-main-results">
           {debugInfo && (
-            <div style={{ margin: '10px 20px', padding: '8px 16px', backgroundColor: 'rgba(0,188,212,0.1)', border: '1px solid var(--accent)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem' }}>
-              <span style={{ fontWeight: 'bold', color: 'var(--accent)' }}>AI DEBUG:</span>
-              <span style={{ color: '#fff' }}>Provider: <strong>{debugInfo.provider}</strong></span>
-              <span style={{ color: 'rgba(255,255,255,0.5)' }}>|</span>
-              <span style={{ color: '#fff' }}>Model: <strong>{debugInfo.model}</strong></span>
+            <div style={{ margin: '10px 20px', padding: '8px 16px', backgroundColor: 'rgba(0,188,212,0.1)', border: '1px solid var(--accent)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.8rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontWeight: 'bold', color: 'var(--accent)' }}>AI DEBUG:</span>
+                <span style={{ color: '#fff' }}>Provider: <strong>{debugInfo.provider}</strong></span>
+                <span style={{ color: 'rgba(255,255,255,0.5)' }}>|</span>
+                <span style={{ color: '#fff' }}>Model: <strong>{debugInfo.model}</strong></span>
+              </div>
+              {debugInfo.logs && debugInfo.logs.length > 0 && (
+                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px', fontStyle: 'italic', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '4px' }}>
+                  Fails: {debugInfo.logs.filter(l => !l.includes(debugInfo.provider)).join(' | ')}
+                </div>
+              )}
             </div>
           )}
           {results.length === 0 ? (

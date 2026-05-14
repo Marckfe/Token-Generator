@@ -41,7 +41,7 @@ export default async function handler(req, res) {
           let content = data.choices[0].message.content;
           let parsed = JSON.parse(content);
           let cards = Array.isArray(parsed) ? parsed : (parsed.cards || parsed.items || []);
-          if (cards.length > 0) return res.status(200).json({ cards, provider: "Groq", model });
+          if (cards.length > 0) return res.status(200).json({ cards, provider: "Groq", model, debugLogs: errors });
         } else if (data.error) {
           errors.push(`Groq ${model}: ${data.error.message || JSON.stringify(data.error)}`);
         }
@@ -80,7 +80,7 @@ export default async function handler(req, res) {
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
           let parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.length > 0) return res.status(200).json({ cards: parsed, provider: "Google", model });
+          if (parsed.length > 0) return res.status(200).json({ cards: parsed, provider: "Google", model, debugLogs: errors });
         }
       } catch (e) {
         errors.push(`Gemini ${model} exception: ${e.message}`);
@@ -116,7 +116,7 @@ export default async function handler(req, res) {
       if (content) {
         let parsed = JSON.parse(content);
         let cards = Array.isArray(parsed) ? parsed : (parsed.cards || []);
-        if (cards.length > 0) return res.status(200).json({ cards, provider: "Mistral", model });
+        if (cards.length > 0) return res.status(200).json({ cards, provider: "Mistral", model, debugLogs: errors });
       } else if (data.error) {
         errors.push(`Mistral: ${data.error.message}`);
       }
@@ -125,7 +125,8 @@ export default async function handler(req, res) {
     }
   }
 
-  return res.status(500).json({ 
-    error: `[MTG-AI-HUB-V3] Fallimento totale. Log: ${errors.join(" | ")}` 
+  return res.status(200).json({ 
+    error: `[MTG-AI-HUB-V3] Fallimento totale. Log: ${errors.join(" | ")}`,
+    debugLogs: errors
   });
 }
