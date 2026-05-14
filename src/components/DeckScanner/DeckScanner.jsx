@@ -45,7 +45,7 @@ const DeckScanner = ({ onAddToQueue }) => {
         img.src = event.target.result;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 800;
+          const MAX_SIZE = 1200;
           let width = img.width;
           let height = img.height;
           if (width > height) {
@@ -57,7 +57,7 @@ const DeckScanner = ({ onAddToQueue }) => {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.7));
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
         };
       };
     });
@@ -73,7 +73,8 @@ const DeckScanner = ({ onAddToQueue }) => {
     const data = await response.json();
     if (data.error) throw new Error(data.error);
     
-    return data.map(item => ({
+    setDebugInfo({ provider: data.provider, model: data.model });
+    return (data.cards || data).map(item => ({
       id: Math.random().toString(36).substr(2, 9),
       qty: item.qty || 1,
       name: item.name,
@@ -240,6 +241,14 @@ const DeckScanner = ({ onAddToQueue }) => {
         </div>
 
         <div className="scanner-main-results">
+          {debugInfo && (
+            <div style={{ margin: '10px 20px', padding: '8px 16px', backgroundColor: 'rgba(0,188,212,0.1)', border: '1px solid var(--accent)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem' }}>
+              <span style={{ fontWeight: 'bold', color: 'var(--accent)' }}>AI DEBUG:</span>
+              <span style={{ color: '#fff' }}>Provider: <strong>{debugInfo.provider}</strong></span>
+              <span style={{ color: 'rgba(255,255,255,0.5)' }}>|</span>
+              <span style={{ color: '#fff' }}>Model: <strong>{debugInfo.model}</strong></span>
+            </div>
+          )}
           {results.length === 0 ? (
             <div className="results-empty-v2">
               <ImageIcon size={64} className="opacity-10" />
