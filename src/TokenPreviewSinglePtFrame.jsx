@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "./editor.css";
+import { useLanguage } from "./context/LanguageContext";
 
 const ALL_FRAME_SETS = import.meta.glob(
   "/src/assets/frames/masterframes/*/*.{png,jpg,jpeg,webp,svg}",
@@ -341,13 +342,19 @@ const DEFAULT_STATE = {
   copyright: { text: `™ & © ${new Date().getFullYear()} Wizards of the Coast`, x: 18, y: 12, color: "#111111", fontSize: 9, fontFamily: 'Mplantin' }, showCopyright: true,
 };
 
+// ptFrame name maps to files in /src/assets/frames/pt/
+// Colors are always #111111 on these frames (dark text on light textbox)
 const TOKEN_TEMPLATES = [
-  { id: 'treasure', name: 'Tesoro', icon: '💰', type: 'Token Artifact — Treasure', ability: '{T}, Sacrifice this artifact: Add one mana of any color.', color: '#d4af37', frame: 'tokenFrameAShort', frameSet: 'tokenshort', showPT: false },
-  { id: 'food', name: 'Cibo', icon: '🍞', type: 'Token Artifact — Food', ability: '{2}, {T}, Sacrifice this artifact: You gain 3 life.', color: '#4a7c44', frame: 'tokenFrameAShort', frameSet: 'tokenshort', showPT: false },
-  { id: 'clue', name: 'Indizio', icon: '🔍', type: 'Token Artifact — Clue', ability: '{2}, Sacrifice this artifact: Draw a card.', color: '#4a90e2', frame: 'tokenFrameAShort', frameSet: 'tokenshort', showPT: false },
-  { id: 'goblin', name: 'Goblin', icon: '👺', type: 'Token Creature — Goblin', ability: 'Haste', color: '#c0392b', pt: { power: '1', toughness: '1' }, frame: 'tokenFrameRShort', frameSet: 'tokenshort', showPT: true },
-  { id: 'beast', name: 'Bestia', icon: '🐗', type: 'Token Creature — Beast', ability: '', color: '#27ae60', pt: { power: '3', toughness: '3' }, frame: 'tokenFrameGShort', frameSet: 'tokenshort', showPT: true },
-  { id: 'knight', name: 'Cavaliere', icon: '⚔️', type: 'Token Creature — Knight', ability: 'Vigilance', color: '#ecf0f1', pt: { power: '2', toughness: '2' }, frame: 'tokenFrameWShort', frameSet: 'tokenshort', showPT: true },
+  { id: 'treasure', name: 'Tesoro',    icon: '💰', type: 'Token Artifact — Treasure', ability: '{T}, Sacrifice this artifact: Add one mana of any color.', frame: 'tokenFrameAShort', ptFrame: 'm15PTA', frameSet: 'tokenshort', showPT: false },
+  { id: 'food',     name: 'Cibo',      icon: '🍞', type: 'Token Artifact — Food',     ability: '{2}, {T}, Sacrifice this artifact: You gain 3 life.',     frame: 'tokenFrameAShort', ptFrame: 'm15PTA', frameSet: 'tokenshort', showPT: false },
+  { id: 'clue',     name: 'Indizio',   icon: '🔍', type: 'Token Artifact — Clue',     ability: '{2}, Sacrifice this artifact: Draw a card.',               frame: 'tokenFrameAShort', ptFrame: 'm15PTA', frameSet: 'tokenshort', showPT: false },
+  { id: 'goblin',   name: 'Goblin',    icon: '👺', type: 'Token Creature — Goblin',   ability: 'Haste', pt: { power: '1', toughness: '1' },                  frame: 'tokenFrameRShort', ptFrame: 'm15PTR', frameSet: 'tokenshort', showPT: true  },
+  { id: 'beast',    name: 'Bestia',    icon: '🐗', type: 'Token Creature — Beast',    ability: '', pt: { power: '3', toughness: '3' },                       frame: 'tokenFrameGShort', ptFrame: 'm15PTG', frameSet: 'tokenshort', showPT: true  },
+  { id: 'knight',   name: 'Cavaliere', icon: '⚔️', type: 'Token Creature — Knight',   ability: 'Vigilance', pt: { power: '2', toughness: '2' },              frame: 'tokenFrameWShort', ptFrame: 'm15PTW', frameSet: 'tokenshort', showPT: true  },
+  { id: 'spirit',   name: 'Spirito',   icon: '👻', type: 'Token Creature — Spirit',   ability: 'Flying', pt: { power: '1', toughness: '1' },                 frame: 'tokenFrameWShort', ptFrame: 'm15PTW', frameSet: 'tokenshort', showPT: true  },
+  { id: 'zombie',   name: 'Zombie',    icon: '🧟', type: 'Token Creature — Zombie',   ability: '', pt: { power: '2', toughness: '2' },                       frame: 'tokenFrameBShort', ptFrame: 'm15PTB', frameSet: 'tokenshort', showPT: true  },
+  { id: 'elemental',name: 'Elementale',icon: '🔥', type: 'Token Creature — Elemental',ability: 'Haste, Trample', pt: { power: '4', toughness: '4' },          frame: 'tokenFrameRShort', ptFrame: 'm15PTR', frameSet: 'tokenshort', showPT: true  },
+  { id: 'soldier',  name: 'Soldato',   icon: '🛡️', type: 'Token Creature — Soldier',  ability: '', pt: { power: '1', toughness: '1' },                       frame: 'tokenFrameWShort', ptFrame: 'm15PTW', frameSet: 'tokenshort', showPT: true  },
 ];
 
 export default function TokenPreviewSinglePtFrame() {
@@ -665,13 +672,13 @@ export default function TokenPreviewSinglePtFrame() {
           {isMobile && (
              <div className="mobile-subnav mb-4 flex gap-2 overflow-x-auto pb-2 border-b border-[var(--border)]" style={{ WebkitOverflowScrolling: 'touch' }}>
                {[
-                 { id: 'templates', label: '🚀 Template' },
+                 { id: 'templates', label: '🚀 ' + t('token.templates') },
                  { id: 'frame', label: '🖼️ Frame' },
-                 { id: 'art', label: '🎨 Artwork' },
-                 { id: 'text', label: '📝 Testi' },
-                 { id: 'pt', label: '⚔️ Forza/Cost' },
-                 { id: 'info', label: '📜 Crediti' },
-                 { id: 'settings', label: '⚙️ Esporta' }
+                 { id: 'art', label: '🎨 ' + t('studio.bg_placeholder') },
+                 { id: 'text', label: '📝 ' + t('token.title') },
+                 { id: 'pt', label: '⚔️ P/T' },
+                 { id: 'info', label: '📜 ' + t('token.artist') },
+                 { id: 'settings', label: '⚙️ ' + t('common.settings') }
                ].map(t => (
                  <button 
                    key={t.id} 
@@ -687,9 +694,9 @@ export default function TokenPreviewSinglePtFrame() {
           {/* TAB: TEMPLATES */}
           {activeTab === 'templates' && (
             <>
-              <div className="sidebar-panel-title">🚀 Template Rapidi</div>
+              <div className="sidebar-panel-title">🚀 {t('token.templates')}</div>
               <div className="control-group">
-                <p className="text-xs text-muted mb-4">Seleziona un template per configurare istantaneamente la carta.</p>
+                <p className="text-xs text-muted mb-4">{t('token.templates')}</p>
                 <div className="template-grid">
                   {TOKEN_TEMPLATES.map(t => (
                     <div 
@@ -697,18 +704,20 @@ export default function TokenPreviewSinglePtFrame() {
                       className="template-item" 
                       onClick={() => {
                         const frameObj = FRAME_MAP[t.frameSet]?.find(f => f.name === t.frame);
+                        const ptFrameObj = PT_FRAMES.find(f => f.name === t.ptFrame) || state.ptFrame;
                         applyState({
-                          ...state,
+                          ...DEFAULT_STATE,
                           name: t.name,
                           type: t.type,
                           ability: t.ability,
+                          showAbility: !!t.ability,
                           showPT: t.showPT,
-                          pt: t.pt || state.pt,
+                          pt: t.pt || DEFAULT_STATE.pt,
                           frameSet: t.frameSet,
                           frame: frameObj || state.frame,
-                          nameStyle: { ...state.nameStyle, color: t.color || '#111111' },
-                          typeStyle: { ...state.typeStyle, color: t.color || '#111111' },
-                          ptStyle: { ...state.ptStyle, color: t.color || '#111111' }
+                          ptFrame: ptFrameObj,
+                          artUrl: state.artUrl,
+                          artTransform: state.artTransform,
                         });
                       }}
                     >
@@ -724,18 +733,18 @@ export default function TokenPreviewSinglePtFrame() {
           {/* TAB: ARTWORK */}
           {activeTab === 'art' && (
             <>
-              <div className="sidebar-panel-title">🎨 Artwork</div>
+              <div className="sidebar-panel-title">🎨 {t('studio.bg_placeholder')}</div>
               <div className="control-group">
                 <div className="control-field">
                   <label className="btn btn-primary" style={{ textAlign: 'center', cursor: 'pointer' }}>
-                    Carica Immagine
+                    {t('studio.upload_bg_btn')}
                     <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
                       const f = e.target.files?.[0]; if(!f) return;
                       const r = new FileReader(); r.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
                       r.readAsDataURL(f);
                     }} />
                   </label>
-                  <p className="text-xs text-muted mt-2 text-center">Puoi anche trascinare un'immagine direttamente sulla carta</p>
+                  <p className="text-xs text-muted mt-2 text-center">{t('proxy.dropzone_title')}</p>
                 </div>
                 <hr className="my-4 border-[var(--border)]" />
                 <div className="control-field mt-4">
@@ -753,10 +762,10 @@ export default function TokenPreviewSinglePtFrame() {
           {/* TAB: FRAMES */}
           {activeTab === 'frame' && (
             <>
-              <div className="sidebar-panel-title">🎴 Frame Template</div>
+              <div className="sidebar-panel-title">🎴 {t('token.set_frame')}</div>
               <div className="control-group">
                 <div className="control-field">
-                  <span className="control-label">Seleziona Categoria</span>
+                  <span className="control-label">{t('common.settings')}</span>
                   <select className="control-input control-select" value={state.frameSet} onChange={e => {
                     const setName = e.target.value;
                     applyState({ ...state, frameSet: setName, frame: FRAME_MAP[setName][0] || null });
@@ -781,15 +790,15 @@ export default function TokenPreviewSinglePtFrame() {
           {/* TAB: P/T */}
           {activeTab === 'pt' && (
             <>
-              <div className="sidebar-panel-title">⚔️ Forza / Costituzione</div>
+              <div className="sidebar-panel-title">⚔️ {t('token.power_toughness')}</div>
               <div className="control-group">
                 <div className="control-row">
                   <div className="control-field">
-                    <span className="control-label">Forza</span>
+                    <span className="control-label">{t('common.power')}</span>
                     <input type="text" className="control-input" value={state.pt.power} onChange={e => applyState({ ...state, pt: { ...state.pt, power: e.target.value } })} />
                   </div>
                   <div className="control-field">
-                    <span className="control-label">Costituzione</span>
+                    <span className="control-label">{t('common.toughness')}</span>
                     <input type="text" className="control-input" value={state.pt.toughness} onChange={e => applyState({ ...state, pt: { ...state.pt, toughness: e.target.value } })} />
                   </div>
                 </div>
@@ -809,9 +818,9 @@ export default function TokenPreviewSinglePtFrame() {
                   </div>
                 </div>
 
-                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} className="custom-checkbox"/> Mostra P/T Box</label>
+                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} className="custom-checkbox"/> {t('token.pt_frame')}</label>
                 
-                <span className="control-label mb-2">Scegli Badge</span>
+                <span className="control-label mb-2">{t('token.pt_frame')}</span>
                 <div className="pt-badge-grid">
                   {PT_FRAMES.map(f => (
                     <div key={f.name} className={`pt-badge-item ${state.ptFrame?.name === f.name ? 'active' : ''}`} onClick={() => applyState({ ...state, ptFrame: f })}>
@@ -826,12 +835,12 @@ export default function TokenPreviewSinglePtFrame() {
           {/* TAB: TEXT */}
           {activeTab === 'text' && (
             <>
-              <div className="sidebar-panel-title">📝 Modifica Testi</div>
+              <div className="sidebar-panel-title">📝 {t('token.title')}</div>
               <div className="control-group">
                 <div className="control-field mb-4">
-                  <span className="control-label">Nome Carta</span>
+                  <span className="control-label">{t('token.card_name')}</span>
                   <input type="text" className="control-input" value={state.name} onChange={e => applyState({ ...state, name: e.target.value })} onClick={() => setActiveLayer('name')} list="token-names" />
-                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showName !== false} onChange={e => applyState({ ...state, showName: e.target.checked })} className="custom-checkbox"/> Mostra Nome</label>
+                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showName !== false} onChange={e => applyState({ ...state, showName: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.card_name')}</label>
                 </div>
                 
                 <ColorPickerField 
@@ -853,9 +862,9 @@ export default function TokenPreviewSinglePtFrame() {
                 <hr className="my-4 border-[var(--border)] opacity-30" />
 
                 <div className="control-field mb-4">
-                  <span className="control-label">Tipo</span>
+                  <span className="control-label">{t('token.type_line')}</span>
                   <input type="text" className="control-input" value={state.type} onChange={e => applyState({ ...state, type: e.target.value })} onClick={() => setActiveLayer('type')} list="token-types" />
-                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showType !== false} onChange={e => applyState({ ...state, showType: e.target.checked })} className="custom-checkbox"/> Mostra Tipo</label>
+                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showType !== false} onChange={e => applyState({ ...state, showType: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.type_line')}</label>
                 </div>
 
                 <ColorPickerField 
@@ -877,9 +886,9 @@ export default function TokenPreviewSinglePtFrame() {
                 <hr className="my-4 border-[var(--border)] opacity-30" />
 
                 <div className="control-field mb-4">
-                  <span className="control-label">Regole</span>
+                  <span className="control-label">{t('token.rules_text')}</span>
                   <textarea className="control-input control-textarea" value={state.ability} onChange={e => applyState({ ...state, ability: e.target.value })} onClick={() => setActiveLayer('ability')} />
-                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showAbility} onChange={e => applyState({ ...state, showAbility: e.target.checked })} className="custom-checkbox"/> Mostra regole</label>
+                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showAbility} onChange={e => applyState({ ...state, showAbility: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.rules_text')}</label>
                 </div>
 
                 <ColorPickerField 
@@ -908,7 +917,7 @@ export default function TokenPreviewSinglePtFrame() {
           {/* TAB: INFO / CREDITS */}
           {activeTab === 'info' && (
             <>
-              <div className="sidebar-panel-title">📜 Crediti & Footer</div>
+              <div className="sidebar-panel-title">📜 {t('token.artist')} & {t('token.copyright')}</div>
               <div className="control-group">
                 <ColorPickerField 
                   label="Testo Extra (Sx)" 
@@ -919,25 +928,25 @@ export default function TokenPreviewSinglePtFrame() {
                   onFontChange={v => update('infoLeft', { fontFamily: v })}
                 />
                 <input type="text" className="control-input mb-2" value={state.infoLeft.text} onChange={e => update('infoLeft', { text: e.target.value })} placeholder="Es. C10/C20" />
-                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showInfoLeft !== false} onChange={e => applyState({ ...state, showInfoLeft: e.target.checked })} className="custom-checkbox"/> Mostra Testo Extra</label>
+                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showInfoLeft !== false} onChange={e => applyState({ ...state, showInfoLeft: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} Extra</label>
 
                 <hr className="my-4 border-[var(--border)] opacity-30" />
 
                 <ColorPickerField 
-                  label="Artista" 
+                  label={t('token.artist')} 
                   value={state.artistStyle?.color || "#111111"} 
                   onChange={v => update('artistStyle', { color: v })}
                   onTarget={() => setActiveLayer('artist')}
                   fontValue={state.artistStyle.fontFamily}
                   onFontChange={v => update('artistStyle', { fontFamily: v })}
                 />
-                <input type="text" className="control-input mb-2" value={state.artist} onChange={e => applyState({ ...state, artist: e.target.value })} placeholder="Nome Artista" />
-                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showArtist !== false} onChange={e => applyState({ ...state, showArtist: e.target.checked })} className="custom-checkbox"/> Mostra Artista</label>
+                <input type="text" className="control-input mb-2" value={state.artist} onChange={e => applyState({ ...state, artist: e.target.value })} placeholder={t('token.artist')} />
+                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showArtist !== false} onChange={e => applyState({ ...state, showArtist: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.artist')}</label>
 
                 <hr className="my-4 border-[var(--border)] opacity-30" />
 
                 <ColorPickerField 
-                  label="Copyright" 
+                  label={t('token.copyright')} 
                   value={state.copyright.color} 
                   onChange={v => update('copyright', { color: v })}
                   onTarget={() => setActiveLayer('copyright')}
@@ -953,9 +962,9 @@ export default function TokenPreviewSinglePtFrame() {
                   </div>
                 </div>
 
-                <label className="checkbox-label mb-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showCopyright !== false} onChange={e => applyState({ ...state, showCopyright: e.target.checked })} className="custom-checkbox"/> Mostra Copyright</label>
+                <label className="checkbox-label mb-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showCopyright !== false} onChange={e => applyState({ ...state, showCopyright: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.copyright')}</label>
 
-                <button className="btn btn-ghost w-full mt-6 text-xs" style={{ background: 'var(--surf-off)' }} onClick={resetFooterAlign}>🔄 Ripristina Posizioni Footer</button>
+                <button className="btn btn-ghost w-full mt-6 text-xs" style={{ background: 'var(--surf-off)' }} onClick={resetFooterAlign}>🔄 {t('studio.refresh_lib')}</button>
               </div>
             </>
           )}
@@ -963,24 +972,24 @@ export default function TokenPreviewSinglePtFrame() {
           {/* TAB: SETTINGS */}
           {activeTab === 'settings' && (
             <>
-              <div className="sidebar-panel-title">⚙️ Esporta & Progetto</div>
+              <div className="sidebar-panel-title">⚙️ {t('common.export')} & {t('common.settings')}</div>
               <div className="control-group">
                 <div className="control-field mb-2">
-                  <label className="checkbox-label"><input type="checkbox" checked={exportBleed} onChange={e => setExportBleed(e.target.checked)} className="custom-checkbox"/> Aggiungi 3mm Bleed</label>
+                  <label className="checkbox-label"><input type="checkbox" checked={exportBleed} onChange={e => setExportBleed(e.target.checked)} className="custom-checkbox"/> {t('pdf_settings.bleed')}</label>
                 </div>
                 <div className="control-field mb-4">
-                  <label className="checkbox-label"><input type="checkbox" checked={exportCropMarks} onChange={e => setExportCropMarks(e.target.checked)} className="custom-checkbox"/> Aggiungi Segni di Taglio</label>
+                  <label className="checkbox-label"><input type="checkbox" checked={exportCropMarks} onChange={e => setExportCropMarks(e.target.checked)} className="custom-checkbox"/> {t('pdf_settings.cut_marks')}</label>
                 </div>
-                <button className="btn btn-primary w-full" onClick={exportPNG}>⬇ Scarica PNG per Stampa</button>
+                <button className="btn btn-primary w-full" onClick={exportPNG}>⬇ {t('token.export_png')}</button>
                 
                 <hr className="my-4 border-[var(--border)]" />
-                <div className="sidebar-panel-title" style={{ border: 'none', padding: '0 0 12px 0' }}>💾 Gestione Progetto</div>
-                <button className="btn btn-ghost w-full mb-2" style={{ background: 'var(--surf-off)' }} onClick={saveProject}>💾 Salva Progetto (JSON)</button>
+                <div className="sidebar-panel-title" style={{ border: 'none', padding: '0 0 12px 0' }}>💾 {t('token.reset')}</div>
+                <button className="btn btn-ghost w-full mb-2" style={{ background: 'var(--surf-off)' }} onClick={saveProject}>💾 {t('common.save')} JSON</button>
                 <label className="btn btn-ghost w-full" style={{ background: 'var(--surf-off)', textAlign: 'center', cursor: 'pointer' }}>
-                  📂 Carica Progetto (JSON)
+                  📂 {t('common.open')} JSON
                   <input type="file" accept=".json" style={{ display: 'none' }} onChange={loadProject} />
                 </label>
-                <button className="btn btn-ghost w-full mt-4 text-error" onClick={() => applyState(DEFAULT_STATE)}>🗑️ Reset Iniziale</button>
+                <button className="btn btn-ghost w-full mt-4 text-error" onClick={() => applyState(DEFAULT_STATE)}>🗑️ {t('token.reset')}</button>
               </div>
             </>
           )}
@@ -1028,7 +1037,7 @@ export default function TokenPreviewSinglePtFrame() {
                 <select className="control-input py-1 text-xs w-auto" value={previewZoom} onChange={e => setPreviewZoom(Number(e.target.value))}>
                   <option value="75">75% Zoom</option><option value="100">100% Zoom</option><option value="125">125% Zoom</option>
                 </select>
-                <button className="btn btn-primary text-xs py-1" onClick={exportPNG}>Esporta</button>
+                <button className="btn btn-primary text-xs py-1" onClick={exportPNG}>{t('common.export')}</button>
               </div>
             )}
           </div>
@@ -1089,7 +1098,7 @@ export default function TokenPreviewSinglePtFrame() {
                   fontSize: `${1.2 * pScale}rem`,
                   zIndex: 5
                 }}>
-                  Carica immagine principale
+                  {t('studio.bg_placeholder')}
                 </div>
               )}
               <div className={`snap-line vertical ${snapGuides.x !== null ? 'visible' : ''}`} style={{ left: (snapGuides.x || 0) * pScale }} />
@@ -1135,7 +1144,7 @@ export default function TokenPreviewSinglePtFrame() {
             </div>
           </div>
           <div style={{ position: 'absolute', bottom: 10, right: 20, fontSize: 11, color: 'var(--faint)' }}>
-            ✨ Canva Mode Attivo
+            ✨ Canva Mode {t('common.success')}
           </div>
         </main>
       )}

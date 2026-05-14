@@ -26,6 +26,9 @@ export default function BulkImportPanel({ onAddCards, toast }) {
 
   const parseList = (raw) =>
     raw.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
+      // Skip comment lines and blank separators
+      if (line.startsWith('//') || line.startsWith('#')) return null;
+
       let cleanLine = line.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
       const m1 = cleanLine.match(/^(\d+)[xX]?\s+(.+)$/);
       const m2 = cleanLine.match(/^(.+?)\s+[xX](\d+)$/);
@@ -36,8 +39,13 @@ export default function BulkImportPanel({ onAddCards, toast }) {
       else if (m2) { qty = Math.min(100, parseInt(m2[2])); name = m2[1].trim(); }
       else if (m3) { qty = Math.min(100, parseInt(m3[2])); name = m3[1].trim(); }
       name = name.split(/\s*\/\/?\s*/)[0].trim();
+
+      // Skip section headers: name is ALL CAPS (e.g. "LANDS", "CREATURES", "INSTANTS and SORC.")
+      // A real card name always has at least one lowercase letter
+      if (name && name === name.toUpperCase() && /[A-Z]/.test(name)) return null;
+
       return { qty, name, original: line };
-    }).filter(e => e.name);
+    }).filter(Boolean).filter(e => e.name && e.name.length > 1);
 
   const resolveCards = async () => {
     const parsed = parseList(text);

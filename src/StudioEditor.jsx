@@ -714,7 +714,28 @@ function CloudLibrary({ user, onLoad }) {
     <div className="cloud-library-section mt-6">
       <div className="sidebar-panel-title flex items-center justify-between">
         <span>La tua Libreria Cloud</span>
-        <button onClick={refresh} className="text-accent hover:rotate-180 transition-transform"><RotateCw size={12} /></button>
+        <button
+          onClick={refresh}
+          title="Aggiorna libreria"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            color: 'var(--muted)',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            flexShrink: 0,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--surf-off)'; e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.querySelector('svg').style.transform = 'rotate(180deg)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.querySelector('svg').style.transform = 'rotate(0deg)'; }}
+        >
+          <RotateCw size={13} style={{ transition: 'transform 0.4s ease' }} />
+        </button>
       </div>
       <div className="tokens-grid mt-4">
         {loading ? (

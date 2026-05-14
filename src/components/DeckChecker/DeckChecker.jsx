@@ -12,6 +12,7 @@ import {
   Clock
 } from 'lucide-react';
 import './DeckChecker.css';
+import { useLanguage } from '../../context/LanguageContext';
 
 const FORMATS = [
   { id: 'commander', name: 'Commander' },
@@ -28,6 +29,7 @@ const FORMATS = [
 ];
 
 export default function DeckChecker() {
+  const { t } = useLanguage();
   const [selectedFormat, setSelectedFormat] = useState('commander');
   const [maindeck, setMaindeck] = useState('');
   const [sideboard, setSideboard] = useState('');
@@ -68,13 +70,22 @@ export default function DeckChecker() {
       .map(line => line.trim())
       .filter(line => line.length > 0)
       .map(line => {
+        // Skip comment lines (// or #)
+        if (line.startsWith('//') || line.startsWith('#')) return null;
+
         let cleanLine = line.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
         const match = cleanLine.match(/^(\d+)x?\s+(.+)$/i);
         let name = match ? match[2].trim() : cleanLine.trim();
         let qty = match ? parseInt(match[1], 10) : 1;
         name = name.split(/\s*\/\/?\s*/)[0].trim();
+
+        // Skip section headers: ALL CAPS lines like "21 LANDS", "10 CREATURES", "25 INSTANTS and SORC."
+        if (name && name === name.toUpperCase() && /[A-Z]/.test(name)) return null;
+
         return { qty, name };
-      });
+      })
+      .filter(Boolean)
+      .filter(e => e.name && e.name.length > 1);
   };
 
   const handleCheck = async () => {
@@ -164,24 +175,24 @@ export default function DeckChecker() {
         const info = cardInfoMap[item.name.toLowerCase()];
         if (!info) {
           newResults.status = 'banned';
-          newResults.reasons.push({ name: item.name, reason: 'Non trovata' });
+          newResults.reasons.push({ name: item.name, reason: t('checker.not_found') });
           return;
         }
         
         const l = info.legalities[selectedFormat];
         if (l === 'not_legal' || l === 'banned') {
           newResults.status = 'banned';
-          newResults.reasons.push({ name: info.fullName, reason: l === 'not_legal' ? 'Non legale' : 'Bannata' });
+          newResults.reasons.push({ name: info.fullName, reason: l === 'not_legal' ? t('checker.not_legal') : t('checker.banned') });
         } else if (selectedFormat === 'duel' && l === 'restricted') {
           newResults.status = 'banned';
-          newResults.reasons.push({ name: info.fullName, reason: 'Bannata come Comandante' });
+          newResults.reasons.push({ name: info.fullName, reason: t('checker.banned_commander') });
         }
       });
 
       setResults(newResults);
     } catch (e) {
       console.error(e);
-      alert("Errore durante il controllo.");
+      alert(t('common.error'));
     }
     setChecking(false);
   };
@@ -193,23 +204,23 @@ export default function DeckChecker() {
     doc.setFillColor(0, 188, 212);
     doc.circle(20, 15, 6, 'F');
     doc.setTextColor(255, 255, 255); doc.setFontSize(10); doc.text("M", 20, 16.2, { align: "center" });
-    doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(16);
-    doc.text("OFFICIAL DECK REGISTRATION SHEET", 105, 16, { align: "center" });
+    doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+    doc.text(t('checker.official_sheet'), 105, 16, { align: "center" });
 
     // Player Info Grid
     doc.setFontSize(9); doc.setFont("helvetica", "normal");
     const drawField = (label, val, x, y, w) => {
-      doc.setFont("helvetica", "bold"); doc.text(label, x, y);
-      doc.setFont("helvetica", "normal"); doc.text(val || "________________", x + 25, y);
-      doc.setDrawColor(200); doc.line(x + 25, y + 1, x + w, y + 1);
+      doc.setFont("helvetica", "bold"); doc.text(label + ":", x, y);
+      doc.setFont("helvetica", "normal"); doc.text(val || "________________", x + 30, y);
+      doc.setDrawColor(200); doc.line(x + 30, y + 1, x + w, y + 1);
     };
 
-    drawField("Last Name:", playerData.lastName, 20, 30, 80);
-    drawField("First Name:", playerData.firstName, 110, 30, 80);
-    drawField("Player ID:", playerData.playerId, 20, 38, 80);
-    drawField("Date:", playerData.date, 110, 38, 80);
-    drawField("Deck Name:", playerData.deckName, 20, 46, 80);
-    drawField("Event:", playerData.event, 110, 46, 80);
+    drawField(t('checker.last_name'), playerData.lastName, 20, 30, 80);
+    drawField(t('checker.first_name'), playerData.firstName, 110, 30, 80);
+    drawField(t('checker.player_id'), playerData.playerId, 20, 38, 80);
+    drawField(t('checker.date'), playerData.date, 110, 38, 80);
+    drawField(t('checker.deck_name'), playerData.deckName, 20, 46, 80);
+    drawField(t('checker.event_name'), playerData.event, 110, 46, 80);
 
     // Categories Logic
     const categorize = (deck) => {
@@ -258,22 +269,22 @@ export default function DeckChecker() {
     // 1. COMMANDERS AT TOP (if singleton)
     let startY = 60;
     if (isSingleton && parsedDeck.cmd.length > 0) {
-      startY = drawSection("Commanders", parsedDeck.cmd, 20, 60);
+      startY = drawSection(t('checker.cat_commanders'), parsedDeck.cmd, 20, 60);
     }
 
     // 2. MAIN DECK COLUMNS
-    let y1 = drawSection("Creatures", mainGroups.Creature, 20, startY);
-    y1 = drawSection("Lands", mainGroups.Land, 20, y1);
+    let y1 = drawSection(t('checker.cat_creatures'), mainGroups.Creature, 20, startY);
+    y1 = drawSection(t('checker.cat_lands'), mainGroups.Land, 20, y1);
 
-    let y2 = drawSection("Instants & Sorceries", mainGroups["Instant/Sorcery"], 110, startY);
-    y2 = drawSection("Other Spells", mainGroups.Other, 110, y2);
+    let y2 = drawSection(t('checker.cat_instants'), mainGroups["Instant/Sorcery"], 110, startY);
+    y2 = drawSection(t('checker.cat_other'), mainGroups.Other, 110, y2);
 
     let finalY = Math.max(y1, y2) + 10;
 
     // 3. SIDEBOARD AT BOTTOM (if not singleton)
     if (!isSingleton && parsedDeck.cmd.length > 0) {
       if (finalY > 270) finalY = 270;
-      finalY = drawSection("Sideboard", parsedDeck.cmd, 20, finalY);
+      finalY = drawSection(t('checker.cat_sideboard'), parsedDeck.cmd, 20, finalY);
     }
 
     // Totals Footer
@@ -285,12 +296,12 @@ export default function DeckChecker() {
     doc.setFontSize(10);
     const footerY = Math.min(290, Math.max(finalY + 5, 285));
     
-    doc.text(`MAIN: ${totalMain}`, 20, footerY);
-    doc.text(`${isSingleton ? 'COMMANDERS' : 'SIDEBOARD'}: ${totalSide}`, 60, footerY);
+    doc.text(t('checker.footer_main', { count: totalMain }), 20, footerY);
+    doc.text(t(isSingleton ? 'checker.footer_cmd' : 'checker.footer_side', { count: totalSide }), 60, footerY);
     doc.setFillColor(0, 188, 212); // Cyan accent
     doc.setTextColor(255);
     doc.rect(108, footerY - 5, 82, 7, 'F');
-    doc.text(`GRAND TOTAL: ${grandTotal} CARDS`, 110, footerY);
+    doc.text(t('checker.grand_total', { count: grandTotal }), 110, footerY);
     doc.setTextColor(0);
     
     doc.save(`${playerData.lastName}_Registration.pdf`);
@@ -302,38 +313,43 @@ export default function DeckChecker() {
         {/* 1. DATI TORNEO (IN ALTO) */}
         <div className="sidebar-panel-title flex items-center gap-2">
           <FileText size={18} />
-          <span>Dati Torneo</span>
+          <span>{t('checker.tournament_data')}</span>
         </div>
         <div className="p-4 bg-[var(--surface2)] rounded-xl border border-[var(--border)] mb-6">
           <div className="flex gap-2 mb-2">
-            <input type="text" className="control-input" placeholder="Cognome" value={playerData.lastName} onChange={e => setPlayerData({...playerData, lastName: e.target.value})} />
-            <input type="text" className="control-input" placeholder="Nome" value={playerData.firstName} onChange={e => setPlayerData({...playerData, firstName: e.target.value})} />
+            <input type="text" className="control-input" placeholder={t('checker.last_name')} value={playerData.lastName} onChange={e => setPlayerData({...playerData, lastName: e.target.value})} />
+            <input type="text" className="control-input" placeholder={t('checker.first_name')} value={playerData.firstName} onChange={e => setPlayerData({...playerData, firstName: e.target.value})} />
           </div>
           <div className="flex gap-2 mb-2">
-            <input type="text" className="control-input" placeholder="Player ID (ex DCI)" value={playerData.playerId} onChange={e => setPlayerData({...playerData, playerId: e.target.value})} />
+            <input type="text" className="control-input" placeholder={t('checker.player_id')} value={playerData.playerId} onChange={e => setPlayerData({...playerData, playerId: e.target.value})} />
             <input type="date" className="control-input" value={playerData.date} onChange={e => setPlayerData({...playerData, date: e.target.value})} />
           </div>
           <div className="mb-2">
-            <input type="text" className="control-input" placeholder="Nome Evento" value={playerData.event} onChange={e => setPlayerData({...playerData, event: e.target.value})} />
+            <input type="text" className="control-input" placeholder={t('checker.event_name')} value={playerData.event} onChange={e => setPlayerData({...playerData, event: e.target.value})} />
           </div>
           <div className="flex gap-2 mb-4">
-            <input type="text" className="control-input" placeholder="Nome Mazzo" value={playerData.deckName} onChange={e => setPlayerData({...playerData, deckName: e.target.value})} />
-            <input type="text" className="control-input" placeholder="Designer" value={playerData.deckDesigner} onChange={e => setPlayerData({...playerData, deckDesigner: e.target.value})} />
+            <input type="text" className="control-input" placeholder={t('checker.deck_name')} value={playerData.deckName} onChange={e => setPlayerData({...playerData, deckName: e.target.value})} />
+            <input type="text" className="control-input" placeholder={t('checker.designer')} value={playerData.deckDesigner} onChange={e => setPlayerData({...playerData, deckDesigner: e.target.value})} />
           </div>
-          <button className="btn btn-ghost w-full border border-[var(--border)] text-xs" onClick={generatePDF}>
-            <Download size={14} className="mr-2" />
-            Export PDF Sheet
+          <button
+            className="btn btn-primary w-full py-3 font-bold mt-2"
+            onClick={generatePDF}
+            disabled={!parsedDeck.main.length && !parsedDeck.cmd.length}
+            style={{ opacity: (!parsedDeck.main.length && !parsedDeck.cmd.length) ? 0.4 : 1 }}
+          >
+            <Download size={16} className="mr-2" />
+            {t('checker.export_pdf')}
           </button>
         </div>
 
         {/* 2. SELEZIONE FORMATO */}
         <div className="sidebar-panel-title flex items-center gap-2">
           <ShieldCheck size={18} />
-          <span>Analisi Legalità</span>
+          <span>{t('checker.legality_analysis')}</span>
         </div>
 
         <div className="control-field mb-6 px-1">
-          <label className="control-label mb-2">Seleziona Formato</label>
+          <label className="control-label mb-2">{t('checker.select_format')}</label>
           <div className="format-selector">
             {FORMATS.map(f => (
               <button 
@@ -352,7 +368,7 @@ export default function DeckChecker() {
         
         {/* 3. INSERIMENTO CARTE */}
         <div className="control-field mb-4">
-          <label className="control-label">Lista Carte (Maindeck)</label>
+          <label className="control-label">{t('checker.maindeck_list')}</label>
           <textarea 
             className="control-input" 
             rows={isSingleton ? 10 : 7} 
@@ -364,13 +380,13 @@ export default function DeckChecker() {
 
         {isSingleton ? (
           <div className="control-field mb-6">
-            <label className="control-label">Comandanti</label>
+            <label className="control-label">{t('checker.commanders')}</label>
             <div className="relative mb-2">
               <Search size={14} className="absolute left-3 top-3 opacity-40" />
               <input 
                 type="text" 
                 className="control-input pl-9" 
-                placeholder="Comandante 1..." 
+                placeholder={t('checker.commander_placeholder', { n: 1 })} 
                 value={commander1} 
                 onChange={e => handleCmdSearch(e.target.value, setCommander1)} 
                 list="cmd-list" 
@@ -381,7 +397,7 @@ export default function DeckChecker() {
               <input 
                 type="text" 
                 className="control-input pl-9" 
-                placeholder="Partner / Background..." 
+                placeholder={t('checker.partner_placeholder')} 
                 value={commander2} 
                 onChange={e => handleCmdSearch(e.target.value, setCommander2)} 
                 list="cmd-list" 
@@ -393,7 +409,7 @@ export default function DeckChecker() {
           </div>
         ) : (
           <div className="control-field mb-6">
-            <label className="control-label">Sideboard</label>
+            <label className="control-label">{t('checker.sideboard')}</label>
             <textarea 
               className="control-input" 
               rows={4} 
@@ -406,7 +422,7 @@ export default function DeckChecker() {
 
         <button className="btn btn-primary w-full py-4 text-lg font-bold shadow-lg" onClick={handleCheck} disabled={checking}>
           {checking ? <Clock className="animate-spin mr-2" /> : <ShieldCheck className="mr-2" />}
-          {checking ? 'Analisi in corso...' : 'Verifica Mazzo'}
+          {checking ? t('checker.checking') : t('checker.check_button')}
         </button>
       </div>
 
@@ -417,20 +433,20 @@ export default function DeckChecker() {
               {results.status === 'legal' ? <CheckCircle2 size={80} color="var(--success)" /> : <XCircle size={80} color="var(--error)" />}
             </div>
             <h2 className={`status-title ${results.status}`}>
-              {results.status === 'legal' ? 'Mazzo Legale' : 'Mazzo Non Legale'}
+              {results.status === 'legal' ? t('checker.legal_title') : t('checker.not_legal_title')}
             </h2>
-            <p className="format-name-hero">Formato: {FORMATS.find(f => f.id === selectedFormat)?.name}</p>
+            <p className="format-name-hero">{t('checker.format_label', { format: FORMATS.find(f => f.id === selectedFormat)?.name })}</p>
 
             {results.status === 'legal' ? (
               <div className="p-8 bg-[var(--success-hl)] rounded-2xl border border-[var(--success)]/20 max-w-md">
                 <ShieldCheck size={40} className="mx-auto mb-4 opacity-40" />
-                <p className="text-lg">Tutte le carte sono state verificate con successo nel database globale di Scryfall.</p>
+                <p className="text-lg">{t('checker.legal_desc')}</p>
               </div>
             ) : (
               <div className="banned-list-container">
                 <div className="banned-list-title">
                   <AlertTriangle size={18} />
-                  <span>Problemi rilevati ({results.reasons.length})</span>
+                  <span>{t('checker.issues_found', { count: results.reasons.length })}</span>
                 </div>
                 <div className="banned-items-list">
                   {results.reasons.map((r, i) => (
@@ -444,14 +460,14 @@ export default function DeckChecker() {
             )}
             
             <button className="btn btn-ghost mt-12 opacity-50 hover:opacity-100" onClick={() => setResults(null)}>
-              Nuova Analisi
+              {t('checker.new_analysis')}
             </button>
           </div>
         ) : (
           <div className="deck-checker-empty">
             <ShieldCheck size={100} className="empty-icon opacity-10 mb-6" />
-            <h3 className="text-2xl font-black uppercase opacity-20">In attesa di analisi</h3>
-            <p className="max-w-xs mt-4 text-center opacity-40">Seleziona il formato, inserisci la lista e premi "Verifica Mazzo" per iniziare il controllo.</p>
+            <h3 className="text-2xl font-black uppercase opacity-20">{t('checker.waiting_title')}</h3>
+            <p className="max-w-xs mt-4 text-center opacity-40">{t('checker.waiting_desc')}</p>
           </div>
         )}
       </div>

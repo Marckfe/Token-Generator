@@ -4,6 +4,7 @@ import BulkImportPanel from "./BulkImportPanel";
 import PrintQueue from "./PrintQueue";
 import PdfSettings from "./PdfSettings";
 import { generatePDF } from "../../utils/pdfGenerator";
+import { useLanguage } from "../../context/LanguageContext";
 
 function Icon({ d, size = 16, className = "" }) {
   return (
@@ -15,6 +16,7 @@ function Icon({ d, size = 16, className = "" }) {
 }
 
 export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQueue }) {
+  const { t } = useLanguage();
   const [images, setImages] = useState(externalQueue || []);
   const [dragIdx, setDragIdx] = useState(null);
   const [isDrop, setIsDrop] = useState(false);
@@ -56,10 +58,10 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
     const arr = Array.from(files)
       .filter(f => valid.includes(f.type))
       .map(f => ({ id: Date.now() + Math.random(), name: f.name, file: f, url: URL.createObjectURL(f) }));
-    if (!arr.length) { toast("Nessuna immagine valida (PNG/JPG/WEBP)", "w"); return; }
+    if (!arr.length) { toast(t('proxy.toast_no_valid'), "w"); return; }
     setImages(prev => [...prev, ...arr]);
-    toast(`${arr.length} immagini caricate`);
-  }, [toast]);
+    toast(t('proxy.toast_loaded', { count: arr.length }));
+  }, [toast, t]);
 
   const onDrop = e => {
     e.preventDefault(); setIsDrop(false);
@@ -82,7 +84,7 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
       if (prev[idx].file) URL.revokeObjectURL(prev[idx].url);
       return prev.filter((_, i) => i !== idx);
     });
-    toast("Rimossa", "w");
+    toast(t('proxy.toast_removed'), "w");
   };
 
   const dup = idx => {
@@ -92,12 +94,12 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
       a.splice(idx + 1, 0, d);
       return a;
     });
-    toast("Duplicata!");
+    toast(t('proxy.toast_duplicated'));
   };
 
   const clearAll = () => {
     images.forEach(img => { if (img.file) URL.revokeObjectURL(img.url); });
-    setImages([]); setConfirmOpen(false); toast("Tutte rimosse", "w");
+    setImages([]); setConfirmOpen(false); toast(t('proxy.toast_all_removed'), "w");
   };
 
   const batchDuplicate = () => {
@@ -106,7 +108,7 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
       const cloned = prev.map(img => ({ ...img, id: Date.now() + Math.random() + "_" + img.id }));
       return [...prev, ...cloned];
     });
-    toast("Coda raddoppiata!");
+    toast(t('proxy.toast_doubled'));
   };
 
   const batchResetToOne = () => {
@@ -120,14 +122,14 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
         return true;
       });
     });
-    toast("Ridotto a 1 copia per carta");
+    toast(t('proxy.toast_reduced'));
   };
 
   const perPage = printCols * printRows;
   const pages = Math.max(1, Math.ceil(images.length / perPage));
 
   const handleGenPDF = async () => {
-    if (!images.length) { toast("Nessuna carta", "w"); return; }
+    if (!images.length) { toast(t('proxy.toast_no_valid'), "w"); return; }
     setIsGen(true);
     try {
       const bytes = await generatePDF({
@@ -140,9 +142,9 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
       a.href = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       a.download = "mtg-proxy-stampa.pdf";
       a.click();
-      toast("✅ PDF scaricato!");
+      toast(t('proxy.toast_pdf_success'));
     } catch (e) {
-      console.error(e); toast("Errore PDF: " + e.message, "e");
+      console.error(e); toast(t('proxy.toast_pdf_error', { error: e.message }), "e");
     } finally { setIsGen(false); }
   };
 
@@ -151,31 +153,31 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
       {/* Header */}
       <div className="main-header">
         <div>
-          <h1 className="main-title">Proxy Card Printer <span className="premium-badge">ELITE</span></h1>
-          <p className="main-subtitle">Carica le tue carte e genera un PDF pronto per la stampa</p>
+          <h1 className="main-title">{t('proxy.title')} <span className="premium-badge">ELITE</span></h1>
+          <p className="main-subtitle">{t('proxy.subtitle')}</p>
         </div>
         <div className="header-actions">
           {images.length > 0 && (
             <div className="batch-actions-bar">
-               <button className="batch-btn" onClick={batchDuplicate} title="Duplica tutte le carte in coda">
+               <button className="batch-btn" onClick={batchDuplicate} title={t('proxy.batch_duplicate')}>
                  <Icon d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" size={14}/>
-                 <span>Duplica</span>
+                 <span>{t('proxy.batch_duplicate')}</span>
                </button>
-               <button className="batch-btn" onClick={batchResetToOne} title="Mantieni solo 1 copia per ogni carta">
+               <button className="batch-btn" onClick={batchResetToOne} title={t('proxy.batch_singles')}>
                  <Icon d="M4 7V4h16v3M9 20h6M12 4v16" size={14}/>
-                 <span>Singoli</span>
+                 <span>{t('proxy.batch_singles')}</span>
                </button>
                <div className="batch-sep"></div>
                <button className="batch-btn text-error" onClick={() => setConfirmOpen(true)}>
                  <Icon d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2" size={14}/>
-                 <span>Svuota</span>
+                 <span>{t('proxy.batch_clear')}</span>
                </button>
             </div>
           )}
 
           {images.length > 0 && (
             <button className="btn btn-primary" disabled={isGen} onClick={handleGenPDF}>
-              {isGen ? <span className="text-xs">Generando…</span> : <><Icon d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" size={15}/> Genera PDF</>}
+              {isGen ? <span className="text-xs">{t('proxy.generating')}</span> : <><Icon d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" size={15}/> {t('proxy.generate_pdf')}</>}
             </button>
           )}
         </div>
@@ -188,19 +190,21 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
           className={`accordion-trigger ${showDatabase ? "open" : ""}`}
         >
           <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          🔍 Cerca carte · Aggiungi lista
-          <span className="accordion-icon">{showDatabase ? "▲ chiudi" : "▼ apri"}</span>
+          {t('proxy.search_bulk_toggle')}
+          <span className="accordion-icon">{showDatabase ? "▲ " + t('common.close') : "▼ " + t('common.open')}</span>
         </button>
 
         {showDatabase && (
           <div className="accordion-content">
             <CardSearchPanel onAddCards={cards => {
               setImages(prev => [...prev, ...cards]);
-              toast(`✅ ${cards.length} cop${cards.length === 1 ? "ia" : "ie"} aggiunte!`);
+              const suffix = cards.length === 1 ? (t === 'it' ? "ia" : "") : (t === 'it' ? "ie" : "s");
+              toast(t('proxy.cards_added', { count: cards.length, suffix }));
             }} />
             <BulkImportPanel onAddCards={cards => {
               setImages(prev => [...prev, ...cards]);
-              toast(`✅ ${cards.length} cop${cards.length === 1 ? "ia" : "ie"} aggiunte!`);
+              const suffix = cards.length === 1 ? (t === 'it' ? "ia" : "") : (t === 'it' ? "ie" : "s");
+              toast(t('proxy.cards_added', { count: cards.length, suffix }));
             }} toast={toast} />
           </div>
         )}
@@ -218,8 +222,8 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
         <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
           onChange={e => { handleFiles(e.target.files); e.target.value = ""; }} />
         <div className="dropzone-icon">🖼️</div>
-        <div className="dropzone-title">Trascina le immagini qui o clicca per caricare</div>
-        <div className="dropzone-subtitle">PNG, JPG, WEBP — carte custom, screenshot, proxy</div>
+        <div className="dropzone-title">{t('proxy.dropzone_title')}</div>
+        <div className="dropzone-subtitle">{t('proxy.dropzone_subtitle')}</div>
       </div>
 
       {/* Print Queue */}
@@ -227,12 +231,12 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
         <div className="section queue-section">
           <div className="queue-header">
             <div className="queue-title">
-              Coda di stampa
-              <span className="queue-badge">{images.length} carte</span>
+              {t('proxy.queue_title')}
+              <span className="queue-badge">{t('proxy.queue_badge', { count: images.length })}</span>
             </div>
             <button className={`btn ${printOpen ? 'btn-primary' : 'btn-accent'}`} onClick={() => setPrintOpen(v => !v)}>
               <Icon d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" size={14}/>
-              {printOpen ? "Chiudi impostazioni" : "Impostazioni PDF"}
+              {printOpen ? t('proxy.close_settings') : t('proxy.pdf_settings_toggle')}
             </button>
           </div>
 
@@ -258,9 +262,9 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
           />
 
           <div className="queue-footer">
-            <button className="btn btn-ghost" onClick={() => setConfirmOpen(true)}>🗑 Svuota tutto</button>
+            <button className="btn btn-ghost" onClick={() => setConfirmOpen(true)}>{t('proxy.clear_all')}</button>
             <button className="btn btn-primary" disabled={isGen} onClick={handleGenPDF}>
-              {isGen ? "⏳ Generando PDF…" : `⬇ Genera PDF (${images.length} carte, ${pages} pag)`}
+              {isGen ? t('proxy.generating') : t('proxy.generate_btn', { count: images.length, pages })}
             </button>
           </div>
         </div>
@@ -281,11 +285,11 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
         <div className="modal-backdrop" onClick={() => setConfirmOpen(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-icon">🗑</div>
-            <div className="modal-title">Svuota la coda?</div>
-            <div className="modal-body">Tutte le {images.length} carte verranno rimosse.</div>
+            <div className="modal-title">{t('proxy.modal_clear_title')}</div>
+            <div className="modal-body">{t('proxy.modal_clear_body', { count: images.length })}</div>
             <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setConfirmOpen(false)}>Annulla</button>
-              <button onClick={clearAll} className="btn btn-danger">Sì, svuota</button>
+              <button className="btn btn-ghost" onClick={() => setConfirmOpen(false)}>{t('common.cancel')}</button>
+              <button onClick={clearAll} className="btn btn-danger">{t('proxy.modal_clear_confirm')}</button>
             </div>
           </div>
         </div>

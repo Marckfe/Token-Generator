@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload, Bug, RefreshCw, HelpCircle, LayoutGrid, Layers } from 'lucide-react';
 import './DeckScanner.css';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
 
@@ -16,6 +17,7 @@ const DeckScanner = ({ onAddToQueue }) => {
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
   const { user } = useAuth();
+  const { t } = useLanguage();
   
   const mainInputRef = useRef(null);
   const sideInputRef = useRef(null);
@@ -84,14 +86,14 @@ const DeckScanner = ({ onAddToQueue }) => {
   const processImages = async () => {
     if (!mainImage && !sideImage) return;
     if (!user) {
-      setError("Devi essere loggato per usare l'analisi IA.");
+      setError(t('scanner.error_login'));
       return;
     }
 
     setIsProcessing(true);
     setError(null);
     setResults([]);
-    setStatusMessage('Inizializzazione Vision IA...');
+    setStatusMessage(t('scanner.status_init'));
 
     try {
       const tasks = [];
@@ -102,7 +104,7 @@ const DeckScanner = ({ onAddToQueue }) => {
         tasks.push(analyzeSingleImage(sideImage, true));
       }
 
-      setStatusMessage('Analisi immagini in corso...');
+      setStatusMessage(t('scanner.status_analysis'));
       const responses = await Promise.all(tasks);
       const allDetected = responses.flat();
       
@@ -167,12 +169,12 @@ const DeckScanner = ({ onAddToQueue }) => {
           </div>
           <div className="scanner-text-group">
             <h2>Deck Scanner Elite <span className="version-tag-v2">VISION AI</span></h2>
-            <p className="scanner-subtitle">Analisi intelligente per Mainboard e Sideboard</p>
+            <p className="scanner-subtitle">{t('scanner.subtitle')}</p>
           </div>
         </div>
         <div className="header-actions">
            <button className="add-to-queue-btn-v2" onClick={handleAddToQueue} disabled={results.length === 0}>
-             Aggiungi {results.filter(r => r.status === 'found').length} carte
+             {t('proxy.add_cards_btn', { count: results.filter(r => r.status === 'found').length })}
            </button>
         </div>
       </div>
@@ -195,7 +197,7 @@ const DeckScanner = ({ onAddToQueue }) => {
               ) : (
                 <div className="upload-placeholder">
                   <ImageIcon size={32} />
-                  <p>Carica Foto</p>
+                  <p>{t('scanner.upload_btn')}</p>
                 </div>
               )}
             </div>
@@ -215,7 +217,7 @@ const DeckScanner = ({ onAddToQueue }) => {
               ) : (
                 <div className="upload-placeholder">
                   <ImageIcon size={32} />
-                  <p>Carica Foto</p>
+                  <p>{t('scanner.upload_btn')}</p>
                 </div>
               )}
             </div>
@@ -223,9 +225,9 @@ const DeckScanner = ({ onAddToQueue }) => {
 
           <button className="process-action-btn" onClick={processImages} disabled={(!mainImage && !sideImage) || isProcessing}>
             {isProcessing ? (
-              <><Loader2 size={18} className="animate-spin" /> {statusMessage || 'Analisi...'}</>
+              <><Loader2 size={18} className="animate-spin" /> {statusMessage || t('scanner.status_analysis')}</>
             ) : (
-              <><Wand2 size={18} /> Avvia Analisi Vision</>
+              <><Wand2 size={18} /> {t('scanner.start_btn')}</>
             )}
           </button>
 
@@ -241,7 +243,7 @@ const DeckScanner = ({ onAddToQueue }) => {
           {results.length === 0 ? (
             <div className="results-empty-v2">
               <ImageIcon size={64} className="opacity-10" />
-              <p>Carica una foto per iniziare l'analisi</p>
+              <p>{t('scanner.empty_state')}</p>
             </div>
           ) : (
             <div className="results-scroll-v2">

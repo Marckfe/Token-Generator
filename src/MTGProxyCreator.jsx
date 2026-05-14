@@ -5,7 +5,8 @@ import StudioEditor from "./StudioEditor";
 import DeckChecker from "./components/DeckChecker/DeckChecker";
 import DeckScanner from "./components/DeckScanner/DeckScanner";
 import { useAuth } from "./context/AuthContext";
-import { LogOut, User as UserIcon } from "lucide-react";
+import { useLanguage } from "./context/LanguageContext";
+import { LogOut, User as UserIcon, Globe } from "lucide-react";
 import { getUserQueue, saveUserQueue } from "./services/dbService";
 
 function Icon({ d, size = 16, className = "" }) {
@@ -20,6 +21,7 @@ function Icon({ d, size = 16, className = "" }) {
 export default function MTGProxyCreator() {
   const [tab, setTab] = useState("proxy");
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 700);
+  const { lang, setLang, t } = useLanguage();
   const [globalQueue, setGlobalQueue] = useState(() => {
     const saved = localStorage.getItem("mtg_print_queue");
     return saved ? JSON.parse(saved) : [];
@@ -60,6 +62,23 @@ export default function MTGProxyCreator() {
     setTab("proxy"); // Switch to proxy tab to show results
   };
 
+  const LanguageToggle = ({ className = "" }) => (
+    <div className={`flex items-center gap-1 p-1 bg-[var(--surface2)] rounded-lg border border-[var(--border)] ${className}`}>
+      <button 
+        className={`px-2 py-1 text-[10px] font-bold rounded ${lang === 'it' ? 'bg-[var(--accent)] text-black' : 'opacity-40'}`}
+        onClick={() => setLang('it')}
+      >
+        IT
+      </button>
+      <button 
+        className={`px-2 py-1 text-[10px] font-bold rounded ${lang === 'en' ? 'bg-[var(--accent)] text-black' : 'opacity-40'}`}
+        onClick={() => setLang('en')}
+      >
+        EN
+      </button>
+    </div>
+  );
+
   return (
     <div className="shell">
       {/* SIDEBAR desktop */}
@@ -71,11 +90,11 @@ export default function MTGProxyCreator() {
             </div>
             <div className="nav-group">
               {[
-                { id: "proxy", icon: "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7", label: "Proxy Stampa" },
-                { id: "ocr", icon: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5", label: "Scanner OCR" },
-                { id: "token", icon: "M12 5v14M5 12h14", label: "Token Creator" },
-                { id: "studio", icon: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5", label: "Studio Design" },
-                { id: "checker", icon: "M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z", label: "Deck Checker" },
+                { id: "proxy", icon: "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7", label: t('nav.proxy') },
+                { id: "ocr", icon: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5", label: t('nav.ocr') },
+                { id: "token", icon: "M12 5v14M5 12h14", label: t('nav.token') },
+                { id: "studio", icon: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5", label: t('nav.studio') },
+                { id: "checker", icon: "M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z", label: t('nav.checker') },
               ].map(n => (
                 <button
                   key={n.id}
@@ -96,16 +115,21 @@ export default function MTGProxyCreator() {
                   <div className="user-avatar-placeholder"><UserIcon size={20} /></div>
                 )}
                 <div className="user-details">
-                  <span className="user-name">{user?.displayName || "Utente"}</span>
+                  <span className="user-name">{user?.displayName || t('common.user')}</span>
                   <span className="user-email">{user?.email}</span>
                 </div>
               </div>
-              <button className="logout-btn" onClick={logout} title="Esci">
+              <button className="logout-btn" onClick={logout} title={t('common.logout')}>
                 <LogOut size={18} />
               </button>
             </div>
+
+            <div className="mt-4 px-4">
+              <LanguageToggle />
+            </div>
+
             <div className="sidebar-credits">
-              Created by <span className="text-accent">Marco Feoli</span>
+              {t('nav.credits')} <span className="text-accent">Marco Feoli</span>
             </div>
           </aside>
           <main className="main-content">
@@ -124,6 +148,7 @@ export default function MTGProxyCreator() {
           <div className="mobile-header">
              <div className="mobile-logo">🃏 MTG Tools</div>
              <div className="mobile-user-actions">
+               <LanguageToggle className="mr-2" />
                {user?.photoURL && <img src={user.photoURL} alt="User" className="user-avatar-sm" />}
                <button className="logout-btn-sm" onClick={logout}>
                  <LogOut size={18} />
@@ -132,7 +157,7 @@ export default function MTGProxyCreator() {
           </div>
           <div className="mobile-tabs">
             {[
-              { id: "proxy", label: "🖨 Stampa" }, 
+              { id: "proxy", label: "🖨 " + (lang === 'it' ? 'Stampa' : 'Print') }, 
               { id: "ocr", label: "👁️ OCR" },
               { id: "token", label: "🃏 Token" },
               { id: "studio", label: "🎨 Studio" },

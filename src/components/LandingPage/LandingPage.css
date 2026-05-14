@@ -10,6 +10,40 @@
   font-family: 'Inter', sans-serif;
 }
 
+.landing-lang-toggle {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.8rem;
+  font-weight: 700;
+  backdrop-filter: blur(10px);
+}
+
+.landing-lang-toggle button {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 2px 4px;
+}
+
+.landing-lang-toggle button.active {
+  color: #00bcd4;
+}
+
+.landing-lang-toggle .sep {
+  color: #333;
+}
+
 .landing-glow {
   position: absolute;
   top: -10%;
