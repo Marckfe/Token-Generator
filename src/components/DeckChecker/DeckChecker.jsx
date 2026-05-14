@@ -296,139 +296,155 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
     setChecking(false);
   };
 
-  // ── Generate PDF ──────────────────────────────────────────────────
+  // ── Generate PDF (Official WotC Style) ────────────────────────────
   const generatePDF = async () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const t_up = (key, params) => t(key, params).toUpperCase();
 
-    // Header with MTG Logo or Fallback
+    // Helper: Logo
     const logoUrl = '/assets/mtg-logo.png';
+    const getLogoDim = () => new Promise(res => {
+      const img = new Image();
+      img.onload = () => res({ w: 35, h: 35 * (img.naturalHeight / img.naturalWidth) });
+      img.onerror = () => res({ w: 15, h: 10, err: true });
+      img.src = logoUrl;
+    });
+    const logo = await getLogoDim();
+    if (!logo.err) doc.addImage(logoUrl, 'PNG', 12, 12, logo.w, logo.h);
+
+    // Title
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(16);
+    doc.text('DECK REGISTRATION SHEET', 105, 12, { align: 'center' });
+
+    // Top Right Box: First Letter of Last Name
+    doc.setDrawColor(0); doc.setLineWidth(0.3);
+    doc.setFontSize(7); doc.text('First Letter of\nLast Name', 188, 10, { align: 'right' });
+    doc.rect(190, 6, 12, 12);
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text((playerData.lastName?.[0] || '').toUpperCase(), 196, 14, { align: 'center' });
+
+    // Table Number Stamp (Custom addition)
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+    doc.text(t_up('checker.table'), 175, 10, { align: 'right' });
+    doc.rect(176, 6, 12, 12);
+    doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text(String(playerData.tableNumber || ''), 182, 14, { align: 'center' });
+
+    // Header Grid
+    doc.setLineWidth(0.2); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    const gridY = 20;
+    doc.rect(40, gridY, 162, 24); // Main box
+    doc.line(40, gridY + 8, 202, gridY + 8);  // Row 1
+    doc.line(40, gridY + 16, 202, gridY + 16); // Row 2
+    doc.line(115, gridY, 115, gridY + 24);     // Col separator
+
+    const drawGridField = (label, val, x, y) => {
+      doc.setFontSize(7); doc.setTextColor(100);
+      doc.text(label + ':', x + 2, y + 5);
+      doc.setFontSize(10); doc.setTextColor(0);
+      doc.text(val || '', x + 18, y + 5.5);
+    };
+    drawGridField('Date', playerData.date, 40, gridY);
+    drawGridField('Event', playerData.event, 115, gridY);
+    drawGridField('Location', '', 40, gridY + 8);
+    drawGridField('Deck Name', playerData.deckName, 115, gridY + 8);
+    drawGridField('Designer', playerData.deckDesigner, 115, gridY + 16);
+
+    // Left Vertical Sidebar (Gray Bar)
+    doc.setFillColor(235, 235, 235); doc.rect(10, 20, 10, 260, 'F');
+    doc.setDrawColor(0); doc.rect(10, 20, 10, 260, 'S');
+    doc.setTextColor(80); doc.setFontSize(8);
+    // Vertical text
+    doc.text('First Name:', 14, 215, { angle: 90 });
+    doc.text('Last Name:', 14, 275, { angle: 90 });
+    doc.setTextColor(0); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text(playerData.firstName || '', 17, 215, { angle: 90 });
+    doc.text(playerData.lastName || '', 17, 275, { angle: 90 });
+
+    // Body Titles
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+    doc.text('PRINT CLEARLY USING ENGLISH CARD NAMES', 105, 52, { align: 'center' });
+
+    // Column Balancing
+    const col1Y = 60;
+    const col2Y = 60;
     
-    const getLogoDimensions = () => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const ratio = img.naturalHeight / img.naturalWidth;
-          resolve({ w: 35, h: 35 * ratio });
-        };
-        img.onerror = () => resolve({ w: 12, h: 10, error: true });
-        img.src = logoUrl;
+    // Split main deck and sideboard/commanders
+    const mainList = parsedDeck.main;
+    const sideList = parsedDeck.cmd;
+
+    const drawWotCSection = (title, subtitle, items, x, y, maxRows = 38, lineH = 4.5) => {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+      doc.text(title, x, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+      if (subtitle) doc.text(subtitle, x + doc.getTextWidth(title) + 2, y);
+      
+      doc.setFontSize(8); doc.text('# in deck:', x, y + 6); doc.text('Card Name:', x + 18, y + 6);
+      doc.setLineWidth(0.1); doc.line(x, y + 7, x + 85, y + 7);
+
+      let curY = y + 12;
+      items.slice(0, maxRows).forEach(item => {
+        doc.setFont('helvetica', 'bold'); doc.text(String(item.qty), x + 2, curY);
+        doc.setFont('helvetica', 'normal'); doc.text(item.name.substring(0, 45), x + 18, curY);
+        doc.setDrawColor(200); doc.line(x, curY + 1, x + 85, curY + 1);
+        curY += lineH;
       });
+
+      // Fill empty lines
+      const remaining = maxRows - items.length;
+      if (remaining > 0) {
+        for(let i=0; i<remaining; i++) {
+          doc.setDrawColor(230); doc.line(x, curY + 1, x + 85, curY + 1);
+          curY += lineH;
+        }
+      }
+      return curY;
     };
 
-    const logoDim = await getLogoDimensions();
-    
-    try {
-      if (logoDim.error) throw new Error();
-      doc.addImage(logoUrl, 'PNG', 15, 8, logoDim.w, logoDim.h);
-    } catch (e) {
-      // Premium Fallback Logo
-      doc.setFillColor(30, 30, 30);
-      doc.roundedRect(15, 8, 12, 10, 2, 2, 'F');
-      doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
-      doc.text('MTG', 21, 14, { align: 'center' });
+    if (isSingleton) {
+      // Commander Layout: Tightened line height to fit 100 cards (3.5mm)
+      const lineH = 3.5;
+      let yLeft = drawWotCSection('Commanders:', '', sideList, 25, col1Y, 3, lineH); 
+      
+      const main1 = mainList.slice(0, 50);
+      const main2 = mainList.slice(50, 100);
+      
+      drawWotCSection('Main Deck:', '(99 Total)', main1, 25, yLeft + 5, 50, lineH);
+      drawWotCSection('Main Deck Continued:', '', main2, 115, col2Y, 55, lineH);
+    } else {
+      // Standard/Modern Layout (Classic spacing)
+      const main1 = mainList.slice(0, 38);
+      const main2 = mainList.slice(38);
+      drawWotCSection('Main Deck:', '(Magic: 60 Minimum)', main1, 25, col1Y, 38, 4.5);
+      let yRight = drawWotCSection('Main Deck Continued:', '', main2, 115, col2Y, 15, 4.5);
+      drawWotCSection('Sideboard:', '(Magic: Up to 15)', sideList, 115, yRight + 10, 15, 4.5);
     }
 
-    // Official Title
-    doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
-    doc.text(t('checker.official_sheet').toUpperCase(), 110, 15, { align: 'center' });
+    // Totals
+    const totalMain = mainList.reduce((s, i) => s + i.qty, 0);
+    const totalCmd  = sideList.reduce((s, i) => s + i.qty, 0);
+    const totalAll  = totalMain + totalCmd;
 
-    // Table Number in Top Right
-    doc.setFontSize(10);
-    doc.setFillColor(0, 0, 0); doc.rect(170, 8, 25, 12, 'F');
-    doc.setTextColor(255);
-    doc.text(t('checker.table').toUpperCase(), 182.5, 12.5, { align: 'center' });
-    doc.setFontSize(14);
-    doc.text(String(playerData.tableNumber || '---'), 182.5, 18.5, { align: 'center' });
-    doc.setTextColor(0);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text(isSingleton ? 'Total Number of Cards in Deck:' : 'Total Number of Cards in Main Deck:', 40, 275);
+    doc.rect(88, 270, 15, 8);
+    doc.setFont('helvetica', 'bold'); doc.text(String(isSingleton ? totalAll : totalMain), 95.5, 275.5, { align: 'center' });
 
-    const drawField = (label, val, x, y, w) => {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-      doc.text(label.toUpperCase() + ':', x, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(val || '', x + 35, y);
-      doc.setDrawColor(180); doc.line(x + 35, y + 1, x + w, y + 1);
-    };
-    drawField(t('checker.last_name'),  playerData.lastName,  20,  30, 95);
-    drawField(t('checker.first_name'), playerData.firstName, 110, 30, 190);
-    drawField(t('checker.player_id'),  playerData.playerId,  20,  38, 95);
-    drawField(t('checker.date'),       playerData.date,      110, 38, 190);
-    drawField(t('checker.deck_name'),  playerData.deckName,  20,  46, 95);
-    drawField(t('checker.event_name'), playerData.event,     110, 46, 190);
-
-    const categorize = (deck) => {
-      const g = { 
-        [t('checker.cat_lands')]: [], 
-        [t('checker.cat_creatures')]: [], 
-        [t('checker.cat_instants')]: [], 
-        [t('checker.cat_other')]: [] 
-      };
-      deck.forEach(c => {
-        const t_line = c.type.toLowerCase();
-        if (t_line.includes('land')) g[t('checker.cat_lands')].push(c);
-        else if (t_line.includes('creature')) g[t('checker.cat_creatures')].push(c);
-        else if (t_line.includes('instant') || t_line.includes('sorcery')) g[t('checker.cat_instants')].push(c);
-        else g[t('checker.cat_other')].push(c);
-      });
-      return g;
-    };
-
-    const drawSection = (title, items, x, y) => {
-      if (!items.length) return y;
-      const total = items.reduce((s, i) => s + i.qty, 0);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-      doc.setFillColor(0, 0, 0); doc.rect(x - 2, y - 4, 87, 5.5, 'F');
-      doc.setTextColor(255);
-      doc.text(`${title.toUpperCase()} (${total})`, x, y);
-      doc.setTextColor(0);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-      let ny = y + 4.5;
-      items.forEach(item => {
-        if (ny > 282) return; // Almost end of A4
-        doc.setFont('helvetica', 'bold'); doc.text(String(item.qty), x, ny);
-        doc.setFont('helvetica', 'normal'); doc.text(item.name.substring(0, 42), x + 5, ny);
-        doc.setDrawColor(235); doc.line(x, ny + 0.4, x + 85, ny + 0.4);
-        ny += 4.0; 
-      });
-      return ny + 4; 
-    };
-
-    const mainGroups = categorize(parsedDeck.main);
-    const catLands = t('checker.cat_lands');
-    const catCreatures = t('checker.cat_creatures');
-    const catInstants = t('checker.cat_instants');
-    const catOther = t('checker.cat_other');
-
-    let startY = 60;
-    if (isSingleton && parsedDeck.cmd.length) {
-      startY = drawSection(t('checker.cat_commanders'), parsedDeck.cmd, 20, 60);
-    }
-    let y1 = drawSection(catCreatures, mainGroups[catCreatures], 20, startY);
-    y1 = drawSection(catLands, mainGroups[catLands], 20, y1);
-    let y2 = drawSection(catInstants, mainGroups[catInstants], 110, startY);
-    y2 = drawSection(catOther, mainGroups[catOther], 110, y2);
-    let finalY = Math.max(y1, y2) + 10;
-    
-    if (!isSingleton && parsedDeck.cmd.length) {
-      if (finalY > 270) finalY = 270;
-      drawSection(t('checker.cat_sideboard'), parsedDeck.cmd, 20, finalY);
+    if (!isSingleton) {
+      doc.setFont('helvetica', 'normal'); doc.text('Total Number of Cards in Sideboard:', 130, 255);
+      doc.rect(182, 250, 15, 8);
+      doc.setFont('helvetica', 'bold'); doc.text(String(totalCmd), 189.5, 255.5, { align: 'center' });
+    } else {
+      // Footer text for official usage
+      doc.setFontSize(7); doc.text('FOR OFFICIAL USE ONLY', 115, 272);
+      doc.rect(115, 273, 85, 12);
     }
 
-    const totalMain = parsedDeck.main.reduce((s, i) => s + i.qty, 0);
-    const totalCmd  = parsedDeck.cmd.reduce((s, i) => s + i.qty, 0);
-    const footerY = 288;
-    doc.setFontSize(9);
-    doc.text(t('checker.footer_main', { count: totalMain }), 20, footerY);
-    doc.text(t(isSingleton ? 'checker.footer_cmd' : 'checker.footer_side', { count: totalCmd }), 65, footerY);
-    
-    // Grand Total in black box
-    const totalAll = totalMain + totalCmd;
-    doc.setFillColor(0, 0, 0); doc.rect(130, footerY - 5, 65, 8, 'F');
-    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-    const totalLabel = t('checker.grand_total', { count: totalAll });
-    doc.text(totalLabel, 162.5, footerY + 1, { align: 'center' });
-    doc.setTextColor(0);
+    // Disclaimer
+    doc.setFontSize(6); doc.setTextColor(150);
+    doc.text('TM & © 2024 Wizards of the Coast LLC. Generated via MTG Tools.', 200, 292, { align: 'right' });
 
-    doc.save(`${playerData.lastName || 'deck'}_Registration.pdf`);
+    doc.save(`${playerData.lastName || 'deck'}_Official_WotC.pdf`);
   };
 
   // ── Add checked deck to print queue ──────────────────────────────
