@@ -540,3 +540,44 @@
   color: var(--error);
   transform: scale(1.2);
 }
+
+/* Template Grid */
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.template-item {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+}
+
+.template-item:hover {
+  background: var(--accent-hl);
+  border-color: var(--accent);
+  transform: translateY(-4px);
+  box-shadow: var(--sh-md);
+}
+
+.template-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.template-name {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}

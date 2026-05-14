@@ -341,13 +341,22 @@ const DEFAULT_STATE = {
   copyright: { text: `™ & © ${new Date().getFullYear()} Wizards of the Coast`, x: 18, y: 12, color: "#111111", fontSize: 9, fontFamily: 'Mplantin' }, showCopyright: true,
 };
 
+const TOKEN_TEMPLATES = [
+  { id: 'treasure', name: 'Tesoro', icon: '💰', type: 'Token Artifact — Treasure', ability: '{T}, Sacrifice this artifact: Add one mana of any color.', color: '#d4af37', frame: 'tokenFrameAShort', frameSet: 'tokenshort', showPT: false },
+  { id: 'food', name: 'Cibo', icon: '🍞', type: 'Token Artifact — Food', ability: '{2}, {T}, Sacrifice this artifact: You gain 3 life.', color: '#4a7c44', frame: 'tokenFrameAShort', frameSet: 'tokenshort', showPT: false },
+  { id: 'clue', name: 'Indizio', icon: '🔍', type: 'Token Artifact — Clue', ability: '{2}, Sacrifice this artifact: Draw a card.', color: '#4a90e2', frame: 'tokenFrameAShort', frameSet: 'tokenshort', showPT: false },
+  { id: 'goblin', name: 'Goblin', icon: '👺', type: 'Token Creature — Goblin', ability: 'Haste', color: '#c0392b', pt: { power: '1', toughness: '1' }, frame: 'tokenFrameRShort', frameSet: 'tokenshort', showPT: true },
+  { id: 'beast', name: 'Bestia', icon: '🐗', type: 'Token Creature — Beast', ability: '', color: '#27ae60', pt: { power: '3', toughness: '3' }, frame: 'tokenFrameGShort', frameSet: 'tokenshort', showPT: true },
+  { id: 'knight', name: 'Cavaliere', icon: '⚔️', type: 'Token Creature — Knight', ability: 'Vigilance', color: '#ecf0f1', pt: { power: '2', toughness: '2' }, frame: 'tokenFrameWShort', frameSet: 'tokenshort', showPT: true },
+];
+
 export default function TokenPreviewSinglePtFrame() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 900);
   const [state, setState] = useState(DEFAULT_STATE);
   const [history, setHistory] = useState([cloneState(DEFAULT_STATE)]);
   const [historyIdx, setHistoryIdx] = useState(0);
   
-  const [activeTab, setActiveTab] = useState('frame'); // 'art', 'frame', 'pt', 'text', 'settings'
+  const [activeTab, setActiveTab] = useState('templates'); // 'templates', 'art', 'frame', 'pt', 'text', 'settings'
   const [activeLayer, setActiveLayer] = useState('art');
   const [showGuides, setShowGuides] = useState(true);
   const [pngScale, setPngScale] = useState(4);
@@ -618,6 +627,9 @@ export default function TokenPreviewSinglePtFrame() {
       {/* CANVA-STYLE LEFT NAVIGATION */}
       {!isMobile && (
         <nav className="editor-nav">
+          <div className={`nav-item ${activeTab === 'templates' ? 'active' : ''}`} onClick={() => setActiveTab('templates')}>
+            <Icon d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /> Template
+          </div>
           <div className={`nav-item ${activeTab === 'art' ? 'active' : ''}`} onClick={() => setActiveTab('art')}>
             <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /> Artwork
           </div>
@@ -653,6 +665,7 @@ export default function TokenPreviewSinglePtFrame() {
           {isMobile && (
              <div className="mobile-subnav mb-4 flex gap-2 overflow-x-auto pb-2 border-b border-[var(--border)]" style={{ WebkitOverflowScrolling: 'touch' }}>
                {[
+                 { id: 'templates', label: '🚀 Template' },
                  { id: 'frame', label: '🖼️ Frame' },
                  { id: 'art', label: '🎨 Artwork' },
                  { id: 'text', label: '📝 Testi' },
@@ -669,6 +682,43 @@ export default function TokenPreviewSinglePtFrame() {
                  </button>
                ))}
              </div>
+          )}
+
+          {/* TAB: TEMPLATES */}
+          {activeTab === 'templates' && (
+            <>
+              <div className="sidebar-panel-title">🚀 Template Rapidi</div>
+              <div className="control-group">
+                <p className="text-xs text-muted mb-4">Seleziona un template per configurare istantaneamente la carta.</p>
+                <div className="template-grid">
+                  {TOKEN_TEMPLATES.map(t => (
+                    <div 
+                      key={t.id} 
+                      className="template-item" 
+                      onClick={() => {
+                        const frameObj = FRAME_MAP[t.frameSet]?.find(f => f.name === t.frame);
+                        applyState({
+                          ...state,
+                          name: t.name,
+                          type: t.type,
+                          ability: t.ability,
+                          showPT: t.showPT,
+                          pt: t.pt || state.pt,
+                          frameSet: t.frameSet,
+                          frame: frameObj || state.frame,
+                          nameStyle: { ...state.nameStyle, color: t.color || '#111111' },
+                          typeStyle: { ...state.typeStyle, color: t.color || '#111111' },
+                          ptStyle: { ...state.ptStyle, color: t.color || '#111111' }
+                        });
+                      }}
+                    >
+                      <div className="template-icon">{t.icon}</div>
+                      <div className="template-name">{t.name}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
           {/* TAB: ARTWORK */}

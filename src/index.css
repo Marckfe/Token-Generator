@@ -356,7 +356,19 @@ input, select, textarea { font: inherit; color: inherit; outline: none; }
   cursor: grab; transition: transform var(--tr), box-shadow var(--tr);
 }
 .queue-card:hover { transform: translateY(-4px); box-shadow: var(--sh-md); }
-.queue-card.dragging { opacity: 0.5; transform: scale(0.95); cursor: grabbing; }
+.queue-card.dragging { opacity: 0.4; transform: scale(0.93); cursor: grabbing; box-shadow: none; }
+.queue-card.drop-target { outline: 2px solid var(--accent); outline-offset: 2px; transform: translateY(-4px) scale(1.02); box-shadow: 0 0 16px rgba(0, 188, 212, 0.4); }
+.drop-placeholder-line {
+  position: absolute;
+  top: 0; left: -8px; bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(0, 188, 212, 0.8);
+  animation: placeholder-pulse 0.8s ease-in-out infinite alternate;
+  z-index: 10;
+}
+@keyframes placeholder-pulse { from { opacity: 0.6; } to { opacity: 1; box-shadow: 0 0 14px rgba(0, 188, 212, 1); } }
 .queue-card-img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
 .card-overlay {
   position: absolute; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(2px);
@@ -398,6 +410,36 @@ input, select, textarea { font: inherit; color: inherit; outline: none; }
 .checkbox-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.85rem; color: var(--text-light); font-weight: 600; user-select: none; }
 .custom-checkbox { accent-color: var(--accent); width: 18px; height: 18px; cursor: pointer; }
 .settings-summary { font-size: 0.8rem; color: var(--faint); align-self: center; background: var(--bg); padding: 8px 12px; border-radius: var(--r-md); text-align: center; }
+
+/* Batch Actions Bar */
+.batch-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 4px 8px;
+}
+.batch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: var(--tr);
+  white-space: nowrap;
+}
+.batch-btn:hover { color: var(--text-light); background: var(--surf-dyn); }
+.batch-btn.text-error { color: var(--error); }
+.batch-btn.text-error:hover { background: var(--danger-bg); }
+.batch-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
 
 /* Snackbar & Modals */
 .snackbar {

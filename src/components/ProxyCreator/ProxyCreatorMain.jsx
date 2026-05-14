@@ -19,7 +19,6 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
   const [dragIdx, setDragIdx] = useState(null);
   const [isDrop, setIsDrop] = useState(false);
   const [isGen, setIsGen] = useState(false);
-  const [loadRnd, setLoadRnd] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [snack, setSnack] = useState({ show: false, msg: "", type: "s" });
@@ -101,27 +100,27 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
     setImages([]); setConfirmOpen(false); toast("Tutte rimosse", "w");
   };
 
-  const fetchRandom = async () => {
-    setLoadRnd(true);
-    try {
-      const results = [];
-      for (let i = 0; i < 9; i++) {
-        const d = await fetch("https://api.scryfall.com/cards/random").then(r => r.json());
-        const imgUrl = d.image_uris?.normal || d.image_uris?.large || d.card_faces?.[0]?.image_uris?.normal;
-        if (!imgUrl) continue;
-        try {
-          const blob = await fetch(imgUrl).then(r => r.blob());
-          const localUrl = URL.createObjectURL(blob);
-          const file = new File([blob], `${d.name}.jpg`, { type: blob.type });
-          results.push({ id: d.id + "_" + Math.random(), name: d.name, url: localUrl, file, srcType: "scryfall" });
-        } catch {
-          results.push({ id: d.id + "_" + Math.random(), name: d.name, url: imgUrl, srcType: "scryfall" });
-        }
-      }
-      setImages(prev => [...prev, ...results]);
-      toast(`${results.length} carte casuali aggiunte!`);
-    } catch (e) { toast("Errore ricerca: " + e.message, "e"); }
-    finally { setLoadRnd(false); }
+  const batchDuplicate = () => {
+    if (!images.length) return;
+    setImages(prev => {
+      const cloned = prev.map(img => ({ ...img, id: Date.now() + Math.random() + "_" + img.id }));
+      return [...prev, ...cloned];
+    });
+    toast("Coda raddoppiata!");
+  };
+
+  const batchResetToOne = () => {
+    if (!images.length) return;
+    setImages(prev => {
+      const seen = new Set();
+      return prev.filter(img => {
+        const key = img.name + "_" + (img.url || "");
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    });
+    toast("Ridotto a 1 copia per carta");
   };
 
   const perPage = printCols * printRows;
@@ -152,18 +151,28 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
       {/* Header */}
       <div className="main-header">
         <div>
-          <h1 className="main-title">Proxy Card Printer</h1>
+          <h1 className="main-title">Proxy Card Printer <span className="premium-badge">ELITE</span></h1>
           <p className="main-subtitle">Carica le tue carte e genera un PDF pronto per la stampa</p>
         </div>
         <div className="header-actions">
           {images.length > 0 && (
-            <button className="btn btn-ghost text-error" onClick={() => setConfirmOpen(true)}>
-              <Icon d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2" size={15}/> Svuota
-            </button>
+            <div className="batch-actions-bar">
+               <button className="batch-btn" onClick={batchDuplicate} title="Duplica tutte le carte in coda">
+                 <Icon d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" size={14}/>
+                 <span>Duplica</span>
+               </button>
+               <button className="batch-btn" onClick={batchResetToOne} title="Mantieni solo 1 copia per ogni carta">
+                 <Icon d="M4 7V4h16v3M9 20h6M12 4v16" size={14}/>
+                 <span>Singoli</span>
+               </button>
+               <div className="batch-sep"></div>
+               <button className="batch-btn text-error" onClick={() => setConfirmOpen(true)}>
+                 <Icon d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2" size={14}/>
+                 <span>Svuota</span>
+               </button>
+            </div>
           )}
-          <button className="btn btn-ghost" disabled={loadRnd} onClick={fetchRandom}>
-            {loadRnd ? <span className="text-xs">Carico…</span> : <><Icon d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15" size={15}/>9 casuali</>}
-          </button>
+
           {images.length > 0 && (
             <button className="btn btn-primary" disabled={isGen} onClick={handleGenPDF}>
               {isGen ? <span className="text-xs">Generando…</span> : <><Icon d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" size={15}/> Genera PDF</>}

@@ -1,27 +1,35 @@
 import React, { useState, useRef } from 'react';
-import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload, Bug, RefreshCw, HelpCircle } from 'lucide-react';
+import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload, Bug, RefreshCw, HelpCircle, LayoutGrid, Layers } from 'lucide-react';
 import './DeckScanner.css';
 import { useAuth } from '../../context/AuthContext';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
 
 const DeckScanner = ({ onAddToQueue }) => {
-  const [image, setImage] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [mainImage, setMainImage] = useState(null);
+  const [mainPreview, setMainPreview] = useState(null);
+  const [sideImage, setSideImage] = useState(null);
+  const [sidePreview, setSidePreview] = useState(null);
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
-  const [debugInfo, setDebugInfo] = useState(null);
   const { user } = useAuth();
-  const fileInputRef = useRef(null);
+  
+  const mainInputRef = useRef(null);
+  const sideInputRef = useRef(null);
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = (e, type) => {
     const file = e.target.files[0];
     if (file) {
-      setImage(file);
-      setPreview(URL.createObjectURL(file));
-      setResults([]);
+      if (type === 'main') {
+        setMainImage(file);
+        setMainPreview(URL.createObjectURL(file));
+      } else {
+        setSideImage(file);
+        setSidePreview(URL.createObjectURL(file));
+      }
       setError(null);
     }
   };
@@ -35,7 +43,7 @@ const DeckScanner = ({ onAddToQueue }) => {
         img.src = event.target.result;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 1200; // Slightly larger for better AI visibility
+          const MAX_SIZE = 1200;
           let width = img.width;
           let height = img.height;
           if (width > height) {
@@ -53,42 +61,53 @@ const DeckScanner = ({ onAddToQueue }) => {
     });
   };
 
-  const processImage = async () => {
-    if (!image) return;
+  const analyzeSingleImage = async (imageFile, isSide) => {
+    const base64Image = await compressImage(imageFile);
+    const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: base64Image })
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error);
+    
+    return data.map(item => ({
+      id: Math.random().toString(36).substr(2, 9),
+      qty: item.qty || 1,
+      name: item.name,
+      status: 'pending',
+      data: null,
+      isSide
+    }));
+  };
+
+  const processImages = async () => {
+    if (!mainImage && !sideImage) return;
     if (!user) {
-      setError("Devi essere loggato per usare l'analisi IA del Deck Scanner.");
+      setError("Devi essere loggato per usare l'analisi IA.");
       return;
     }
 
     setIsProcessing(true);
     setError(null);
-    setStatusMessage('Analisi Vision con Gemini IA...');
+    setResults([]);
+    setStatusMessage('Inizializzazione Vision IA...');
 
     try {
-      const base64Image = await compressImage(image);
-      
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: base64Image })
-      });
-
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error);
+      const tasks = [];
+      if (mainImage) {
+        tasks.push(analyzeSingleImage(mainImage, false));
+      }
+      if (sideImage) {
+        tasks.push(analyzeSingleImage(sideImage, true));
       }
 
-      const detected = data.map(item => ({
-        id: Math.random().toString(36).substr(2, 9),
-        qty: item.qty || 1,
-        name: item.name,
-        status: 'pending',
-        data: null
-      }));
+      setStatusMessage('Analisi immagini in corso...');
+      const responses = await Promise.all(tasks);
+      const allDetected = responses.flat();
       
-      setResults(detected);
-      detected.forEach(card => searchCard(card));
+      setResults(allDetected);
+      allDetected.forEach(card => searchCard(card));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -104,7 +123,8 @@ const DeckScanner = ({ onAddToQueue }) => {
       const data = await response.json();
       if (data.object === 'card') {
         setResults(prev => {
-          const existing = prev.find(c => c.status === 'found' && c.data?.id === data.id && c.id !== card.id);
+          // Check for existing same card in SAME section (main/side)
+          const existing = prev.find(c => c.status === 'found' && c.data?.id === data.id && c.isSide === card.isSide && c.id !== card.id);
           if (existing) {
             const isLand = basicLands.some(l => data.name.toLowerCase().includes(l));
             existing.qty = isLand ? existing.qty + card.qty : Math.min(existing.qty + card.qty, 4);
@@ -135,94 +155,156 @@ const DeckScanner = ({ onAddToQueue }) => {
     })));
   };
 
+  const mainCards = results.filter(r => !r.isSide);
+  const sideCards = results.filter(r => r.isSide);
+
   return (
     <div className="deck-scanner-container">
-      <div className="scanner-header">
-        <div className="scanner-title-row">
-          <div className="scanner-title-group">
-            <Wand2 className="text-accent" size={24} />
-            <h2>Deck Scanner OCR <span className="version-tag">v2.5</span></h2>
+      <div className="scanner-header-v2">
+        <div className="scanner-title-group">
+          <div className="scanner-icon-bg">
+            <Wand2 className="text-accent" size={28} />
+          </div>
+          <div className="scanner-text-group">
+            <h2>Deck Scanner Elite <span className="version-tag-v2">VISION AI</span></h2>
+            <p className="scanner-subtitle">Analisi intelligente per Mainboard e Sideboard</p>
           </div>
         </div>
-        <p className="scanner-subtitle">Analisi intelligente basata su Vision IA.</p>
+        <div className="header-actions">
+           <button className="add-to-queue-btn-v2" onClick={handleAddToQueue} disabled={results.length === 0}>
+             Aggiungi {results.filter(r => r.status === 'found').length} carte
+           </button>
+        </div>
       </div>
 
-      <div className="scanner-layout">
-        <div className="scanner-upload-section">
-          <div className={`scanner-dropzone ${isProcessing ? 'processing' : ''}`} onClick={() => !isProcessing && fileInputRef.current.click()}>
-            <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" style={{ display: 'none' }} />
-            {preview ? (
-              <div className="preview-container">
-                <img src={preview} alt="Anteprima" className="scanner-preview-img" />
-                <div className="preview-overlay"><Upload size={20} /><span>Cambia</span></div>
+      <div className="scanner-layout-v2">
+        <div className="scanner-sidebar-v2">
+          <div className="upload-grid">
+            {/* MAINBOARD UPLOAD */}
+            <div className={`upload-card ${mainImage ? 'has-image' : ''}`} onClick={() => !isProcessing && mainInputRef.current.click()}>
+              <div className="upload-card-header">
+                <LayoutGrid size={16} />
+                <span>Mainboard</span>
               </div>
-            ) : (
-              <div className="dropzone-placeholder"><ImageIcon size={48} className="opacity-20 mb-3" /><p>Carica immagine</p></div>
-            )}
-            {isProcessing && (
-              <div className="processing-overlay">
-                <Loader2 size={40} className="animate-spin mb-4 text-accent" />
-                <p className="font-bold text-center px-4">{statusMessage || 'Analisi...'}</p>
+              <input type="file" ref={mainInputRef} onChange={(e) => handleImageUpload(e, 'main')} accept="image/*" style={{ display: 'none' }} />
+              {mainPreview ? (
+                <div className="upload-preview">
+                  <img src={mainPreview} alt="Mainboard" />
+                  <div className="upload-overlay"><RefreshCw size={20} /></div>
+                </div>
+              ) : (
+                <div className="upload-placeholder">
+                  <ImageIcon size={32} />
+                  <p>Carica Foto</p>
+                </div>
+              )}
+            </div>
+
+            {/* SIDEBOARD UPLOAD */}
+            <div className={`upload-card ${sideImage ? 'has-image' : ''}`} onClick={() => !isProcessing && sideInputRef.current.click()}>
+              <div className="upload-card-header">
+                <Layers size={16} />
+                <span>Sideboard</span>
               </div>
-            )}
+              <input type="file" ref={sideInputRef} onChange={(e) => handleImageUpload(e, 'side')} accept="image/*" style={{ display: 'none' }} />
+              {sidePreview ? (
+                <div className="upload-preview">
+                  <img src={sidePreview} alt="Sideboard" />
+                  <div className="upload-overlay"><RefreshCw size={20} /></div>
+                </div>
+              ) : (
+                <div className="upload-placeholder">
+                  <ImageIcon size={32} />
+                  <p>Carica Foto</p>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="scanner-controls">
-            <button className="main-process-btn ai" onClick={processImage} disabled={!image || isProcessing}>
-              {isProcessing ? (
-                <><Loader2 size={18} className="animate-spin" /> {statusMessage || 'Analisi...'}</>
-              ) : (
-                <><Wand2 size={18} /> Analisi IA Vision</>
-              )}
-            </button>
-            
-            {error && (
-              <div className="error-box">
-                <AlertCircle size={14} />
-                <span className="flex-1">{error}</span>
-              </div>
+          <button className="process-action-btn" onClick={processImages} disabled={(!mainImage && !sideImage) || isProcessing}>
+            {isProcessing ? (
+              <><Loader2 size={18} className="animate-spin" /> {statusMessage || 'Analisi...'}</>
+            ) : (
+              <><Wand2 size={18} /> Avvia Analisi Vision</>
             )}
-          </div>
+          </button>
+
+          {error && (
+            <div className="error-message-v2">
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
         </div>
 
-        <div className="scanner-results-section">
-          <div className="results-header">
-            <h3>Risultati ({results.length})</h3>
-            <button className="add-to-queue-btn" onClick={handleAddToQueue} disabled={results.length === 0}>Aggiungi</button>
-          </div>
-          <div className="results-grid">
-            {results.map((card) => (
-              <div key={card.id} className={`result-card-item ${card.status}`}>
-                <div className="card-thumb">
-                  {card.status === 'found' ? (
-                    <img src={card.data?.image_uris?.normal || card.data?.card_faces?.[0]?.image_uris?.normal} alt={card.name} />
-                  ) : (
-                    <div className="card-thumb-placeholder">
-                      {card.status === 'searching' ? <Loader2 className="animate-spin" size={24} /> : <HelpCircle size={24} />}
-                    </div>
-                  )}
-                </div>
-                <div className="card-item-body">
-                  <div className="card-item-info">
-                    <span className="result-name">{card.name}</span>
-                    {card.status === 'error' && <span className="status-badge error">Non trovata</span>}
+        <div className="scanner-main-results">
+          {results.length === 0 ? (
+            <div className="results-empty-v2">
+              <ImageIcon size={64} className="opacity-10" />
+              <p>Carica una foto per iniziare l'analisi</p>
+            </div>
+          ) : (
+            <div className="results-scroll-v2">
+              {/* MAINBOARD SECTION */}
+              {mainCards.length > 0 && (
+                <div className="result-section-v2">
+                  <div className="section-header-v2">
+                    <LayoutGrid size={16} />
+                    <span>Mainboard ({mainCards.length})</span>
                   </div>
-                  <div className="card-item-footer">
-                    <div className="qty-control">
-                      <button onClick={() => updateCardQty(card.id, card.qty - 1)}>-</button>
-                      <input type="number" value={card.qty} readOnly />
-                      <button onClick={() => updateCardQty(card.id, card.qty + 1)}>+</button>
-                    </div>
-                    <button className="del-btn" onClick={() => removeCard(card.id)}><Trash2 size={14} /></button>
+                  <div className="results-grid-v2">
+                    {mainCards.map(card => <ResultCard key={card.id} card={card} onUpdateQty={updateCardQty} onRemove={removeCard} />)}
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+
+              {/* SIDEBOARD SECTION */}
+              {sideCards.length > 0 && (
+                <div className="result-section-v2">
+                  <div className="section-header-v2">
+                    <Layers size={16} />
+                    <span>Sideboard ({sideCards.length})</span>
+                  </div>
+                  <div className="results-grid-v2">
+                    {sideCards.map(card => <ResultCard key={card.id} card={card} onUpdateQty={updateCardQty} onRemove={removeCard} />)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
+const ResultCard = ({ card, onUpdateQty, onRemove }) => (
+  <div className={`card-item-v2 ${card.status}`}>
+    <div className="card-thumb-v2">
+      {card.status === 'found' ? (
+        <img src={card.data?.image_uris?.normal || card.data?.card_faces?.[0]?.image_uris?.normal} alt={card.name} />
+      ) : (
+        <div className="thumb-placeholder-v2">
+          {card.status === 'searching' ? <Loader2 className="animate-spin" size={24} /> : <HelpCircle size={24} />}
+        </div>
+      )}
+      {card.isSide && <div className="side-badge">SIDE</div>}
+    </div>
+    <div className="card-content-v2">
+      <div className="card-name-v2">{card.name}</div>
+      <div className="card-controls-v2">
+        <div className="qty-pill-v2">
+          <button onClick={() => onUpdateQty(card.id, card.qty - 1)}>-</button>
+          <span>{card.qty}</span>
+          <button onClick={() => onUpdateQty(card.id, card.qty + 1)}>+</button>
+        </div>
+        <button className="remove-card-btn-v2" onClick={() => onRemove(card.id)}>
+          <Trash2 size={12} />
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 export default DeckScanner;
+
