@@ -156,6 +156,11 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
         } catch { /* ignore */ }
       }));
 
+      const enrich = (items) => items.map(item => {
+        const info = cardMap[item.name.toLowerCase()];
+        return { ...item, name: info ? info.fullName : item.name, type: info?.type || 'Unknown' };
+      });
+
       const mergeItems = (items) => {
         const map = {};
         items.forEach(item => {

@@ -113,7 +113,6 @@ export default {
     deck_name: "Nome Mazzo",
     designer: "Designer",
     export_pdf: "⬇ Esporta Scheda PDF",
-    check_button: "Analizza Legalità",
     singleton_violation: "Più copie in formato Singleton",
     legality_analysis: "Analisi Legalità",
     select_format: "Seleziona Formato",

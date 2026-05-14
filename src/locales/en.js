@@ -113,7 +113,6 @@ export default {
     deck_name: "Deck Name",
     designer: "Designer",
     export_pdf: "⬇ Export PDF Sheet",
-    check_button: "Check Legality",
     singleton_violation: "Multiple copies in Singleton format",
     legality_analysis: "Legality Analysis",
     select_format: "Select Format",
