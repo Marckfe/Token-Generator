@@ -173,13 +173,18 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
   const generatePDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-    // Header
-    doc.setFillColor(0, 188, 212);
-    doc.circle(20, 15, 6, 'F');
-    doc.setTextColor(255); doc.setFontSize(10);
-    doc.text('M', 20, 16.2, { align: 'center' });
+    // Header with MTG Logo
+    const logoUrl = 'https://raw.githubusercontent.com/filipekiss/mtg-icons/master/png/128/mtg.png';
+    try {
+      doc.addImage(logoUrl, 'PNG', 15, 10, 10, 10);
+    } catch (e) {
+      // Fallback if image fails to load
+      doc.setFillColor(0, 0, 0);
+      doc.rect(15, 10, 10, 10, 'F');
+    }
+
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
-    doc.text(t('checker.official_sheet'), 105, 16, { align: 'center' });
+    doc.text(t('checker.official_sheet'), 105, 17, { align: 'center' });
 
     const drawField = (label, val, x, y, w) => {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
@@ -246,7 +251,9 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
     doc.text(t('checker.footer_main', { count: totalMain }), 20, footerY);
     doc.text(t(isSingleton ? 'checker.footer_cmd' : 'checker.footer_side', { count: totalCmd }), 65, footerY);
-    doc.setFillColor(0, 188, 212); doc.setTextColor(255);
+    
+    // Black square for Grand Total
+    doc.setFillColor(0, 0, 0); doc.setTextColor(255);
     doc.rect(108, footerY - 5, 82, 7, 'F');
     doc.text(t('checker.grand_total', { count: totalMain + totalCmd }), 110, footerY);
     doc.setTextColor(0);

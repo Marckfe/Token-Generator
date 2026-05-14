@@ -156,7 +156,10 @@ export default function MTGProxyCreator() {
       {!isMobile && (
         <div className="desktop-layout">
           <aside className="sidebar">
-            <div className="sidebar-logo">🃏 MTG Tools</div>
+            <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 0 20px' }}>
+              <div className="sidebar-logo" style={{ padding: 0 }}>🃏 MTG Tools</div>
+              <LanguageToggle lang={lang} setLang={setLang} />
+            </div>
 
             <nav className="nav-group">
               {NAV_ITEMS.map(n => (
@@ -178,23 +181,24 @@ export default function MTGProxyCreator() {
               ))}
             </nav>
 
-            <div className="user-profile-section">
-              <div className="user-info">
+            <div className="user-profile-section" style={{ marginTop: 'auto', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+              <div className="user-info" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 {user?.photoURL
-                  ? <img src={user.photoURL} alt="avatar" className="user-avatar" />
-                  : <div className="user-avatar-placeholder"><UserIcon size={18} /></div>}
-                <div className="user-details">
-                  <span className="user-name">{user?.displayName || t('common.user')}</span>
-                  <span className="user-email">{user?.email}</span>
+                  ? <img src={user.photoURL} alt="avatar" className="user-avatar" style={{ width: '36px', height: '36px' }} />
+                  : <div className="user-avatar-placeholder" style={{ width: '36px', height: '36px' }}><UserIcon size={18} /></div>}
+                <div className="user-details" style={{ overflow: 'hidden', flex: 1 }}>
+                  <div className="user-name" style={{ fontWeight: '700', color: 'var(--text-light)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {user?.displayName || t('common.user')}
+                  </div>
+                  <div className="user-email" style={{ fontSize: '0.75rem', color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {user?.email}
+                  </div>
                 </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', width: '100%' }}>
-                <LanguageToggle lang={lang} setLang={setLang} />
                 <button
                   className="logout-btn"
                   onClick={logout}
                   title={t('common.logout')}
-                  style={{ marginLeft: 'auto' }}
+                  style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '4px' }}
                 >
                   <LogOut size={16} />
                 </button>

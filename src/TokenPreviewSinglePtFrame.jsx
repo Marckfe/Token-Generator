@@ -142,15 +142,22 @@ function measureTextWidth(text, fontSize, family = FT_DEFAULT, weight = "bold") 
   return measureCtx.measureText(text || "").width;
 }
 
-function fitTextBox(text, startSize, minSize, width, linesLimit = 12) {
+function fitTextBox(text, startSize, minSize, width, linesLimit = 12, maxHeight = 9999) {
   const lines = String(text || "").split("\n");
   let size = startSize;
   while (size > minSize) {
     let ok = true;
-    for (const line of lines) {
-      if (measureTextWidth(line.replace(/\{[^}]+\}/g, "MM"), size, FB_DEFAULT, "normal") > width) { 
-        ok = false; 
-        break; 
+    const lineH = size * 1.45;
+    const totalH = lines.length * lineH;
+    
+    if (totalH > maxHeight) {
+      ok = false;
+    } else {
+      for (const line of lines) {
+        if (measureTextWidth(line.replace(/\{[^}]+\}/g, "MM"), size, FB_DEFAULT, "normal") > width) { 
+          ok = false; 
+          break; 
+        }
       }
     }
     if (ok && lines.length <= linesLimit) return size;
@@ -235,7 +242,7 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (state.showName !== false) {
-    const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1, nameStyle.fontFamily || FT_DEFAULT) : nameStyle.fontSize;
+    const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1, 40, nameStyle.fontFamily || FT_DEFAULT) : nameStyle.fontSize;
     ctx.save();
     ctx.font = `bold ${fittedNameSize}px ${nameStyle.fontFamily || FT_DEFAULT}`;
     ctx.fillStyle = nameStyle.color;
@@ -247,7 +254,7 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (state.showType !== false) {
-    const fittedTypeSize = state.autoFitType ? fitTextBox(type || "Token", typeStyle.fontSize, 14, CW - typeStyle.x - 40, 1, typeStyle.fontFamily || FT_DEFAULT) : typeStyle.fontSize;
+    const fittedTypeSize = state.autoFitType ? fitTextBox(type || "Token", typeStyle.fontSize, 14, CW - typeStyle.x - 40, 1, 40, typeStyle.fontFamily || FT_DEFAULT) : typeStyle.fontSize;
     ctx.save();
     ctx.font = `bold ${fittedTypeSize}px ${typeStyle.fontFamily || FT_DEFAULT}`;
     ctx.fillStyle = typeStyle.color;
@@ -258,7 +265,7 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (showAbility && ability) {
-    const size = state.autoFitRules ? fitTextBox(ability, abilityStyle.fontSize, 14, abilityStyle.width || (CW - abilityStyle.x * 2), 10, abilityStyle.fontFamily || FB_DEFAULT) : abilityStyle.fontSize;
+    const size = state.autoFitRules ? fitTextBox(ability, abilityStyle.fontSize, 14, abilityStyle.width || (CW - abilityStyle.x * 2), 10, 840 - abilityStyle.y, abilityStyle.fontFamily || FB_DEFAULT) : abilityStyle.fontSize;
     const lines = String(ability).split("\n");
     let nextY = abilityStyle.y;
     for (const line of lines) {
@@ -331,7 +338,7 @@ function renderCardSync(canvas, state, withBleed = false) {
 function getGuideMetrics(state) {
   const nameSize = state.autoFitName ? fitTextBox((state.name || "TOKEN").toUpperCase(), state.nameStyle.fontSize, 16, CW - 90, 1, state.nameStyle.fontFamily || FT_DEFAULT) : state.nameStyle.fontSize;
   const typeSize = state.autoFitType ? fitTextBox(state.type || "Token", state.typeStyle.fontSize, 14, CW - state.typeStyle.x - 40, 1, state.typeStyle.fontFamily || FT_DEFAULT) : state.typeStyle.fontSize;
-  const abilitySize = state.autoFitRules ? fitTextBox(state.ability || "", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, state.abilityStyle.fontFamily || FB_DEFAULT) : state.abilityStyle.fontSize;
+  const abilitySize = state.autoFitRules ? fitTextBox(state.ability || "", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, 840 - state.abilityStyle.y, state.abilityStyle.fontFamily || FB_DEFAULT) : state.abilityStyle.fontSize;
   const typeWidth = measureTextWidth(state.type || "Token", typeSize, state.typeStyle.fontFamily || FT_DEFAULT, "bold");
   const nameWidth = measureTextWidth((state.name || "TOKEN").toUpperCase(), nameSize, state.nameStyle.fontFamily || FT_DEFAULT, "bold");
   const abilityLines = Math.max(1, String(state.ability || '').split('\n').length || 1);
@@ -507,7 +514,7 @@ export default function TokenPreviewSinglePtFrame() {
 
         // 2. Strict Clamping Logic
         if (kind === 'name') {
-          const nSize = state.autoFitName ? fitTextBox((state.name||"TOKEN").toUpperCase(), state.nameStyle.fontSize, 16, CW-90, 1, state.nameStyle.fontFamily||FT_DEFAULT) : state.nameStyle.fontSize;
+          const nSize = state.autoFitName ? fitTextBox((state.name||"TOKEN").toUpperCase(), state.nameStyle.fontSize, 16, CW-90, 1, 40, state.nameStyle.fontFamily||FT_DEFAULT) : state.nameStyle.fontSize;
           const nWidth = measureTextWidth((state.name||"TOKEN").toUpperCase(), nSize, state.nameStyle.fontFamily||FT_DEFAULT, "bold");
           const offset = state.nameStyle.align === "left" ? 10 : state.nameStyle.align === "right" ? CW - 10 : CW/2;
           const minX = MARGIN - offset + nWidth/2;
@@ -515,12 +522,12 @@ export default function TokenPreviewSinglePtFrame() {
           next.nameStyle.x = Math.max(minX, Math.min(maxX, next.nameStyle.x));
           next.nameStyle.y = Math.max(MARGIN + 10, Math.min(CH/2, next.nameStyle.y)); // Keep name in upper half
         } else if (kind === 'type') {
-          const tSize = state.autoFitType ? fitTextBox(state.type||"Token", state.typeStyle.fontSize, 14, CW-state.typeStyle.x-40, 1, state.typeStyle.fontFamily||FT_DEFAULT) : state.typeStyle.fontSize;
+          const tSize = state.autoFitType ? fitTextBox(state.type||"Token", state.typeStyle.fontSize, 14, CW-state.typeStyle.x-40, 1, 40, state.typeStyle.fontFamily||FT_DEFAULT) : state.typeStyle.fontSize;
           const tWidth = measureTextWidth(state.type||"Token", tSize, state.typeStyle.fontFamily||FT_DEFAULT, "bold");
           next.typeStyle.x = Math.max(MARGIN + 15, Math.min(CW - tWidth - MARGIN - 15, next.typeStyle.x));
           next.typeStyle.y = Math.max(CH/2, Math.min(CH - MARGIN - 40, next.typeStyle.y));
         } else if (kind === 'ability') {
-          const aSize = state.autoFitRules ? fitTextBox(state.ability||"", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, state.abilityStyle.fontFamily || FB_DEFAULT) : state.abilityStyle.fontSize;
+          const aSize = state.autoFitRules ? fitTextBox(state.ability||"", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, 840 - state.abilityStyle.y, state.abilityStyle.fontFamily || FB_DEFAULT) : state.abilityStyle.fontSize;
           const aLines = Math.max(1, String(state.ability || '').split('\n').length);
           const aHeight = aLines * (aSize * 1.45);
           next.abilityStyle.x = Math.max(MARGIN + 15, Math.min(CW - (next.abilityStyle.width||400) - MARGIN - 15, next.abilityStyle.x));

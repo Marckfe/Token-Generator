@@ -10,14 +10,18 @@ export default async function handler(req, res) {
   const mimeType = image.startsWith('data:image/png') ? 'image/png' : 'image/jpeg';
 
   const errors = [];
-  const MTG_PROMPT = `You are a professional Magic: The Gathering card recognition system.
-Analyze this image carefully and identify ALL MTG cards visible.
-IMPORTANT RULES:
-- If cards are stacked/overlapping, count each distinct card separately
-- Count the EXACT quantity of each card shown
-- Use the EXACT official English card name from Scryfall
-- Ignore card backs, tokens, and non-MTG items
-Return ONLY a valid JSON array, no other text:
+  const MTG_PROMPT = `You are a professional Magic: The Gathering card recognition expert.
+Analyze this image carefully and identify ALL cards.
+
+PRECISION RULES:
+1. QUANTITY: Count the EXACT number of physical copies of each card visible. 
+   - If 4 copies of 'Opt' are shown, return {"name": "Opt", "qty": 4}.
+   - Pay close attention to overlapping cards in a pile; count the visible edges/names.
+2. NAMES: Use official Scryfall English names.
+3. NO GUESSING: Only list cards you are highly confident about.
+4. IGNORE: Tokens, basic lands (unless requested), and non-MTG items.
+
+Return ONLY a valid JSON array:
 [{"name": "Card Name", "qty": 1}, {"name": "Another Card", "qty": 4}]`;
 
   // ──────────────────────────────────────────────
