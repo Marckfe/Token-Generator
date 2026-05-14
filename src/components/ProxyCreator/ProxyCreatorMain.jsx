@@ -185,44 +185,54 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
       </div>
 
       {/* Database Search & Bulk Import Section */}
-      <div className="section">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-[var(--accent-hl)] rounded-lg text-[var(--accent)]">
-              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <div className="section" style={{ padding: '20px', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ padding: '10px', backgroundColor: 'var(--accent-hl)', borderRadius: '10px', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             </div>
             <div>
-              <h2 className="text-lg font-bold text-light leading-tight">{t('proxy.search_bulk_toggle')}</h2>
-              <p className="text-xs text-muted">{t('proxy.search_subtitle')}</p>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#fff', margin: 0 }}>{t('proxy.search_cards')}</h2>
+              <p style={{ fontSize: '0.75rem', color: 'var(--muted)', margin: '4px 0 0 0' }}>{t('proxy.search_subtitle')}</p>
             </div>
           </div>
           
-          <div className="flex bg-black/20 p-1 rounded-xl border border-[var(--border)]">
+          <div style={{ display: 'flex', backgroundColor: 'rgba(0,0,0,0.3)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border)' }}>
             <button 
-              className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${!showDatabase || dbType === 'single' ? 'bg-[var(--accent)] text-black shadow-lg' : 'opacity-50 hover:opacity-100'}`}
+              style={{ 
+                padding: '8px 16px', fontSize: '0.75rem', fontWeight: '700', borderRadius: '7px', cursor: 'pointer', transition: 'all 0.2s',
+                backgroundColor: (!showDatabase || dbType === 'single') ? 'var(--accent)' : 'transparent',
+                color: (!showDatabase || dbType === 'single') ? '#000' : 'var(--muted)',
+                border: 'none'
+              }}
               onClick={() => { setShowDatabase(true); setDbType('single'); }}
             >
               🃏 {t('proxy.search_tab')}
             </button>
             <button 
-              className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${showDatabase && dbType === 'bulk' ? 'bg-[var(--accent)] text-black shadow-lg' : 'opacity-50 hover:opacity-100'}`}
+              style={{ 
+                padding: '8px 16px', fontSize: '0.75rem', fontWeight: '700', borderRadius: '7px', cursor: 'pointer', transition: 'all 0.2s',
+                backgroundColor: (showDatabase && dbType === 'bulk') ? 'var(--accent)' : 'transparent',
+                color: (showDatabase && dbType === 'bulk') ? '#000' : 'var(--muted)',
+                border: 'none'
+              }}
               onClick={() => { setShowDatabase(true); setDbType('bulk'); }}
             >
               📝 {t('proxy.bulk_tab')}
             </button>
             {showDatabase && (
               <button 
-                className="ml-2 px-3 py-2 text-xs font-bold text-error opacity-60 hover:opacity-100"
+                style={{ marginLeft: '8px', padding: '0 8px', backgroundColor: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
                 onClick={() => setShowDatabase(false)}
               >
-                ✕ {t('common.close')}
+                ✕
               </button>
             )}
           </div>
         </div>
 
         {showDatabase && (
-          <div className="accordion-content pt-0 border-none shadow-none bg-transparent">
+          <div style={{ paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
             {dbType === 'single' ? (
               <CardSearchPanel onAddCards={cards => {
                 setImages(prev => [...prev, ...cards]);

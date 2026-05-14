@@ -60,6 +60,7 @@ export default {
     grid_hint: "— griglia scrollabile, clicca una carta per vedere le art",
     choose_art: "🎨 Scegli art / lingua",
     add_to_queue: "Aggiungi {{count}} {{suffix}} alla coda",
+    add_cards_btn: "Aggiungi {{count}} carte",
     batch_duplicate: "Duplica",
     batch_clear: "Svuota",
     generate_pdf: "Genera PDF",

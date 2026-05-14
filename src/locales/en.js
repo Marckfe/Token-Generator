@@ -60,6 +60,7 @@ export default {
     grid_hint: "— scrollable grid, click a card to see artworks",
     choose_art: "🎨 Choose art / language",
     add_to_queue: "Add {{count}} cop{{suffix}} to queue",
+    add_cards_btn: "Add {{count}} cards",
     batch_duplicate: "Duplicate",
     batch_clear: "Clear",
     generate_pdf: "Generate PDF",

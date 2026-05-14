@@ -113,6 +113,6 @@ export default async function handler(req, res) {
   }
 
   return res.status(500).json({ 
-    error: "[MTG-AI] Tutti i servizi AI sono al momento non disponibili o le chiavi API sono errate. Per favore controlla le impostazioni di Vercel." 
+    error: "[MTG-AI-HUB-V2] Tutti i servizi AI sono al momento non disponibili o le chiavi API sono errate. Per favore controlla le impostazioni di Vercel." 
   });
 }
