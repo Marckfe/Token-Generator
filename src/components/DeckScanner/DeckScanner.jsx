@@ -45,7 +45,7 @@ const DeckScanner = ({ onAddToQueue }) => {
         img.src = event.target.result;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 1200;
+          const MAX_SIZE = 800;
           let width = img.width;
           let height = img.height;
           if (width > height) {
@@ -57,7 +57,7 @@ const DeckScanner = ({ onAddToQueue }) => {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
         };
       };
     });

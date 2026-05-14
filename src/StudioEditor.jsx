@@ -68,7 +68,7 @@ export default function StudioEditor() {
         bgArt: bgArt,
         isDraft: isDraft
       };
-      await saveUserToken(user.uid, tokenData, isDraft);
+      await saveUserToken(user.uid, tokenData, isDraft, 'studio');
       setSaveStatus('success');
       setTimeout(() => setSaveStatus(null), 3000);
     } catch (err) {

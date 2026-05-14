@@ -23,12 +23,11 @@ const FORMATS = [
   { id: 'pauper', name: 'Pauper' },
   { id: 'legacy', name: 'Legacy' },
   { id: 'vintage', name: 'Vintage' },
-  { id: 'brawl', name: 'Brawl' },
   { id: 'premodern', name: 'Premodern' },
   { id: 'oldschool', name: 'Oldschool' }
 ];
 
-export default function DeckChecker() {
+export default function DeckChecker({ onAddToQueue }) {
   const { t } = useLanguage();
   const [selectedFormat, setSelectedFormat] = useState('commander');
   const [maindeck, setMaindeck] = useState('');
@@ -331,15 +330,22 @@ export default function DeckChecker() {
             <input type="text" className="control-input" placeholder={t('checker.deck_name')} value={playerData.deckName} onChange={e => setPlayerData({...playerData, deckName: e.target.value})} />
             <input type="text" className="control-input" placeholder={t('checker.designer')} value={playerData.deckDesigner} onChange={e => setPlayerData({...playerData, deckDesigner: e.target.value})} />
           </div>
-          <button
-            className="btn btn-primary w-full py-3 font-bold mt-2"
-            onClick={generatePDF}
-            disabled={!parsedDeck.main.length && !parsedDeck.cmd.length}
-            style={{ opacity: (!parsedDeck.main.length && !parsedDeck.cmd.length) ? 0.4 : 1 }}
-          >
-            <Download size={16} className="mr-2" />
-            {t('checker.export_pdf')}
-          </button>
+          <div className="flex justify-center mt-6">
+            <button
+              className="btn btn-primary px-8 py-4 font-bold shadow-xl transition-all hover:scale-105"
+              onClick={generatePDF}
+              disabled={!parsedDeck.main.length && !parsedDeck.cmd.length}
+              style={{ 
+                opacity: (!parsedDeck.main.length && !parsedDeck.cmd.length) ? 0.3 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}
+            >
+              <Download size={20} />
+              {t('checker.export_pdf')}
+            </button>
+          </div>
         </div>
 
         {/* 2. SELEZIONE FORMATO */}
@@ -459,9 +465,42 @@ export default function DeckChecker() {
               </div>
             )}
             
-            <button className="btn btn-ghost mt-12 opacity-50 hover:opacity-100" onClick={() => setResults(null)}>
-              {t('checker.new_analysis')}
-            </button>
+            <div className="flex gap-4 mt-12">
+              <button className="btn btn-ghost opacity-50 hover:opacity-100" onClick={() => setResults(null)}>
+                {t('checker.new_analysis')}
+              </button>
+              <button 
+                className="btn btn-accent flex items-center gap-2" 
+                onClick={async () => {
+                  const items = [];
+                  const all = [...parsedDeck.main, ...parsedDeck.cmd];
+                  for (const card of all) {
+                    try {
+                      const res = await fetch(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(card.name)}`);
+                      const data = await res.json();
+                      const imgUrl = data.image_uris?.normal || data.card_faces?.[0]?.image_uris?.normal;
+                      if (!imgUrl) continue;
+                      for (let i = 0; i < card.qty; i++) {
+                        items.push({
+                          id: data.id + "_" + i + "_" + Math.random(),
+                          name: data.name,
+                          url: imgUrl,
+                          thumb: data.image_uris?.small || data.card_faces?.[0]?.image_uris?.small,
+                          srcType: "scryfall",
+                          set: data.set_name
+                        });
+                      }
+                    } catch (e) {}
+                  }
+                  if (items.length > 0) {
+                    onAddToQueue(items);
+                  }
+                }}
+              >
+                <Download size={18} />
+                {t('checker.add_all_to_queue')}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="deck-checker-empty">

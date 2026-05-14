@@ -54,25 +54,34 @@ export const getUserQueue = async (userId) => {
 // --- GESTIONE TOKEN & BOZZE ---
 
 /**
- * Salva un nuovo token o bozza
+ * Salva un nuovo token o bozza con limite di 5 per tipo
  */
-export const saveUserToken = async (userId, tokenData, isDraft = true) => {
+export const saveUserToken = async (userId, tokenData, isDraft = true, tool = 'token') => {
   if (!userId) return;
   try {
     const tokensRef = collection(db, "users", userId, "customTokens");
+    
+    // Controllo limiti (solo se è un nuovo salvataggio)
+    if (!tokenData.id) {
+      const q = query(tokensRef, where("isDraft", "==", isDraft), where("tool", "==", tool));
+      const snap = await getDocs(q);
+      if (snap.size >= 5) {
+        throw new Error(`Limite raggiunto: puoi salvare al massimo 5 ${isDraft ? 'bozze' : 'progetti definitivi'} per questo strumento.`);
+      }
+    }
+
     const data = {
       ...tokenData,
       isDraft,
+      tool,
       updatedAt: new Date(),
       createdAt: tokenData.createdAt || new Date()
     };
 
     if (tokenData.id) {
-      // Aggiorna esistente
       await setDoc(doc(tokensRef, tokenData.id), data);
       return tokenData.id;
     } else {
-      // Crea nuovo
       const docRef = await addDoc(tokensRef, data);
       return docRef.id;
     }

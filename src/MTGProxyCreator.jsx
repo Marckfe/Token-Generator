@@ -63,18 +63,18 @@ export default function MTGProxyCreator() {
   };
 
   const LanguageToggle = ({ className = "" }) => (
-    <div className={`flex items-center gap-1 p-1 bg-[var(--surface2)] rounded-lg border border-[var(--border)] ${className}`}>
+    <div className={`flex items-center gap-2 p-1.5 bg-black/20 rounded-xl border border-[var(--border)] ${className}`}>
       <button 
-        className={`px-2 py-1 text-[10px] font-bold rounded ${lang === 'it' ? 'bg-[var(--accent)] text-black' : 'opacity-40'}`}
+        className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-300 ${lang === 'it' ? 'bg-[var(--accent)] text-black shadow-lg shadow-[var(--accent-hl)]' : 'opacity-40 hover:opacity-100'}`}
         onClick={() => setLang('it')}
       >
-        IT
+        <span style={{ fontSize: '14px' }}>🇮🇹</span> IT
       </button>
       <button 
-        className={`px-2 py-1 text-[10px] font-bold rounded ${lang === 'en' ? 'bg-[var(--accent)] text-black' : 'opacity-40'}`}
+        className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all duration-300 ${lang === 'en' ? 'bg-[var(--accent)] text-black shadow-lg shadow-[var(--accent-hl)]' : 'opacity-40 hover:opacity-100'}`}
         onClick={() => setLang('en')}
       >
-        EN
+        <span style={{ fontSize: '14px' }}>🇺🇸</span> EN
       </button>
     </div>
   );

@@ -31,6 +31,7 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
   const [cutMarks, setCutMarks] = useState(true);
   const [bleedPDF, setBleedPDF] = useState(false);
   const [showDatabase, setShowDatabase] = useState(false);
+  const [dbType, setDbType] = useState('single'); // 'single' or 'bulk'
   
   const inputRef = useRef();
 
@@ -183,29 +184,58 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
         </div>
       </div>
 
-      {/* Database Search & Bulk Import Accordion */}
+      {/* Database Search & Bulk Import Section */}
       <div className="section">
-        <button
-          onClick={() => setShowDatabase(v => !v)}
-          className={`accordion-trigger ${showDatabase ? "open" : ""}`}
-        >
-          <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          {t('proxy.search_bulk_toggle')}
-          <span className="accordion-icon">{showDatabase ? "▲ " + t('common.close') : "▼ " + t('common.open')}</span>
-        </button>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-[var(--accent-hl)] rounded-lg text-[var(--accent)]">
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-light leading-tight">{t('proxy.search_bulk_toggle')}</h2>
+              <p className="text-xs text-muted">{t('proxy.search_subtitle')}</p>
+            </div>
+          </div>
+          
+          <div className="flex bg-black/20 p-1 rounded-xl border border-[var(--border)]">
+            <button 
+              className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${!showDatabase || dbType === 'single' ? 'bg-[var(--accent)] text-black shadow-lg' : 'opacity-50 hover:opacity-100'}`}
+              onClick={() => { setShowDatabase(true); setDbType('single'); }}
+            >
+              🃏 {t('proxy.search_tab')}
+            </button>
+            <button 
+              className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${showDatabase && dbType === 'bulk' ? 'bg-[var(--accent)] text-black shadow-lg' : 'opacity-50 hover:opacity-100'}`}
+              onClick={() => { setShowDatabase(true); setDbType('bulk'); }}
+            >
+              📝 {t('proxy.bulk_tab')}
+            </button>
+            {showDatabase && (
+              <button 
+                className="ml-2 px-3 py-2 text-xs font-bold text-error opacity-60 hover:opacity-100"
+                onClick={() => setShowDatabase(false)}
+              >
+                ✕ {t('common.close')}
+              </button>
+            )}
+          </div>
+        </div>
 
         {showDatabase && (
-          <div className="accordion-content">
-            <CardSearchPanel onAddCards={cards => {
-              setImages(prev => [...prev, ...cards]);
-              const suffix = cards.length === 1 ? (lang === 'it' ? "ia" : "") : (lang === 'it' ? "ie" : "s");
-              toast(t('proxy.cards_added', { count: cards.length, suffix }));
-            }} />
-            <BulkImportPanel onAddCards={cards => {
-              setImages(prev => [...prev, ...cards]);
-              const suffix = cards.length === 1 ? (lang === 'it' ? "ia" : "") : (lang === 'it' ? "ie" : "s");
-              toast(t('proxy.cards_added', { count: cards.length, suffix }));
-            }} toast={toast} />
+          <div className="accordion-content pt-0 border-none shadow-none bg-transparent">
+            {dbType === 'single' ? (
+              <CardSearchPanel onAddCards={cards => {
+                setImages(prev => [...prev, ...cards]);
+                const suffix = cards.length === 1 ? (lang === 'it' ? "ia" : "") : (lang === 'it' ? "ie" : "s");
+                toast(t('proxy.cards_added', { count: cards.length, suffix }));
+              }} />
+            ) : (
+              <BulkImportPanel onAddCards={cards => {
+                setImages(prev => [...prev, ...cards]);
+                const suffix = cards.length === 1 ? (lang === 'it' ? "ia" : "") : (lang === 'it' ? "ie" : "s");
+                toast(t('proxy.cards_added', { count: cards.length, suffix }));
+              }} toast={toast} />
+            )}
           </div>
         )}
       </div>

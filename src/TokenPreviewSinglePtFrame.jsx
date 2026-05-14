@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "./editor.css";
 import { useLanguage } from "./context/LanguageContext";
+import { useAuth } from "./context/AuthContext";
+import { saveUserToken, getUserTokens, deleteUserToken } from "./services/dbService";
+import { Cloud, Save, Trash2, Loader2, Check } from "lucide-react";
 
 const ALL_FRAME_SETS = import.meta.glob(
   "/src/assets/frames/masterframes/*/*.{png,jpg,jpeg,webp,svg}",
@@ -83,10 +86,16 @@ function parseMana(text) {
 function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
   const parts = parseMana(text);
   const symSize = fontSize * 1.1;
+  const lineH = fontSize * 1.45;
+  
+  ctx.save();
   ctx.font = `${fontSize}px ${font}`;
   ctx.fillStyle = color;
   ctx.textBaseline = "top";
+  
   let curX = x;
+  let curY = y;
+  let maxY = y + lineH;
   
   for (const p of parts) {
     if (p.type === "txt") {
@@ -95,30 +104,42 @@ function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
         const word = (i === 0 ? "" : " ") + words[i];
         const w = ctx.measureText(word).width;
         if (maxWidth && curX + w > x + maxWidth && curX > x) {
-          curX = x; y += fontSize * 1.45;
+          curX = x; 
+          curY += lineH;
+          maxY = curY + lineH;
         }
-        ctx.fillText(word, curX, y);
+        ctx.fillText(word, curX, curY);
         curX += ctx.measureText(word).width;
       }
     } else {
       const url = symbolUrl(p.v);
       if (url) {
         const img = getCachedImage(url);
-        if (img) { ctx.drawImage(img, curX, y, symSize, symSize); curX += symSize + 1; } 
-        else { const token = `{${p.v}}`; ctx.fillText(token, curX, y); curX += ctx.measureText(token).width; }
+        if (img) { 
+          ctx.drawImage(img, curX, curY + (lineH - symSize)/2, symSize, symSize); 
+          curX += symSize + 2; 
+        } else { 
+          const token = `{${p.v}}`; 
+          ctx.fillText(token, curX, curY); 
+          curX += ctx.measureText(token).width; 
+        }
       } else {
-        const token = `{${p.v}}`; ctx.fillText(token, curX, y); curX += ctx.measureText(token).width;
+        const token = `{${p.v}}`; 
+        ctx.fillText(token, curX, curY); 
+        curX += ctx.measureText(token).width;
       }
     }
   }
-  return y;
+  ctx.restore();
+  return maxY;
 }
 
+const measureCanvas = document.createElement("canvas");
+const measureCtx = measureCanvas.getContext("2d");
+
 function measureTextWidth(text, fontSize, family = FT_DEFAULT, weight = "bold") {
-  const c = document.createElement("canvas");
-  const ctx = c.getContext("2d");
-  ctx.font = `${weight} ${fontSize}px ${family}`;
-  return ctx.measureText(text || "").width;
+  measureCtx.font = `${weight} ${fontSize}px ${family}`;
+  return measureCtx.measureText(text || "").width;
 }
 
 function fitTextBox(text, startSize, minSize, width, linesLimit = 12) {
@@ -127,10 +148,13 @@ function fitTextBox(text, startSize, minSize, width, linesLimit = 12) {
   while (size > minSize) {
     let ok = true;
     for (const line of lines) {
-      if (measureTextWidth(line.replace(/\{[^}]+\}/g, "MM"), size, FB_DEFAULT, "normal") > width) { ok = false; break; }
+      if (measureTextWidth(line.replace(/\{[^}]+\}/g, "MM"), size, FB_DEFAULT, "normal") > width) { 
+        ok = false; 
+        break; 
+      }
     }
     if (ok && lines.length <= linesLimit) return size;
-    size -= 1;
+    size -= 0.5;
   }
   return minSize;
 }
@@ -236,10 +260,10 @@ function renderCardSync(canvas, state, withBleed = false) {
   if (showAbility && ability) {
     const size = state.autoFitRules ? fitTextBox(ability, abilityStyle.fontSize, 14, abilityStyle.width || (CW - abilityStyle.x * 2), 10, abilityStyle.fontFamily || FB_DEFAULT) : abilityStyle.fontSize;
     const lines = String(ability).split("\n");
-    let curY = abilityStyle.y;
+    let nextY = abilityStyle.y;
     for (const line of lines) {
-      curY = drawManaText(ctx, line, abilityStyle.x, curY, size, abilityStyle.color, abilityStyle.fontFamily || FB_DEFAULT, abilityStyle.width || (CW - abilityStyle.x * 2));
-      curY += Math.max(2, abilityStyle.lineGap || 4);
+      nextY = drawManaText(ctx, line, abilityStyle.x, nextY, size, abilityStyle.color, abilityStyle.fontFamily || FB_DEFAULT, abilityStyle.width || (CW - abilityStyle.x * 2));
+      nextY += Math.max(0, abilityStyle.lineGap || 0);
     }
   }
 
@@ -625,6 +649,48 @@ export default function TokenPreviewSinglePtFrame() {
   const pScale = isMobile ? Math.max(0.46, baseScale) : Math.max(0.34, baseScale * (previewZoom / 100));
   const boxes = getGuideMetrics(state);
 
+  const { user } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null);
+  const [myTokens, setMyTokens] = useState([]);
+
+  const loadMyTokens = useCallback(async () => {
+    if (!user) return;
+    const tokens = await getUserTokens(user.uid);
+    setMyTokens(tokens.filter(t => t.tool === 'token' || !t.tool));
+  }, [user]);
+
+  useEffect(() => {
+    if (user) loadMyTokens();
+  }, [user, loadMyTokens]);
+
+  const handleSaveCloud = async (isDraft = true) => {
+    if (!user) { alert(t('studio.login_required')); return; }
+    setIsSaving(true);
+    setSaveStatus('saving');
+    try {
+      const tokenData = {
+        name: state.name || "Senza nome",
+        ...state
+      };
+      await saveUserToken(user.uid, tokenData, isDraft, 'token');
+      setSaveStatus('success');
+      loadMyTokens();
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (err) {
+      alert(err.message);
+      setSaveStatus('error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm(t('common.confirm_delete'))) return;
+    await deleteUserToken(user.uid, id);
+    loadMyTokens();
+  };
+
   const Icon = ({ d }) => (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>
   );
@@ -642,10 +708,10 @@ export default function TokenPreviewSinglePtFrame() {
             <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /> {t('common.artwork')}
           </div>
           <div className={`nav-item ${activeTab === 'frame' ? 'active' : ''}`} onClick={() => setActiveTab('frame')}>
-            <Icon d="M4 4h16v16H4zM4 9h16" /> Frames
+            <Icon d="M4 4h16v16H4zM4 9h16" /> {t('common.frames')}
           </div>
           <div className={`nav-item ${activeTab === 'pt' ? 'active' : ''}`} onClick={() => setActiveTab('pt')}>
-            <Icon d="M12 2l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" /> P/T
+            <Icon d="M12 2l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" /> {t('common.pt')}
           </div>
           <div className={`nav-item ${activeTab === 'text' ? 'active' : ''}`} onClick={() => setActiveTab('text')}>
             <Icon d="M4 7V4h16v3M9 20h6M12 4v16" /> {t('common.layers')}
@@ -728,6 +794,44 @@ export default function TokenPreviewSinglePtFrame() {
                   ))}
                 </div>
               </div>
+
+              <div className="sidebar-panel-title mt-8">☁️ {t('studio.cloud_library')}</div>
+              <div className="flex gap-2 mb-4">
+                <button onClick={() => handleSaveCloud(true)} className="btn btn-ghost flex-1 py-3 text-xs gap-2" disabled={isSaving}>
+                  {isSaving && saveStatus === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Cloud size={14} />}
+                  {t('studio.save_draft')}
+                </button>
+                <button onClick={() => handleSaveCloud(false)} className="btn btn-primary flex-1 py-3 text-xs gap-2" disabled={isSaving}>
+                  {isSaving && saveStatus === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  {t('studio.save_final')}
+                </button>
+              </div>
+
+              {myTokens.length > 0 && (
+                <div className="asset-grid">
+                  {myTokens.map(item => (
+                    <div key={item.id} className="asset-item group relative">
+                      <div 
+                        className="template-icon" 
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          const { id, name, tool, isDraft, updatedAt, createdAt, ...loadedState } = item;
+                          applyState({ ...state, ...loadedState });
+                        }}
+                      >
+                        {item.isDraft ? "📝" : "⭐"}
+                      </div>
+                      <div className="template-name">{item.name}</div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
+                        className="absolute -top-1 -right-1 p-1 bg-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      >
+                        <Trash2 size={10} color="white" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
 
