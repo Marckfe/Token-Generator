@@ -19,7 +19,7 @@ PRECISION RULES:
    - Pay close attention to overlapping cards in a pile; count the visible edges/names.
 2. NAMES: Use official Scryfall English names.
 3. NO GUESSING: Only list cards you are highly confident about.
-4. IGNORE: Tokens, basic lands (unless requested), and non-MTG items.
+4. IGNORE: Tokens, basic lands (unless requested), category headers (e.g., 'Instants', 'Creatures'), and non-MTG items.
 
 Return ONLY a valid JSON array:
 [{"name": "Card Name", "qty": 1}, {"name": "Another Card", "qty": 4}]`;

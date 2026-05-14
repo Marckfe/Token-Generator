@@ -186,15 +186,7 @@ export default function CardSearchPanel({ onAddCards }) {
   const selPrints = Object.keys(selected).length;
 
   return (
-    <div className="panel-container">
-      <div className="panel-header">
-        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-accent">
-          <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-        </svg>
-        <span className="panel-title">{t('proxy.search_cards')}</span>
-        <span className="panel-subtitle">{t('proxy.search_subtitle')}</span>
-      </div>
-
+    <div className="panel-container" style={{ background: 'transparent', border: 'none', padding: 0, boxShadow: 'none', animation: 'none' }}>
       <div className="search-box-wrapper">
         <div className="search-input-group">
           <div className="search-input-container">

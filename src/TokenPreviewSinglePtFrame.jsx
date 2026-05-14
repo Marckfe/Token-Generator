@@ -142,25 +142,49 @@ function measureTextWidth(text, fontSize, family = FT_DEFAULT, weight = "bold") 
   return measureCtx.measureText(text || "").width;
 }
 
-function fitTextBox(text, startSize, minSize, width, linesLimit = 12, maxHeight = 9999) {
+function calculateAbilityHeight(text, fontSize, width, family = FB_DEFAULT, lineGap = 4) {
   const lines = String(text || "").split("\n");
-  let size = startSize;
-  while (size > minSize) {
-    let ok = true;
-    const lineH = size * 1.45;
-    const totalH = lines.length * lineH;
+  const lineH = fontSize * 1.45 + lineGap;
+  const symSize = fontSize * 1.1;
+  measureCtx.font = `${fontSize}px ${family}`;
+  
+  let totalH = 0;
+  for (const line of lines) {
+    const parts = parseMana(line);
+    let curX = 0;
+    let lineCount = 1;
     
-    if (totalH > maxHeight) {
-      ok = false;
-    } else {
-      for (const line of lines) {
-        if (measureTextWidth(line.replace(/\{[^}]+\}/g, "MM"), size, FB_DEFAULT, "normal") > width) { 
-          ok = false; 
-          break; 
+    for (const p of parts) {
+      if (p.type === "txt") {
+        const words = p.v.split(" ");
+        for (let i = 0; i < words.length; i++) {
+          const word = (i === 0 ? "" : " ") + words[i];
+          const w = measureCtx.measureText(word).width;
+          if (width && curX + w > width && curX > 0) {
+            curX = 0;
+            lineCount++;
+          }
+          curX += measureCtx.measureText(word).width;
         }
+      } else {
+        const sW = symSize + 2;
+        if (width && curX + sW > width && curX > 0) {
+          curX = 0;
+          lineCount++;
+        }
+        curX += sW;
       }
     }
-    if (ok && lines.length <= linesLimit) return size;
+    totalH += lineCount * lineH;
+  }
+  return totalH;
+}
+
+function fitTextBox(text, startSize, minSize, width, linesLimit = 99, maxHeight = 9999, lineGap = 4) {
+  let size = startSize;
+  while (size > minSize) {
+    const totalH = calculateAbilityHeight(text, size, width, FB_DEFAULT, lineGap);
+    if (totalH <= maxHeight) return size;
     size -= 0.5;
   }
   return minSize;
@@ -265,7 +289,7 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (showAbility && ability) {
-    const size = state.autoFitRules ? fitTextBox(ability, abilityStyle.fontSize, 14, abilityStyle.width || (CW - abilityStyle.x * 2), 10, 840 - abilityStyle.y, abilityStyle.fontFamily || FB_DEFAULT) : abilityStyle.fontSize;
+    const size = state.autoFitRules ? fitTextBox(ability, abilityStyle.fontSize, 14, abilityStyle.width || (CW - abilityStyle.x * 2), 10, 840 - abilityStyle.y, abilityStyle.lineGap || 4) : abilityStyle.fontSize;
     const lines = String(ability).split("\n");
     let nextY = abilityStyle.y;
     for (const line of lines) {
@@ -338,7 +362,7 @@ function renderCardSync(canvas, state, withBleed = false) {
 function getGuideMetrics(state) {
   const nameSize = state.autoFitName ? fitTextBox((state.name || "TOKEN").toUpperCase(), state.nameStyle.fontSize, 16, CW - 90, 1, state.nameStyle.fontFamily || FT_DEFAULT) : state.nameStyle.fontSize;
   const typeSize = state.autoFitType ? fitTextBox(state.type || "Token", state.typeStyle.fontSize, 14, CW - state.typeStyle.x - 40, 1, state.typeStyle.fontFamily || FT_DEFAULT) : state.typeStyle.fontSize;
-  const abilitySize = state.autoFitRules ? fitTextBox(state.ability || "", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, 840 - state.abilityStyle.y, state.abilityStyle.fontFamily || FB_DEFAULT) : state.abilityStyle.fontSize;
+  const abilitySize = state.autoFitRules ? fitTextBox(state.ability || "", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, 840 - state.abilityStyle.y, state.abilityStyle.lineGap || 4) : state.abilityStyle.fontSize;
   const typeWidth = measureTextWidth(state.type || "Token", typeSize, state.typeStyle.fontFamily || FT_DEFAULT, "bold");
   const nameWidth = measureTextWidth((state.name || "TOKEN").toUpperCase(), nameSize, state.nameStyle.fontFamily || FT_DEFAULT, "bold");
   const abilityLines = Math.max(1, String(state.ability || '').split('\n').length || 1);
@@ -527,7 +551,7 @@ export default function TokenPreviewSinglePtFrame() {
           next.typeStyle.x = Math.max(MARGIN + 15, Math.min(CW - tWidth - MARGIN - 15, next.typeStyle.x));
           next.typeStyle.y = Math.max(CH/2, Math.min(CH - MARGIN - 40, next.typeStyle.y));
         } else if (kind === 'ability') {
-          const aSize = state.autoFitRules ? fitTextBox(state.ability||"", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, 840 - state.abilityStyle.y, state.abilityStyle.fontFamily || FB_DEFAULT) : state.abilityStyle.fontSize;
+          const aSize = state.autoFitRules ? fitTextBox(state.ability||"", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, 840 - state.abilityStyle.y, state.abilityStyle.lineGap || 4) : state.abilityStyle.fontSize;
           const aLines = Math.max(1, String(state.ability || '').split('\n').length);
           const aHeight = aLines * (aSize * 1.45);
           next.abilityStyle.x = Math.max(MARGIN + 15, Math.min(CW - (next.abilityStyle.width||400) - MARGIN - 15, next.abilityStyle.x));

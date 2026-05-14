@@ -37,8 +37,13 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
 
   // Sync with global queue if provided
   useEffect(() => {
-    if (externalQueue && externalQueue.length !== images.length) {
-      setImages(externalQueue);
+    if (externalQueue) {
+      // Use ID string comparison for a stable and efficient check
+      const currentIds = images.map(img => img.id).join(',');
+      const externalIds = externalQueue.map(img => img.id).join(',');
+      if (currentIds !== externalIds) {
+        setImages(externalQueue);
+      }
     }
   }, [externalQueue]);
 
@@ -184,134 +189,105 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
         </div>
       </div>
 
-      {/* Database Search & Bulk Import Section */}
-      <div className="section" style={{ padding: '20px', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ padding: '10px', backgroundColor: 'var(--accent-hl)', borderRadius: '10px', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            </div>
-            <div>
-              <h2 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#fff', margin: 0 }}>{t('proxy.search_cards')}</h2>
-              <p style={{ fontSize: '0.75rem', color: 'var(--muted)', margin: '4px 0 0 0' }}>{t('proxy.search_subtitle')}</p>
-            </div>
-          </div>
-          
-          <div style={{ display: 'flex', backgroundColor: 'rgba(0,0,0,0.3)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border)' }}>
-            <button 
-              style={{ 
-                padding: '8px 16px', fontSize: '0.75rem', fontWeight: '700', borderRadius: '7px', cursor: 'pointer', transition: 'all 0.2s',
-                backgroundColor: (!showDatabase || dbType === 'single') ? 'var(--accent)' : 'transparent',
-                color: (!showDatabase || dbType === 'single') ? '#000' : 'var(--muted)',
-                border: 'none'
-              }}
-              onClick={() => { setShowDatabase(true); setDbType('single'); }}
-            >
-              🃏 {t('proxy.search_tab')}
-            </button>
-            <button 
-              style={{ 
-                padding: '8px 16px', fontSize: '0.75rem', fontWeight: '700', borderRadius: '7px', cursor: 'pointer', transition: 'all 0.2s',
-                backgroundColor: (showDatabase && dbType === 'bulk') ? 'var(--accent)' : 'transparent',
-                color: (showDatabase && dbType === 'bulk') ? '#000' : 'var(--muted)',
-                border: 'none'
-              }}
-              onClick={() => { setShowDatabase(true); setDbType('bulk'); }}
-            >
-              📝 {t('proxy.bulk_tab')}
-            </button>
-            {showDatabase && (
-              <button 
-                style={{ marginLeft: '8px', padding: '0 8px', backgroundColor: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
-                onClick={() => setShowDatabase(false)}
-              >
-                ✕
-              </button>
-            )}
-          </div>
+      {/* Unified Elite Toolbox */}
+      <div className="proxy-toolbox">
+        <div className="toolbox-tabs">
+          <button 
+            className={`toolbox-tab ${dbType === 'single' ? 'active' : ''}`} 
+            onClick={() => { setDbType('single'); setShowDatabase(true); }}
+          >
+            <Icon d="m21 21-4.35-4.35M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z" size={16} />
+            {t('proxy.search_tab')}
+          </button>
+          <button 
+            className={`toolbox-tab ${dbType === 'bulk' ? 'active' : ''}`} 
+            onClick={() => { setDbType('bulk'); setShowDatabase(true); }}
+          >
+            <Icon d="M4 7V4h16v3M9 20h6M12 4v16" size={16} />
+            {t('proxy.bulk_tab')}
+          </button>
+          <button 
+            className="toolbox-tab" 
+            onClick={() => inputRef.current.click()}
+          >
+            <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" size={16} />
+            {t('proxy.upload_local')}
+          </button>
         </div>
 
-        {showDatabase && (
-          <div style={{ paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            {dbType === 'single' ? (
-              <CardSearchPanel onAddCards={cards => {
-                setImages(prev => [...prev, ...cards]);
-                const suffix = cards.length === 1 ? (lang === 'it' ? "ia" : "") : (lang === 'it' ? "ie" : "s");
-                toast(t('proxy.cards_added', { count: cards.length, suffix }));
-              }} />
-            ) : (
-              <BulkImportPanel onAddCards={cards => {
-                setImages(prev => [...prev, ...cards]);
-                const suffix = cards.length === 1 ? (lang === 'it' ? "ia" : "") : (lang === 'it' ? "ie" : "s");
-                toast(t('proxy.cards_added', { count: cards.length, suffix }));
-              }} toast={toast} />
-            )}
-          </div>
-        )}
+        <div className="toolbox-content">
+          <input type="file" ref={inputRef} style={{ display: "none" }} multiple onChange={e => handleFiles(e.target.files)} accept="image/*" />
+          
+          {dbType === 'single' ? (
+            <CardSearchPanel onAddCards={cards => { setImages(prev => [...prev, ...cards]); toast(t('proxy.toast_loaded', { count: cards.length })); }} />
+          ) : (
+            <BulkImportPanel onAddCards={cards => { setImages(prev => [...prev, ...cards]); toast(t('proxy.toast_loaded', { count: cards.length })); }} toast={toast} />
+          )}
+        </div>
       </div>
 
-      {/* Dropzone */}
-      <div
+      {/* Main Queue Area */}
+      <div 
+        className={`proxy-workspace ${isDrop ? "drag-active" : ""}`}
         onDragOver={e => { e.preventDefault(); setIsDrop(true); }}
         onDragLeave={() => setIsDrop(false)}
         onDrop={onDrop}
-        onClick={() => inputRef.current?.click()}
-        className={`dropzone ${isDrop ? "active" : ""}`}
-        style={{ padding: isMobile ? "24px 16px" : "36px 24px" }}
       >
-        <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
-          onChange={e => { handleFiles(e.target.files); e.target.value = ""; }} />
-        <div className="dropzone-icon">🖼️</div>
-        <div className="dropzone-title">{t('proxy.dropzone_title')}</div>
-        <div className="dropzone-subtitle">{t('proxy.dropzone_subtitle')}</div>
-      </div>
-
-      {/* Print Queue */}
-      {images.length > 0 && (
-        <div className="section queue-section">
-          <div className="queue-header">
-            <div className="queue-title">
-              {t('proxy.queue_title')}
-              <span className="queue-badge">{t('proxy.queue_badge', { count: images.length })}</span>
+        {images.length === 0 ? (
+          <div className="empty-state-container" onClick={() => inputRef.current.click()}>
+            <div className="empty-state-art">
+              <div className="empty-icon-pulse">
+                <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" size={48} />
+              </div>
             </div>
-            <button className={`btn ${printOpen ? 'btn-primary' : 'btn-accent'}`} onClick={() => setPrintOpen(v => !v)}>
-              <Icon d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" size={14}/>
-              {printOpen ? t('proxy.close_settings') : t('proxy.pdf_settings_toggle')}
-            </button>
+            <h3 className="empty-state-title">{t('proxy.empty_queue')}</h3>
+            <p className="empty-state-desc">{t('proxy.empty_subtitle')}</p>
+            <div className="empty-state-action">
+              <span>{t('proxy.drag_hint')}</span>
+            </div>
           </div>
+        ) : (
+          <div className="queue-container">
+            <div className="queue-header">
+               <h2 className="queue-title">📦 {t('proxy.queue')} <span className="queue-count">{images.length}</span></h2>
+               <div className="queue-pages">({pages} {pages === 1 ? t('proxy.page') : t('proxy.pages')})</div>
+               
+               <button className={`btn ml-auto ${printOpen ? 'btn-primary' : 'btn-accent'}`} onClick={() => setPrintOpen(v => !v)}>
+                 <Icon d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" size={14}/>
+                 {printOpen ? t('proxy.close_settings') : t('proxy.pdf_settings_toggle')}
+               </button>
+            </div>
 
-          {printOpen && (
-            <PdfSettings
-              printCols={printCols} setPrintCols={setPrintCols}
-              printRows={printRows} setPrintRows={setPrintRows}
-              printGap={printGap} setPrintGap={setPrintGap}
-              cutMarks={cutMarks} setCutMarks={setCutMarks}
-              bleedPDF={bleedPDF} setBleedPDF={setBleedPDF}
-              perPage={perPage} pages={pages} isMobile={isMobile}
+            {printOpen && (
+              <PdfSettings
+                printCols={printCols} setPrintCols={setPrintCols}
+                printRows={printRows} setPrintRows={setPrintRows}
+                printGap={printGap} setPrintGap={setPrintGap}
+                cutMarks={cutMarks} setCutMarks={setCutMarks}
+                bleedPDF={bleedPDF} setBleedPDF={setBleedPDF}
+                perPage={perPage} pages={pages} isMobile={isMobile}
+              />
+            )}
+            
+            <PrintQueue 
+              images={images} 
+              onRemove={remove} 
+              onDup={dup} 
+              onReorder={reorder}
+              dragIdx={dragIdx}
+              setDragIdx={setDragIdx}
+              isMobile={isMobile}
             />
-          )}
 
-          <PrintQueue
-            images={images}
-            dragIdx={dragIdx}
-            setDragIdx={setDragIdx}
-            reorder={reorder}
-            remove={remove}
-            dup={dup}
-            isMobile={isMobile}
-          />
-
-          <div className="queue-footer">
-            <button className="btn btn-ghost" onClick={() => setConfirmOpen(true)}>{t('proxy.clear_all')}</button>
-            <button className="btn btn-primary" disabled={isGen} onClick={handleGenPDF}>
-              {isGen ? t('proxy.generating') : t('proxy.generate_btn', { count: images.length, pages })}
-            </button>
+            <div className="queue-footer">
+              <button className="btn btn-ghost" onClick={() => setConfirmOpen(true)}>{t('proxy.clear_all')}</button>
+              <button className="btn btn-primary" disabled={isGen} onClick={handleGenPDF}>
+                {isGen ? t('proxy.generating') : t('proxy.generate_btn', { count: images.length, pages })}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {images.length === 0 && <PrintQueue images={[]} />}
+        )}
+      </div>
 
       {/* Snackbar */}
       {snack.show && (

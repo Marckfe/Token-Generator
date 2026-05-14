@@ -41,8 +41,34 @@ export async function generatePDF({ images, printCols, printRows, printGap, cutM
         
         const buf = dataURLtoBuffer(dataUrl);
         let pimg;
-        if (dataUrl.startsWith("data:image/jpeg")) pimg = await doc.embedJpg(buf);
-        else pimg = await doc.embedPng(buf);
+        
+        // Robust image embedding with type check
+        if (dataUrl.startsWith("data:image/jpeg")) {
+          pimg = await doc.embedJpg(buf);
+        } else if (dataUrl.startsWith("data:image/png")) {
+          pimg = await doc.embedPng(buf);
+        } else {
+          // Handle WebP or other formats by converting to JPEG via canvas
+          // This is essential as pdf-lib does not support WebP directly
+          try {
+            const img = new Image();
+            img.src = dataUrl;
+            await new Promise((res, rej) => { 
+              img.onload = res; 
+              img.onerror = () => rej(new Error("Errore caricamento immagine per conversione")); 
+            });
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            const convertedDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+            const convertedBuf = dataURLtoBuffer(convertedDataUrl);
+            pimg = await doc.embedJpg(convertedBuf);
+          } catch (err) {
+            throw new Error(`Conversione immagine fallita: ${err.message}`);
+          }
+        }
         
         const col = i % printCols;
         const row = Math.floor(i / printCols);

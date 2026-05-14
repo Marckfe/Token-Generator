@@ -35,11 +35,25 @@ export default function BulkImportPanel({ onAddCards, toast }) {
       const m1 = cleanLine.match(/^(\d+)[xX]?\s+(.+)$/);
       const m2 = cleanLine.match(/^(.+?)\s+[xX](\d+)$/);
       const m3 = cleanLine.match(/^(.+?)\s+(\d+)$/);
+      
       let qty = 1;
       let name = cleanLine;
-      if (m1) { qty = Math.min(100, parseInt(m1[1])); name = m1[2].trim(); }
-      else if (m2) { qty = Math.min(100, parseInt(m2[2])); name = m2[1].trim(); }
-      else if (m3) { qty = Math.min(100, parseInt(m3[2])); name = m3[1].trim(); }
+      
+      // Better number parsing: prioritize explicit 4x or x4 formats
+      if (m1) { 
+        qty = Math.min(100, parseInt(m1[1])); 
+        name = m1[2].trim(); 
+      } else if (m2) { 
+        qty = Math.min(100, parseInt(m2[2])); 
+        name = m2[1].trim(); 
+      } else if (m3) {
+        // Only treat as quantity if the number is small (e.g. 1-40) and the name part is reasonably long
+        const val = parseInt(m3[2]);
+        if (val > 0 && val <= 40 && m3[1].trim().length > 3) {
+           qty = val;
+           name = m3[1].trim();
+        }
+      }
       name = name.split(/\s*\/\/?\s*/)[0].trim();
 
       // Skip section headers: name is ALL CAPS (e.g. "LANDS", "CREATURES", "INSTANTS and SORC.")
@@ -174,11 +188,7 @@ export default function BulkImportPanel({ onAddCards, toast }) {
   };
 
   return (
-    <div className="panel-container">
-      <div className="panel-header">
-        <span style={{ fontSize: 18 }}>📋</span>
-        <span className="panel-title">{t('proxy.bulk_import')}</span>
-      </div>
+    <div className="panel-container" style={{ background: 'transparent', border: 'none', padding: 0, boxShadow: 'none', animation: 'none' }}>
 
       <div className="panel-hint">
         Formati: <code className="text-accent">4 Lightning Bolt</code> · <code className="text-accent">4x Bolt</code> · <code className="text-accent">Bolt x4</code> · solo nome

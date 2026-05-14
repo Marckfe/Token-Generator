@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { jsPDF } from 'jspdf';
 import {
   ShieldCheck, AlertTriangle, FileText, Download,
-  Search, CheckCircle2, XCircle, Clock, Plus
+  Search, CheckCircle2, XCircle, Clock, Plus,
+  CheckCircle, ShieldAlert
 } from 'lucide-react';
 import './DeckChecker.css';
 import { useLanguage } from '../../context/LanguageContext';
@@ -69,19 +70,39 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
   };
 
   // ── Parse deck list text ──────────────────────────────────────────
-  const parseLines = (text) =>
-    text.split('\n')
+  const parseLines = (text) => {
+    const EXCLUDED_KEYWORDS = [
+      'creatures', 'instants', 'sorceries', 'lands', 'artifacts', 'enchantments', 
+      'planeswalkers', 'sideboard', 'commander', 'maybeboard', 'tokens', 'other',
+      'and', 'spells'
+    ];
+
+    return text.split('\n')
       .map(line => line.trim())
       .filter(line => line && !line.startsWith('//') && !line.startsWith('#'))
       .map(line => {
+        // Remove set info like (M21) or collector numbers
         const clean = line.replace(/\s+\([a-zA-Z0-9_]+\)\s*.*$/i, '').trim();
         const m = clean.match(/^(\d+)x?\s+(.+)$/i);
         const name = (m ? m[2] : clean).split(/\s*\/\/??\s*/)[0].trim();
         const qty = m ? parseInt(m[1], 10) : 1;
-        if (name && name === name.toUpperCase() && /[A-Z]/.test(name)) return null;
-        return name && name.length > 1 ? { qty, name } : null;
+
+        if (!name || name.length < 3) return null;
+
+        // Skip if line is all caps (often a header)
+        if (name === name.toUpperCase() && /[A-Z]/.test(name)) return null;
+
+        // Skip if name is just a common category header
+        const lowerName = name.toLowerCase();
+        if (EXCLUDED_KEYWORDS.some(k => lowerName === k || lowerName.includes(k + ' and ') || lowerName.includes(' and ' + k))) {
+          // If it has a number at start, it might be a card, otherwise it's likely a header
+          if (!m) return null;
+        }
+
+        return { qty, name };
       })
       .filter(Boolean);
+  };
 
   // ── Main check logic ──────────────────────────────────────────────
   const handleCheck = async () => {
@@ -135,23 +156,40 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
         } catch { /* ignore */ }
       }));
 
-      const enrich = (items) => items.map(item => {
-        const info = cardMap[item.name.toLowerCase()];
-        return { ...item, name: info ? info.fullName : item.name, type: info?.type || 'Unknown' };
-      });
+      const mergeItems = (items) => {
+        const map = {};
+        items.forEach(item => {
+          const key = item.name.toLowerCase();
+          if (map[key]) {
+            map[key].qty += item.qty;
+          } else {
+            map[key] = { ...item };
+          }
+        });
+        return Object.values(map);
+      };
 
-      const enrichedMain = enrich(mainLines);
-      const enrichedCmd = enrich(cmdLines);
+      const enrichedMain = mergeItems(enrich(mainLines));
+      const enrichedCmd = mergeItems(enrich(cmdLines));
       setParsedDeck({ main: enrichedMain, cmd: enrichedCmd });
 
-      const verdict = { status: 'legal', reasons: [] };
-      allCards.forEach(item => {
+      const isSingletonFormat = selectedFormat === 'commander' || selectedFormat === 'duel';
+      const allEnriched = [...enrichedMain, ...enrichedCmd];
+      
+      allEnriched.forEach(item => {
         const info = cardMap[item.name.toLowerCase()];
         if (!info) {
           verdict.status = 'banned';
           verdict.reasons.push({ name: item.name, reason: t('checker.not_found') });
           return;
         }
+
+        // Singleton check
+        if (isSingletonFormat && item.qty > 1 && !info.type.toLowerCase().includes('basic land')) {
+          verdict.status = 'banned';
+          verdict.reasons.push({ name: info.fullName, reason: `${t('checker.singleton_violation')} (${item.qty}x)` });
+        }
+
         const l = info.legalities[selectedFormat];
         if (l === 'not_legal') {
           verdict.status = 'banned';
@@ -178,27 +216,28 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
     try {
       doc.addImage(logoUrl, 'PNG', 15, 10, 10, 10);
     } catch (e) {
-      // Fallback if image fails to load
       doc.setFillColor(0, 0, 0);
       doc.rect(15, 10, 10, 10, 'F');
+      doc.setTextColor(255); doc.setFontSize(8);
+      doc.text('MTG', 20, 16.5, { align: 'center' });
     }
 
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
-    doc.text(t('checker.official_sheet'), 105, 17, { align: 'center' });
+    doc.text(t('checker.official_sheet').toUpperCase(), 105, 17, { align: 'center' });
 
     const drawField = (label, val, x, y, w) => {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-      doc.text(label + ':', x, y);
+      doc.text(label.toUpperCase() + ':', x, y);
       doc.setFont('helvetica', 'normal');
-      doc.text(val || '________________', x + 30, y);
-      doc.setDrawColor(200); doc.line(x + 30, y + 1, x + w, y + 1);
+      doc.text(val || '', x + 35, y);
+      doc.setDrawColor(180); doc.line(x + 35, y + 1, x + w, y + 1);
     };
-    drawField(t('checker.last_name'),  playerData.lastName,  20,  30, 80);
-    drawField(t('checker.first_name'), playerData.firstName, 110, 30, 80);
-    drawField(t('checker.player_id'),  playerData.playerId,  20,  38, 80);
-    drawField(t('checker.date'),       playerData.date,      110, 38, 80);
-    drawField(t('checker.deck_name'),  playerData.deckName,  20,  46, 80);
-    drawField(t('checker.event_name'), playerData.event,     110, 46, 80);
+    drawField(t('checker.last_name'),  playerData.lastName,  20,  30, 95);
+    drawField(t('checker.first_name'), playerData.firstName, 110, 30, 190);
+    drawField(t('checker.player_id'),  playerData.playerId,  20,  38, 95);
+    drawField(t('checker.date'),       playerData.date,      110, 38, 190);
+    drawField(t('checker.deck_name'),  playerData.deckName,  20,  46, 95);
+    drawField(t('checker.event_name'), playerData.event,     110, 46, 190);
 
     const categorize = (deck) => {
       const g = { Land: [], Creature: [], 'Instant/Sorcery': [], Other: [] };
@@ -216,18 +255,20 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
       if (!items.length) return y;
       const total = items.reduce((s, i) => s + i.qty, 0);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-      doc.setFillColor(240); doc.rect(x - 2, y - 4, 87, 6, 'F');
+      doc.setFillColor(0, 0, 0); doc.rect(x - 2, y - 4, 87, 5.5, 'F');
+      doc.setTextColor(255);
       doc.text(`${title.toUpperCase()} (${total})`, x, y);
+      doc.setTextColor(0);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-      let ny = y + 5;
+      let ny = y + 4.5;
       items.forEach(item => {
-        if (ny > 280) return;
-        doc.text(String(item.qty), x, ny);
-        doc.text(item.name.substring(0, 38), x + 6, ny);
-        doc.setDrawColor(230); doc.line(x, ny + 0.5, x + 85, ny + 0.5);
-        ny += 4.5;
+        if (ny > 282) return; // Almost end of A4
+        doc.setFont('helvetica', 'bold'); doc.text(String(item.qty), x, ny);
+        doc.setFont('helvetica', 'normal'); doc.text(item.name.substring(0, 42), x + 5, ny);
+        doc.setDrawColor(235); doc.line(x, ny + 0.4, x + 85, ny + 0.4);
+        ny += 4.0; // Tighter line height
       });
-      return ny + 6;
+      return ny + 4; // Tighter section gap
     };
 
     const mainGroups = categorize(parsedDeck.main);
@@ -247,15 +288,17 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
 
     const totalMain = parsedDeck.main.reduce((s, i) => s + i.qty, 0);
     const totalCmd  = parsedDeck.cmd.reduce((s, i) => s + i.qty, 0);
-    const footerY = 290;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    const footerY = 288;
+    doc.setFontSize(9);
     doc.text(t('checker.footer_main', { count: totalMain }), 20, footerY);
     doc.text(t(isSingleton ? 'checker.footer_cmd' : 'checker.footer_side', { count: totalCmd }), 65, footerY);
     
-    // Black square for Grand Total
-    doc.setFillColor(0, 0, 0); doc.setTextColor(255);
-    doc.rect(108, footerY - 5, 82, 7, 'F');
-    doc.text(t('checker.grand_total', { count: totalMain + totalCmd }), 110, footerY);
+    // Grand Total in black box
+    const totalAll = totalMain + totalCmd;
+    doc.setFillColor(0, 0, 0); doc.rect(130, footerY - 5, 65, 8, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    const totalLabel = t('checker.grand_total', { count: totalAll });
+    doc.text(totalLabel, 162.5, footerY + 1, { align: 'center' });
     doc.setTextColor(0);
 
     doc.save(`${playerData.lastName || 'deck'}_Registration.pdf`);
@@ -430,10 +473,8 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
       <div className="dc-main">
         {results ? (
           <div className="dc-result-hero">
-            <div className="dc-result-icon">
-              {results.status === 'legal'
-                ? <CheckCircle2 size={80} color="var(--success)" />
-                : <XCircle size={80} color="var(--error)" />}
+            <div className={`dc-result-icon ${results.status === 'legal' ? 'text-success' : 'text-error'}`}>
+              {results.status === 'legal' ? <CheckCircle size={80} /> : <AlertTriangle size={80} />}
             </div>
             <h2 className={`dc-result-title ${results.status}`}>
               {results.status === 'legal' ? t('checker.legal_title') : t('checker.not_legal_title')}
@@ -450,11 +491,16 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
             ) : (
               <div className="dc-banned-box">
                 <div className="dc-banned-title">
-                  <AlertTriangle size={16} />
+                  <ShieldAlert size={16} />
                   {t('checker.issues_found', { count: results.reasons.length })}
                 </div>
                 <div className="dc-banned-list">
-                  {results.reasons.map((r, i) => (
+                  {results.reasons
+                    .filter(r => {
+                      const n = r.name.toLowerCase();
+                      return !['instants', 'sorceries', 'creatures', 'lands', 'and'].some(k => n === k || n.includes(k + ' and '));
+                    })
+                    .map((r, i) => (
                     <div key={i} className="dc-banned-item">
                       <span className="dc-banned-name">{r.name}</span>
                       <span className="dc-banned-reason">{r.reason}</span>
