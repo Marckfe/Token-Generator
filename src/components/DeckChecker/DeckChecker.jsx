@@ -160,8 +160,7 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
         // Skip if name is just a common category header
         const lowerName = name.toLowerCase();
         if (EXCLUDED_KEYWORDS.some(k => lowerName === k || lowerName.includes(k + ' and ') || lowerName.includes(' and ' + k))) {
-          // If it has a number at start, it might be a card, otherwise it's likely a header
-          if (!m) return null;
+          return null;
         }
 
         return { qty, name };
@@ -298,14 +297,29 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
   };
 
   // ── Generate PDF ──────────────────────────────────────────────────
-  const generatePDF = () => {
+  const generatePDF = async () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-    // Header with MTG Logo
     // Header with MTG Logo or Fallback
     const logoUrl = '/assets/mtg-logo.png';
+    
+    const getLogoDimensions = () => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const ratio = img.naturalHeight / img.naturalWidth;
+          resolve({ w: 35, h: 35 * ratio });
+        };
+        img.onerror = () => resolve({ w: 12, h: 10, error: true });
+        img.src = logoUrl;
+      });
+    };
+
+    const logoDim = await getLogoDimensions();
+    
     try {
-      doc.addImage(logoUrl, 'PNG', 15, 8, 25, 8);
+      if (logoDim.error) throw new Error();
+      doc.addImage(logoUrl, 'PNG', 15, 8, logoDim.w, logoDim.h);
     } catch (e) {
       // Premium Fallback Logo
       doc.setFillColor(30, 30, 30);
@@ -316,7 +330,7 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
 
     // Official Title
     doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
-    doc.text(t('checker.official_sheet').toUpperCase(), 105, 15, { align: 'center' });
+    doc.text(t('checker.official_sheet').toUpperCase(), 110, 15, { align: 'center' });
 
     // Table Number in Top Right
     doc.setFontSize(10);
@@ -342,13 +356,18 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
     drawField(t('checker.event_name'), playerData.event,     110, 46, 190);
 
     const categorize = (deck) => {
-      const g = { Land: [], Creature: [], 'Instant/Sorcery': [], Other: [] };
+      const g = { 
+        [t('checker.cat_lands')]: [], 
+        [t('checker.cat_creatures')]: [], 
+        [t('checker.cat_instants')]: [], 
+        [t('checker.cat_other')]: [] 
+      };
       deck.forEach(c => {
-        const t = c.type.toLowerCase();
-        if (t.includes('land')) g.Land.push(c);
-        else if (t.includes('creature')) g.Creature.push(c);
-        else if (t.includes('instant') || t.includes('sorcery')) g['Instant/Sorcery'].push(c);
-        else g.Other.push(c);
+        const t_line = c.type.toLowerCase();
+        if (t_line.includes('land')) g[t('checker.cat_lands')].push(c);
+        else if (t_line.includes('creature')) g[t('checker.cat_creatures')].push(c);
+        else if (t_line.includes('instant') || t_line.includes('sorcery')) g[t('checker.cat_instants')].push(c);
+        else g[t('checker.cat_other')].push(c);
       });
       return g;
     };
@@ -368,21 +387,27 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
         doc.setFont('helvetica', 'bold'); doc.text(String(item.qty), x, ny);
         doc.setFont('helvetica', 'normal'); doc.text(item.name.substring(0, 42), x + 5, ny);
         doc.setDrawColor(235); doc.line(x, ny + 0.4, x + 85, ny + 0.4);
-        ny += 4.0; // Tighter line height
+        ny += 4.0; 
       });
-      return ny + 4; // Tighter section gap
+      return ny + 4; 
     };
 
     const mainGroups = categorize(parsedDeck.main);
+    const catLands = t('checker.cat_lands');
+    const catCreatures = t('checker.cat_creatures');
+    const catInstants = t('checker.cat_instants');
+    const catOther = t('checker.cat_other');
+
     let startY = 60;
     if (isSingleton && parsedDeck.cmd.length) {
       startY = drawSection(t('checker.cat_commanders'), parsedDeck.cmd, 20, 60);
     }
-    let y1 = drawSection(t('checker.cat_creatures'), mainGroups.Creature, 20, startY);
-    y1 = drawSection(t('checker.cat_lands'), mainGroups.Land, 20, y1);
-    let y2 = drawSection(t('checker.cat_instants'), mainGroups['Instant/Sorcery'], 110, startY);
-    y2 = drawSection(t('checker.cat_other'), mainGroups.Other, 110, y2);
+    let y1 = drawSection(catCreatures, mainGroups[catCreatures], 20, startY);
+    y1 = drawSection(catLands, mainGroups[catLands], 20, y1);
+    let y2 = drawSection(catInstants, mainGroups[catInstants], 110, startY);
+    y2 = drawSection(catOther, mainGroups[catOther], 110, y2);
     let finalY = Math.max(y1, y2) + 10;
+    
     if (!isSingleton && parsedDeck.cmd.length) {
       if (finalY > 270) finalY = 270;
       drawSection(t('checker.cat_sideboard'), parsedDeck.cmd, 20, finalY);
@@ -480,7 +505,7 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
                       <div key={deck.id} className="dc-library-item">
                         <div className="dc-lib-info" onClick={() => handleLoadDeck(deck)}>
                           <span className="dc-lib-name">{deck.name}</span>
-                          <span className="dc-lib-meta">{deck.format.toUpperCase()} • {new Date(deck.updatedAt?.seconds * 1000).toLocaleDateString()}</span>
+                          <span className="dc-lib-meta">{deck.format.toUpperCase()} • {new Date(deck.updatedAt).toLocaleDateString()}</span>
                         </div>
                         <button className="dc-lib-delete" onClick={() => handleDeleteDeck(deck.id)}>
                           <Trash2 size={16} />
@@ -642,12 +667,7 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
                   {t('checker.issues_found', { count: results.reasons.length })}
                 </div>
                 <div className="dc-banned-list">
-                  {results.reasons
-                    .filter(r => {
-                      const n = r.name.toLowerCase();
-                      return !['instants', 'sorceries', 'creatures', 'lands', 'and'].some(k => n === k || n.includes(k + ' and '));
-                    })
-                    .map((r, i) => (
+                  {results.reasons.map((r, i) => (
                     <div key={i} className="dc-banned-item">
                       <span className="dc-banned-name">{r.name}</span>
                       <span className="dc-banned-reason">{r.reason}</span>

@@ -10,7 +10,8 @@ import {
   getDocs,
   addDoc,
   deleteDoc,
-  onSnapshot
+  onSnapshot,
+  serverTimestamp
 } from "firebase/firestore";
 
 /**
@@ -124,7 +125,9 @@ export const deleteUserToken = async (userId, tokenId) => {
  * Salva una lista mazzo (limite 10)
  */
 export const saveUserDeck = async (userId, deckData) => {
-  if (!userId) return;
+  if (!userId) throw new Error("Utente non autenticato");
+  console.log("Salvataggio mazzo per:", userId, deckData.name);
+  
   try {
     const decksRef = collection(db, "users", userId, "decks");
     
@@ -132,25 +135,29 @@ export const saveUserDeck = async (userId, deckData) => {
     if (!deckData.id) {
       const snap = await getDocs(decksRef);
       if (snap.size >= 10) {
-        throw new Error("Limite raggiunto: puoi salvare al massimo 10 mazzi sul tuo account.");
+        throw new Error("Limite raggiunto: puoi salvare al massimo 10 mazzi.");
       }
     }
 
     const data = {
       ...deckData,
-      updatedAt: new Date(),
-      createdAt: deckData.createdAt || new Date()
+      updatedAt: serverTimestamp(),
+      createdAt: deckData.createdAt || serverTimestamp()
     };
 
+    let finalId;
     if (deckData.id) {
       await setDoc(doc(decksRef, deckData.id), data);
-      return deckData.id;
+      finalId = deckData.id;
     } else {
       const docRef = await addDoc(decksRef, data);
-      return docRef.id;
+      finalId = docRef.id;
     }
+    
+    console.log("Mazzo salvato con successo, ID:", finalId);
+    return finalId;
   } catch (error) {
-    console.error("Errore salvataggio mazzo:", error);
+    console.error("Errore dettagliato Firestore:", error);
     throw error;
   }
 };
@@ -164,7 +171,12 @@ export const getUserDecks = async (userId) => {
     const decksRef = collection(db, "users", userId, "decks");
     const q = query(decksRef);
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return querySnapshot.docs.map(doc => ({ 
+      id: doc.id, 
+      ...doc.data(),
+      // Handle timestamp conversion for UI
+      updatedAt: doc.data().updatedAt?.toDate ? doc.data().updatedAt.toDate() : new Date()
+    }));
   } catch (error) {
     console.error("Errore recupero mazzi:", error);
     return [];
