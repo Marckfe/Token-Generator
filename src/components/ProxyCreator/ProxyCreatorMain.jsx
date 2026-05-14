@@ -16,7 +16,7 @@ function Icon({ d, size = 16, className = "" }) {
 }
 
 export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQueue }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [images, setImages] = useState(externalQueue || []);
   const [dragIdx, setDragIdx] = useState(null);
   const [isDrop, setIsDrop] = useState(false);
@@ -198,12 +198,12 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
           <div className="accordion-content">
             <CardSearchPanel onAddCards={cards => {
               setImages(prev => [...prev, ...cards]);
-              const suffix = cards.length === 1 ? (t === 'it' ? "ia" : "") : (t === 'it' ? "ie" : "s");
+              const suffix = cards.length === 1 ? (lang === 'it' ? "ia" : "") : (lang === 'it' ? "ie" : "s");
               toast(t('proxy.cards_added', { count: cards.length, suffix }));
             }} />
             <BulkImportPanel onAddCards={cards => {
               setImages(prev => [...prev, ...cards]);
-              const suffix = cards.length === 1 ? (t === 'it' ? "ia" : "") : (t === 'it' ? "ie" : "s");
+              const suffix = cards.length === 1 ? (lang === 'it' ? "ia" : "") : (lang === 'it' ? "ie" : "s");
               toast(t('proxy.cards_added', { count: cards.length, suffix }));
             }} toast={toast} />
           </div>

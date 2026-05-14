@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Wand2, ShieldCheck, Zap, Layers, ChevronRight } from 'lucide-react';
@@ -6,7 +7,7 @@ import './LandingPage.css';
 const LandingPage = () => {
   const { login } = useAuth();
   const { t, lang, setLang } = useLanguage();
-  const [error, setError] = React.useState(null);
+  const [error, setError] = useState(null);
 
   const handleLogin = async () => {
     try {
