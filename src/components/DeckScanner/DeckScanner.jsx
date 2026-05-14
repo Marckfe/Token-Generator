@@ -1,291 +1,426 @@
 import React, { useState, useRef } from 'react';
-import { Search, Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle, Wand2, Key, Upload, Bug, RefreshCw, HelpCircle, LayoutGrid, Layers } from 'lucide-react';
+import {
+  Image as ImageIcon, Trash2, Plus, Loader2, AlertCircle,
+  Wand2, RefreshCw, HelpCircle, LayoutGrid, Layers,
+  ShieldCheck, Printer, CheckCircle2, XCircle
+} from 'lucide-react';
 import './DeckScanner.css';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
-const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'isola', 'palude', 'montagna', 'foresta', 'pianura', 'wastes', 'land'];
+const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'wastes'];
 
-const DeckScanner = ({ onAddToQueue }) => {
+// ── Sub-component: single card result ──────────────────────────────────
+const ResultCard = ({ card, onUpdateQty, onRemove }) => (
+  <div className={`sc-card ${card.status}`}>
+    <div className="sc-card-thumb">
+      {card.status === 'found' ? (
+        <img
+          src={card.data?.image_uris?.normal || card.data?.card_faces?.[0]?.image_uris?.normal}
+          alt={card.name}
+          loading="lazy"
+        />
+      ) : (
+        <div className="sc-card-placeholder">
+          {card.status === 'searching'
+            ? <Loader2 className="animate-spin" size={24} />
+            : <HelpCircle size={24} />}
+        </div>
+      )}
+      {card.isSide && <div className="sc-side-badge">SIDE</div>}
+      {card.status === 'error' && <div className="sc-error-badge">?</div>}
+    </div>
+    <div className="sc-card-body">
+      <div className="sc-card-name" title={card.name}>{card.name}</div>
+      <div className="sc-card-controls">
+        <div className="sc-qty-pill">
+          <button onClick={() => onUpdateQty(card.id, card.qty - 1)}>−</button>
+          <span>{card.qty}</span>
+          <button onClick={() => onUpdateQty(card.id, card.qty + 1)}>+</button>
+        </div>
+        <button className="sc-remove-btn" onClick={() => onRemove(card.id)} title="Remove">
+          <Trash2 size={12} />
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+// ── Sub-component: section header ──────────────────────────────────────
+const SectionHeader = ({ icon, label, count }) => (
+  <div className="sc-section-header">
+    {icon}
+    <span>{label}</span>
+    <span className="sc-section-count">{count}</span>
+  </div>
+);
+
+// ── Main component ─────────────────────────────────────────────────────
+const DeckScanner = ({ onAddToQueue, onValidateDeck }) => {
   const [mainImage, setMainImage] = useState(null);
   const [mainPreview, setMainPreview] = useState(null);
   const [sideImage, setSideImage] = useState(null);
   const [sidePreview, setSidePreview] = useState(null);
-  
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [results, setResults] = useState([]);
   const [error, setError] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
+  const [validationResult, setValidationResult] = useState(null); // null | 'pending' | 'legal' | 'illegal'
+
   const { user } = useAuth();
   const { t } = useLanguage();
-  
   const mainInputRef = useRef(null);
   const sideInputRef = useRef(null);
 
+  // ── Image upload ───────────────────────────────────────────────────
   const handleImageUpload = (e, type) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (type === 'main') {
-        setMainImage(file);
-        setMainPreview(URL.createObjectURL(file));
-      } else {
-        setSideImage(file);
-        setSidePreview(URL.createObjectURL(file));
-      }
-      setError(null);
-    }
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    if (type === 'main') { setMainImage(file); setMainPreview(url); }
+    else { setSideImage(file); setSidePreview(url); }
+    setError(null);
   };
 
-  const compressImage = (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target.result;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_SIZE = 1200;
-          let width = img.width;
-          let height = img.height;
-          if (width > height) {
-            if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
-          } else {
-            if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.8));
-        };
+  // ── Image compression ──────────────────────────────────────────────
+  const compressImage = (file) => new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target.result;
+      img.onload = () => {
+        const MAX = 1200;
+        let { width, height } = img;
+        if (width > height && width > MAX) { height = (height * MAX) / width; width = MAX; }
+        else if (height > MAX) { width = (width * MAX) / height; height = MAX; }
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(width);
+        canvas.height = Math.round(height);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
       };
-    });
-  };
+    };
+  });
 
+  // ── AI analysis of one image ───────────────────────────────────────
   const analyzeSingleImage = async (imageFile, isSide) => {
     const base64Image = await compressImage(imageFile);
-    const response = await fetch("/api/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const response = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: base64Image })
     });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     if (data.error) throw new Error(data.error);
-    
-    setDebugInfo({ provider: data.provider, model: data.model, logs: data.debugLogs });
-    return (data.cards || data).map(item => ({
-      id: Math.random().toString(36).substr(2, 9),
-      qty: item.qty || 1,
-      name: item.name,
-      status: 'pending',
-      data: null,
-      isSide
-    }));
+
+    setDebugInfo({
+      provider: data.provider || 'Unknown',
+      model: data.model || 'Unknown',
+      logs: Array.isArray(data.debugLogs) ? data.debugLogs : []
+    });
+
+    const cards = Array.isArray(data.cards) ? data.cards : [];
+    return cards
+      .filter(item => item?.name)
+      .map(item => ({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        qty: Math.max(1, Number(item.qty) || 1),
+        name: item.name.trim(),
+        status: 'pending',
+        data: null,
+        isSide
+      }));
   };
 
-  const processImages = async () => {
-    if (!mainImage && !sideImage) return;
-    if (!user) {
-      setError(t('scanner.error_login'));
-      return;
-    }
-
-    setIsProcessing(true);
-    setError(null);
-    setResults([]);
-    setStatusMessage(t('scanner.status_init'));
-
-    try {
-      const tasks = [];
-      if (mainImage) {
-        tasks.push(analyzeSingleImage(mainImage, false));
-      }
-      if (sideImage) {
-        tasks.push(analyzeSingleImage(sideImage, true));
-      }
-
-      setStatusMessage(t('scanner.status_analysis'));
-      const responses = await Promise.all(tasks);
-      const allDetected = responses.flat();
-      
-      setResults(allDetected);
-      allDetected.forEach(card => searchCard(card));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsProcessing(false);
-      setStatusMessage('');
-    }
-  };
-
+  // ── Scryfall lookup for one card ───────────────────────────────────
   const searchCard = async (card) => {
     setResults(prev => prev.map(c => c.id === card.id ? { ...c, status: 'searching' } : c));
     try {
-      const response = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(card.name)}`);
-      const data = await response.json();
+      const res = await fetch(
+        `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(card.name)}`
+      );
+      const data = await res.json();
       if (data.object === 'card') {
         setResults(prev => {
-          // Check for existing same card in SAME section (main/side)
-          const existing = prev.find(c => c.status === 'found' && c.data?.id === data.id && c.isSide === card.isSide && c.id !== card.id);
+          const isLand = basicLands.some(l => data.name.toLowerCase() === l);
+          const existing = prev.find(
+            c => c.status === 'found' && c.data?.id === data.id && c.isSide === card.isSide && c.id !== card.id
+          );
           if (existing) {
-            const isLand = basicLands.some(l => data.name.toLowerCase().includes(l));
-            existing.qty = isLand ? existing.qty + card.qty : Math.min(existing.qty + card.qty, 4);
-            return prev.filter(c => c.id !== card.id);
+            return prev.map(c => {
+              if (c.id === existing.id) {
+                return { ...c, qty: isLand ? c.qty + card.qty : Math.min(c.qty + card.qty, 4) };
+              }
+              return c.id === card.id ? null : c;
+            }).filter(Boolean);
           }
-          return prev.map(c => c.id === card.id ? { ...c, status: 'found', name: data.name, data } : c);
+          return prev.map(c =>
+            c.id === card.id ? { ...c, status: 'found', name: data.name, data } : c
+          );
         });
       } else {
         setResults(prev => prev.map(c => c.id === card.id ? { ...c, status: 'error' } : c));
       }
-    } catch (err) {
+    } catch {
       setResults(prev => prev.map(c => c.id === card.id ? { ...c, status: 'error' } : c));
     }
   };
 
-  const updateCardQty = (id, newQty) => setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, newQty) } : c));
-  const removeCard = (id) => setResults(prev => prev.filter(c => c.id !== id));
-  
+  // ── Process all images ─────────────────────────────────────────────
+  const processImages = async () => {
+    if (!mainImage && !sideImage) return;
+    if (!user) { setError(t('scanner.error_login')); return; }
+
+    setIsProcessing(true);
+    setError(null);
+    setResults([]);
+    setDebugInfo(null);
+    setValidationResult(null);
+    setStatusMessage(t('scanner.status_init'));
+
+    try {
+      const tasks = [
+        mainImage ? analyzeSingleImage(mainImage, false) : Promise.resolve([]),
+        sideImage ? analyzeSingleImage(sideImage, true) : Promise.resolve([])
+      ];
+      setStatusMessage(t('scanner.status_analysis'));
+      const [mainCards, sideCards] = await Promise.all(tasks);
+      const allCards = [...mainCards, ...sideCards];
+      setResults(allCards);
+      setStatusMessage(t('scanner.status_resolving'));
+      // Fire off Scryfall lookups concurrently (max 10 at a time)
+      const chunks = [];
+      for (let i = 0; i < allCards.length; i += 10) chunks.push(allCards.slice(i, i + 10));
+      for (const chunk of chunks) await Promise.all(chunk.map(card => searchCard(card)));
+      setStatusMessage(t('scanner.status_done'));
+    } catch (err) {
+      setError(err.message || t('scanner.error_generic'));
+    } finally {
+      setIsProcessing(false);
+      setTimeout(() => setStatusMessage(''), 2000);
+    }
+  };
+
+  // ── Queue actions ──────────────────────────────────────────────────
   const handleAddToQueue = () => {
-    const validCards = results.filter(c => c.status === 'found');
-    onAddToQueue(validCards.map(c => ({
-      id: c.data.id,
+    const valid = results.filter(c => c.status === 'found');
+    onAddToQueue(valid.map(c => ({
+      id: c.data.id + '_' + Math.random(),
       name: c.data.name,
       qty: c.qty,
-      image: c.data.image_uris?.normal || c.data.card_faces?.[0]?.image_uris?.normal,
-      set: c.data.set_name,
-      artist: c.data.artist
+      url: c.data.image_uris?.normal || c.data.card_faces?.[0]?.image_uris?.normal,
+      thumb: c.data.image_uris?.small || c.data.card_faces?.[0]?.image_uris?.small,
+      srcType: 'scryfall',
+      set: c.data.set_name
     })));
   };
 
+  // ── Validate & send to DeckChecker ────────────────────────────────
+  const handleValidate = () => {
+    if (!onValidateDeck) return;
+    const mainCards = results.filter(c => !c.isSide && c.status === 'found');
+    const sideCards = results.filter(c => c.isSide && c.status === 'found');
+    const toList = (arr) => arr.map(c => `${c.qty} ${c.name}`).join('\n');
+    onValidateDeck({ maindeck: toList(mainCards), sideboard: toList(sideCards) });
+  };
+
+  // ── Derived state ──────────────────────────────────────────────────
+  const updateCardQty = (id, qty) =>
+    setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, qty) } : c));
+  const removeCard = (id) => setResults(prev => prev.filter(c => c.id !== id));
+
   const mainCards = results.filter(r => !r.isSide);
   const sideCards = results.filter(r => r.isSide);
+  const foundCount = results.filter(c => c.status === 'found').length;
+  const hasResults = results.length > 0;
 
+  // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div className="deck-scanner-container">
-      <div className="scanner-header-v2">
-        <div className="scanner-title-group">
-          <div className="scanner-icon-bg">
-            <Wand2 className="text-accent" size={28} />
-          </div>
-          <div className="scanner-text-group">
-            <h2>Deck Scanner Elite <span className="version-tag-v2">VISION AI</span></h2>
-            <p className="scanner-subtitle">{t('scanner.subtitle')}</p>
+    <div className="sc-container">
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="sc-header">
+        <div className="sc-header-left">
+          <div className="sc-header-icon"><Wand2 size={22} /></div>
+          <div>
+            <h2 className="sc-header-title">
+              {t('scanner.title')}
+              <span className="sc-version-badge">VISION AI</span>
+            </h2>
+            <p className="sc-header-sub">{t('scanner.subtitle')}</p>
           </div>
         </div>
-        <div className="header-actions">
-           <button className="add-to-queue-btn-v2" onClick={handleAddToQueue} disabled={results.length === 0}>
-             {t('proxy.add_cards_btn', { count: results.filter(r => r.status === 'found').length })}
-           </button>
-        </div>
+        {hasResults && (
+          <div className="sc-header-actions">
+            {onValidateDeck && (
+              <button
+                className="sc-btn sc-btn-validate"
+                onClick={handleValidate}
+                title={t('scanner.validate_btn')}
+              >
+                <ShieldCheck size={16} />
+                {t('scanner.validate_btn')}
+              </button>
+            )}
+            <button
+              className="sc-btn sc-btn-queue"
+              onClick={handleAddToQueue}
+              disabled={foundCount === 0}
+            >
+              <Printer size={16} />
+              {t('scanner.print_btn', { count: foundCount })}
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="scanner-layout-v2">
-        <div className="scanner-sidebar-v2">
-          <div className="upload-grid">
-            {/* MAINBOARD UPLOAD */}
-            <div className={`upload-card ${mainImage ? 'has-image' : ''}`} onClick={() => !isProcessing && mainInputRef.current.click()}>
-              <div className="upload-card-header">
-                <LayoutGrid size={16} />
-                <span>Mainboard</span>
+      {/* ── Body ──────────────────────────────────────────────── */}
+      <div className="sc-body">
+        {/* ── Sidebar ───────────────────────────────────────── */}
+        <div className="sc-sidebar">
+          {/* Upload cards */}
+          <div className="sc-upload-grid">
+            {/* Mainboard */}
+            <div
+              className={`sc-upload-card ${mainImage ? 'has-image' : ''}`}
+              onClick={() => !isProcessing && mainInputRef.current?.click()}
+            >
+              <div className="sc-upload-label">
+                <LayoutGrid size={14} />
+                <span>{t('scanner.mainboard')}</span>
               </div>
-              <input type="file" ref={mainInputRef} onChange={(e) => handleImageUpload(e, 'main')} accept="image/*" style={{ display: 'none' }} />
+              <input
+                ref={mainInputRef} type="file" accept="image/*"
+                style={{ display: 'none' }}
+                onChange={e => handleImageUpload(e, 'main')}
+              />
               {mainPreview ? (
-                <div className="upload-preview">
-                  <img src={mainPreview} alt="Mainboard" />
-                  <div className="upload-overlay"><RefreshCw size={20} /></div>
+                <div className="sc-upload-preview">
+                  <img src={mainPreview} alt="mainboard" />
+                  <div className="sc-upload-overlay"><RefreshCw size={18} /></div>
                 </div>
               ) : (
-                <div className="upload-placeholder">
-                  <ImageIcon size={32} />
-                  <p>{t('scanner.upload_btn')}</p>
+                <div className="sc-upload-empty">
+                  <ImageIcon size={28} />
+                  <span>{t('scanner.upload_btn')}</span>
                 </div>
               )}
             </div>
 
-            {/* SIDEBOARD UPLOAD */}
-            <div className={`upload-card ${sideImage ? 'has-image' : ''}`} onClick={() => !isProcessing && sideInputRef.current.click()}>
-              <div className="upload-card-header">
-                <Layers size={16} />
-                <span>Sideboard</span>
+            {/* Sideboard */}
+            <div
+              className={`sc-upload-card ${sideImage ? 'has-image' : ''}`}
+              onClick={() => !isProcessing && sideInputRef.current?.click()}
+            >
+              <div className="sc-upload-label">
+                <Layers size={14} />
+                <span>{t('scanner.sideboard')}</span>
               </div>
-              <input type="file" ref={sideInputRef} onChange={(e) => handleImageUpload(e, 'side')} accept="image/*" style={{ display: 'none' }} />
+              <input
+                ref={sideInputRef} type="file" accept="image/*"
+                style={{ display: 'none' }}
+                onChange={e => handleImageUpload(e, 'side')}
+              />
               {sidePreview ? (
-                <div className="upload-preview">
-                  <img src={sidePreview} alt="Sideboard" />
-                  <div className="upload-overlay"><RefreshCw size={20} /></div>
+                <div className="sc-upload-preview">
+                  <img src={sidePreview} alt="sideboard" />
+                  <div className="sc-upload-overlay"><RefreshCw size={18} /></div>
                 </div>
               ) : (
-                <div className="upload-placeholder">
-                  <ImageIcon size={32} />
-                  <p>{t('scanner.upload_btn')}</p>
+                <div className="sc-upload-empty">
+                  <ImageIcon size={28} />
+                  <span>{t('scanner.upload_btn')}</span>
                 </div>
               )}
             </div>
           </div>
 
-          <button className="process-action-btn" onClick={processImages} disabled={(!mainImage && !sideImage) || isProcessing}>
+          {/* Scan button */}
+          <button
+            className="sc-scan-btn"
+            onClick={processImages}
+            disabled={(!mainImage && !sideImage) || isProcessing}
+          >
             {isProcessing ? (
-              <><Loader2 size={18} className="animate-spin" /> {statusMessage || t('scanner.status_analysis')}</>
+              <><Loader2 size={18} className="animate-spin" /> {statusMessage}</>
             ) : (
               <><Wand2 size={18} /> {t('scanner.start_btn')}</>
             )}
           </button>
 
+          {/* Error */}
           {error && (
-            <div className="error-message-v2">
-              <AlertCircle size={16} />
+            <div className="sc-error">
+              <AlertCircle size={15} />
               <span>{error}</span>
+            </div>
+          )}
+
+          {/* AI Debug banner */}
+          {debugInfo && (
+            <div className="sc-debug-banner">
+              <div className="sc-debug-row">
+                <span className="sc-debug-label">AI</span>
+                <span className="sc-debug-provider">{debugInfo.provider}</span>
+                <span className="sc-debug-sep">·</span>
+                <span className="sc-debug-model">{debugInfo.model}</span>
+              </div>
+              {debugInfo.logs.length > 0 && (
+                <div className="sc-debug-logs">
+                  {debugInfo.logs.map((l, i) => <span key={i}>{l}</span>)}
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        <div className="scanner-main-results">
-          {debugInfo && (
-            <div style={{ margin: '10px 20px', padding: '8px 16px', backgroundColor: 'rgba(0,188,212,0.1)', border: '1px solid var(--accent)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.8rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontWeight: 'bold', color: 'var(--accent)' }}>AI DEBUG:</span>
-                <span style={{ color: '#fff' }}>Provider: <strong>{debugInfo.provider}</strong></span>
-                <span style={{ color: 'rgba(255,255,255,0.5)' }}>|</span>
-                <span style={{ color: '#fff' }}>Model: <strong>{debugInfo.model}</strong></span>
-              </div>
-              {debugInfo.logs && debugInfo.logs.length > 0 && (
-                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px', fontStyle: 'italic', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '4px' }}>
-                  Fails: {debugInfo.logs.filter(l => !l.includes(debugInfo.provider)).join(' | ')}
-                </div>
-              )}
-            </div>
-          )}
-          {results.length === 0 ? (
-            <div className="results-empty-v2">
-              <ImageIcon size={64} className="opacity-10" />
+        {/* ── Results ───────────────────────────────────────── */}
+        <div className="sc-results">
+          {!hasResults ? (
+            <div className="sc-empty">
+              <ImageIcon size={56} style={{ opacity: 0.08 }} />
               <p>{t('scanner.empty_state')}</p>
             </div>
           ) : (
-            <div className="results-scroll-v2">
-              {/* MAINBOARD SECTION */}
+            <div className="sc-results-scroll">
               {mainCards.length > 0 && (
-                <div className="result-section-v2">
-                  <div className="section-header-v2">
-                    <LayoutGrid size={16} />
-                    <span>Mainboard ({mainCards.length})</span>
-                  </div>
-                  <div className="results-grid-v2">
-                    {mainCards.map(card => <ResultCard key={card.id} card={card} onUpdateQty={updateCardQty} onRemove={removeCard} />)}
+                <div className="sc-section">
+                  <SectionHeader
+                    icon={<LayoutGrid size={14} />}
+                    label={t('scanner.mainboard')}
+                    count={mainCards.length}
+                  />
+                  <div className="sc-cards-grid">
+                    {mainCards.map(card => (
+                      <ResultCard
+                        key={card.id}
+                        card={card}
+                        onUpdateQty={updateCardQty}
+                        onRemove={removeCard}
+                      />
+                    ))}
                   </div>
                 </div>
               )}
 
-              {/* SIDEBOARD SECTION */}
               {sideCards.length > 0 && (
-                <div className="result-section-v2">
-                  <div className="section-header-v2">
-                    <Layers size={16} />
-                    <span>Sideboard ({sideCards.length})</span>
-                  </div>
-                  <div className="results-grid-v2">
-                    {sideCards.map(card => <ResultCard key={card.id} card={card} onUpdateQty={updateCardQty} onRemove={removeCard} />)}
+                <div className="sc-section">
+                  <SectionHeader
+                    icon={<Layers size={14} />}
+                    label={t('scanner.sideboard')}
+                    count={sideCards.length}
+                  />
+                  <div className="sc-cards-grid">
+                    {sideCards.map(card => (
+                      <ResultCard
+                        key={card.id}
+                        card={card}
+                        onUpdateQty={updateCardQty}
+                        onRemove={removeCard}
+                      />
+                    ))}
                   </div>
                 </div>
               )}
@@ -297,33 +432,4 @@ const DeckScanner = ({ onAddToQueue }) => {
   );
 };
 
-const ResultCard = ({ card, onUpdateQty, onRemove }) => (
-  <div className={`card-item-v2 ${card.status}`}>
-    <div className="card-thumb-v2">
-      {card.status === 'found' ? (
-        <img src={card.data?.image_uris?.normal || card.data?.card_faces?.[0]?.image_uris?.normal} alt={card.name} />
-      ) : (
-        <div className="thumb-placeholder-v2">
-          {card.status === 'searching' ? <Loader2 className="animate-spin" size={24} /> : <HelpCircle size={24} />}
-        </div>
-      )}
-      {card.isSide && <div className="side-badge">SIDE</div>}
-    </div>
-    <div className="card-content-v2">
-      <div className="card-name-v2">{card.name}</div>
-      <div className="card-controls-v2">
-        <div className="qty-pill-v2">
-          <button onClick={() => onUpdateQty(card.id, card.qty - 1)}>-</button>
-          <span>{card.qty}</span>
-          <button onClick={() => onUpdateQty(card.id, card.qty + 1)}>+</button>
-        </div>
-        <button className="remove-card-btn-v2" onClick={() => onRemove(card.id)}>
-          <Trash2 size={12} />
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
 export default DeckScanner;
-

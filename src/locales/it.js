@@ -141,7 +141,8 @@ export default {
     cat_instants: "Istantanei & Stregonerie",
     cat_other: "Altre Magie",
     cat_commanders: "Comandanti",
-    cat_sideboard: "Sideboard"
+    cat_sideboard: "Sideboard",
+    imported_from_scanner: "Lista importata dallo Scanner — pronta per la verifica!"
   },
   studio: {
     title: "Progetto Studio",
@@ -192,7 +193,11 @@ export default {
     subtitle: "Analisi intelligente per Mainboard e Sideboard",
     start_btn: "Avvia Analisi Vision",
     upload_btn: "Carica Foto",
-    empty_state: "Carica una foto per iniziare l'analisi"
+    empty_state: "Carica una foto per iniziare l'analisi",
+    add_all: "Aggiungi tutto alla coda",
+    validate_btn: "Valida Mazzo",
+    print_btn: "Stampa ({count} carte)",
+    error_generic: "Errore durante la scansione. Riprova."
   },
   landing: {
     hero_badge: "AI-Powered MTG Tools",

@@ -8,7 +8,16 @@ const locales = { it, en };
 
 export const LanguageProvider = ({ children }) => {
   const [lang, setLang] = useState(() => {
-    return localStorage.getItem('mtg_tools_lang') || 'it';
+    const saved = localStorage.getItem('mtg_tools_lang');
+    if (saved) return saved;
+    
+    // Auto-detection
+    try {
+      const browserLang = navigator.language.split('-')[0];
+      return locales[browserLang] ? browserLang : 'it';
+    } catch (e) {
+      return 'it';
+    }
   });
 
   useEffect(() => {

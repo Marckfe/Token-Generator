@@ -141,7 +141,8 @@ export default {
     cat_instants: "Instants & Sorceries",
     cat_other: "Other Spells",
     cat_commanders: "Commanders",
-    cat_sideboard: "Sideboard"
+    cat_sideboard: "Sideboard",
+    imported_from_scanner: "Deck imported from Scanner — ready to validate!"
   },
   studio: {
     title: "Studio Design",
@@ -192,7 +193,11 @@ export default {
     subtitle: "Intelligent analysis for Mainboard and Sideboard",
     start_btn: "Start Vision Analysis",
     upload_btn: "Upload Photo",
-    empty_state: "Upload a photo to start analysis"
+    empty_state: "Upload a photo to start analysis",
+    add_all: "Add all to queue",
+    validate_btn: "Validate Deck",
+    print_btn: "Print ({count} cards)",
+    error_generic: "Scan error. Please try again."
   },
   landing: {
     hero_badge: "AI-Powered MTG Tools",
