@@ -139,6 +139,7 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
     toast(t('proxy.toast_reduced'));
   };
 
+  const perPage = printCols * printRows;
   const pages = Math.max(1, Math.ceil(images.length / perPage));
   
   const saveQueueAsDeck = async () => {
