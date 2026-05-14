@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { fetchAllPrints } from "../../utils/scryfallApi";
+import { useLanguage } from "../../context/LanguageContext";
 
 const LANGUAGES = [
   { code: 'en', name: 'Inglese' },
@@ -16,6 +17,7 @@ const LANGUAGES = [
 ];
 
 export default function BulkImportPanel({ onAddCards, toast }) {
+  const { t } = useLanguage();
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadMsg, setLoadMsg] = useState("");
@@ -175,7 +177,7 @@ export default function BulkImportPanel({ onAddCards, toast }) {
     <div className="panel-container">
       <div className="panel-header">
         <span style={{ fontSize: 18 }}>📋</span>
-        <span className="panel-title">Importa lista massiva</span>
+        <span className="panel-title">{t('proxy.bulk_import')}</span>
       </div>
 
       <div className="panel-hint">
@@ -195,7 +197,7 @@ export default function BulkImportPanel({ onAddCards, toast }) {
         disabled={loading || !text.trim()}
         className={`btn btn-block ${loading || !text.trim() ? "btn-disabled" : "btn-primary"} ${entries.length ? "mb-3" : ""}`}
       >
-        {loading && !resolved ? `⏳ ${loadMsg || "Verifica in corso…"}` : "🔎 Verifica carte"}
+        {loading && !resolved ? `⏳ ${loadMsg || t('common.loading') + "…"}` : "🔎 " + t('proxy.verify_cards')}
       </button>
 
       {resolved && entries.length > 0 && (
@@ -210,7 +212,7 @@ export default function BulkImportPanel({ onAddCards, toast }) {
               className="btn btn-ghost text-xs ml-4" 
               style={{ color: '#6daa45', padding: '2px 8px', height: 'auto', border: '1px solid rgba(109,170,69,0.3)' }}
             >
-              🇮🇹 Traduci tutto in ITA
+              {t('proxy.translate_it')}
             </button>
 
             <span className="text-muted text-xs ml-auto">Clicca "Scegli art" per selezionare la stampa preferita</span>

@@ -21,6 +21,7 @@ import html2canvas from "html2canvas";
 import "./editor.css";
 import { useAuth } from "./context/AuthContext";
 import { saveUserToken, getUserTokens, deleteUserToken } from "./services/dbService";
+import { useLanguage } from "./context/LanguageContext";
 
 const CW = 620, CH = 890;
 
@@ -36,6 +37,7 @@ const FONT_OPTIONS = [
 ];
 
 export default function StudioEditor() {
+  const { t } = useLanguage();
   const { user } = useAuth();
   const [layers, setLayers] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -44,7 +46,7 @@ export default function StudioEditor() {
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef(null);
 
-  const [projectName, setProjectName] = useState("Nuovo Token");
+  const [projectName, setProjectName] = useState(t('studio.new_project'));
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // 'saving', 'success', 'error'
 
@@ -352,33 +354,33 @@ export default function StudioEditor() {
     <div className={`editor-layout studio-mode ${isMobile ? 'is-mobile' : ''}`}>
       {!isMobile && (
         <nav className="editor-nav">
-          <div className="nav-item" onClick={() => addLayer('text', 'NUOVO TESTO')}>
-            <Type size={20} /> <span className="nav-label">Testo</span>
+          <div className="nav-item" onClick={() => addLayer('text', t('studio.new_text'))}>
+            <Type size={20} /> <span className="nav-label">{t('studio.text')}</span>
           </div>
           <label className="nav-item">
             <ImageIcon size={20} /> <span className="nav-label">Asset</span>
             <input type="file" hidden accept="image/*" onChange={handleAssetUpload} />
           </label>
           <div className="nav-item" onClick={() => setSelectedId(null)}>
-            <Layers size={20} /> <span className="nav-label">Livelli</span>
+            <Layers size={20} /> <span className="nav-label">{t('common.layers')}</span>
           </div>
           <div className="nav-item" style={{ marginTop: 'auto' }} onClick={exportCanvas}>
-            <Download size={20} /> <span className="nav-label">Esporta</span>
+            <Download size={20} /> <span className="nav-label">{t('common.export')}</span>
           </div>
         </nav>
       )}
 
       {isMobile && (
         <div className="mobile-editor-tabs">
-          <button className={`mobile-editor-tab ${activeTab === 'preview' ? 'active' : ''}`} onClick={() => setActiveTab('preview')}>Anteprima</button>
-          <button className={`mobile-editor-tab ${activeTab === 'tools' ? 'active' : ''}`} onClick={() => setActiveTab('tools')}>Strumenti</button>
+          <button className={`mobile-editor-tab ${activeTab === 'preview' ? 'active' : ''}`} onClick={() => setActiveTab('preview')}>{t('common.preview')}</button>
+          <button className={`mobile-editor-tab ${activeTab === 'tools' ? 'active' : ''}`} onClick={() => setActiveTab('tools')}>{t('common.tools')}</button>
         </div>
       )}
 
       {isMobile && selectedId && activeTab === 'preview' && (
         <div className="mobile-properties-bar">
-           <button className="btn btn-ghost" onClick={() => setSelectedId(null)}>✕ Chiudi</button>
-           <span className="text-xs opacity-60">Modifica: {activeLayer.type === 'text' ? 'Testo' : 'Immagine'}</span>
+           <button className="btn btn-ghost" onClick={() => setSelectedId(null)}>✕ {t('common.close')}</button>
+           <span className="text-xs opacity-60">{t('studio.editing')}: {activeLayer.type === 'text' ? t('studio.text') : t('studio.image')}</span>
         </div>
       )}
 
@@ -398,12 +400,12 @@ export default function StudioEditor() {
           {selectedId ? (
             <div className="control-group">
               <div className="sidebar-panel-title flex justify-between items-center">
-                <span>Proprietà Livello</span>
+                <span>{t('studio.properties')}</span>
                 <button onClick={() => setSelectedId(null)}>✕</button>
               </div>
               
               <div className="control-field mb-4">
-                <span className="control-label">Posizione X / Y</span>
+                <span className="control-label">{t('studio.pos')} X / Y</span>
                 <div className="control-row">
                   <input type="number" value={activeLayer.x} onChange={e => updateLayer(selectedId, { x: parseInt(e.target.value) })} className="control-input" />
                   <input type="number" value={activeLayer.y} onChange={e => updateLayer(selectedId, { y: parseInt(e.target.value) })} className="control-input" />
@@ -411,7 +413,7 @@ export default function StudioEditor() {
               </div>
 
               <div className="control-field mb-4">
-                <span className="control-label">Dimensione L / A</span>
+                <span className="control-label">{t('studio.size')} L / A</span>
                 <div className="control-row">
                   <input type="number" value={activeLayer.width} onChange={e => updateLayer(selectedId, { width: parseInt(e.target.value) })} className="control-input" />
                   <input type="number" value={activeLayer.height} onChange={e => updateLayer(selectedId, { height: parseInt(e.target.value) })} className="control-input" />
@@ -431,7 +433,7 @@ export default function StudioEditor() {
               {activeLayer.type === 'text' && (
                 <>
                   <div className="control-field mb-4">
-                    <span className="control-label">Contenuto Testo</span>
+                    <span className="control-label">{t('studio.content')}</span>
                     <textarea className="control-input" value={activeLayer.content} onChange={e => updateLayer(selectedId, { content: e.target.value })} />
                   </div>
                   <div className="control-field mb-4">
@@ -458,7 +460,7 @@ export default function StudioEditor() {
                           onClick={() => updateStyle(selectedId, { textAlign: a })}
                           style={{ background: activeLayer.style.textAlign === a ? 'var(--accent-hl)' : 'var(--surf-off)' }}
                         >
-                          {a === 'left' ? 'Sx' : a === 'center' ? 'Centro' : 'Dx'}
+                          {a === 'left' ? t('studio.align_left') : a === 'center' ? t('studio.align_center') : t('studio.align_right')}
                         </button>
                       ))}
                     </div>
@@ -487,8 +489,8 @@ export default function StudioEditor() {
                 <button className="btn btn-ghost flex-1" onClick={() => moveLayer(selectedId, 'down')}><ArrowDown size={16}/> Giù</button>
               </div>
               <div className="flex gap-2 mt-2">
-                <button className="btn btn-ghost flex-1" onClick={() => duplicateLayer(selectedId)}><Copy size={16}/> Duplica</button>
-                <button className="btn btn-ghost flex-1 text-error" onClick={() => deleteLayer(selectedId)}><Trash2 size={16}/> Elimina</button>
+                <button className="btn btn-ghost flex-1" onClick={() => duplicateLayer(selectedId)}><Copy size={16}/> {t('common.duplicate')}</button>
+                <button className="btn btn-ghost flex-1 text-error" onClick={() => deleteLayer(selectedId)}><Trash2 size={16}/> {t('common.delete')}</button>
               </div>
             </div>
           ) : (
@@ -504,7 +506,7 @@ export default function StudioEditor() {
                   value={projectName} 
                   onChange={e => setProjectName(e.target.value)} 
                   className="control-input"
-                  placeholder="Esempio: Token Drago..."
+                  placeholder={t('studio.project_name_placeholder')}
                 />
               </div>
               <div className="flex gap-2">
@@ -522,16 +524,16 @@ export default function StudioEditor() {
                   disabled={isSaving}
                 >
                   {saveStatus === 'success' ? <Check size={14} /> : <Check size={14} />}
-                  <span className="ml-2">Definitivo</span>
+                  <span className="ml-2">{t('studio.save_final')}</span>
                 </button>
               </div>
               {saveStatus === 'success' && <p className="text-[10px] text-success mt-2 text-center font-bold">✓ Salvato con successo nel Cloud!</p>}
 
               <div className="sidebar-panel-title mt-8">Progetto Studio</div>
               <div className="control-field mb-6">
-                <span className="control-label">Artwork di Sfondo (Full Art)</span>
+                <span className="control-label">{t('studio.bg_fullart')}</span>
                 <label className="btn btn-primary w-full text-center cursor-pointer">
-                  Carica Sfondo
+                  {t('studio.bg_upload')}
                   <input type="file" hidden accept="image/*" onChange={handleBgUpload} />
                 </label>
               </div>
@@ -631,7 +633,7 @@ export default function StudioEditor() {
                     pointerEvents: 'none',
                     fontSize: '1.2rem'
                   }}>
-                    Carica immagine principale
+                    {t('studio.bg_placeholder')}
                   </div>
                 )}
                 
@@ -713,7 +715,7 @@ function CloudLibrary({ user, onLoad }) {
   return (
     <div className="cloud-library-section mt-6">
       <div className="sidebar-panel-title flex items-center justify-between">
-        <span>La tua Libreria Cloud</span>
+        <span>{t('studio.cloud_library')}</span>
         <button
           onClick={refresh}
           title="Aggiorna libreria"
@@ -739,7 +741,7 @@ function CloudLibrary({ user, onLoad }) {
       </div>
       <div className="tokens-grid mt-4">
         {loading ? (
-          <div className="text-center py-4 opacity-50 text-xs">Caricamento...</div>
+          <div className="text-center py-4 opacity-50 text-xs">{t('common.loading')}...</div>
         ) : tokens.length === 0 ? (
           <div className="text-center py-4 opacity-50 text-xs italic">Nessun progetto salvato</div>
         ) : (
@@ -748,7 +750,7 @@ function CloudLibrary({ user, onLoad }) {
               <div className="token-item-info">
                 <div className="token-item-name">{t.name}</div>
                 <div className={`token-item-badge ${t.isDraft ? 'draft' : 'final'}`}>
-                  {t.isDraft ? 'Bozza' : 'Definitivo'}
+                  {t.isDraft ? t('studio.save_draft') : t('studio.save_final')}
                 </div>
               </div>
               <button className="token-item-delete" onClick={(e) => handleDelete(e, t.id)}>

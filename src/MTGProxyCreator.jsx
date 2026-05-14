@@ -157,11 +157,11 @@ export default function MTGProxyCreator() {
           </div>
           <div className="mobile-tabs">
             {[
-              { id: "proxy", label: "🖨 " + (lang === 'it' ? 'Stampa' : 'Print') }, 
-              { id: "ocr", label: "👁️ OCR" },
-              { id: "token", label: "🃏 Token" },
-              { id: "studio", label: "🎨 Studio" },
-              { id: "checker", label: "🔍 Check" }
+              { id: "proxy", label: "🖨 " + t('nav.proxy') }, 
+              { id: "ocr", label: "👁️ " + t('nav.ocr') },
+              { id: "token", label: "🃏 " + t('nav.token') },
+              { id: "studio", label: "🎨 " + t('nav.studio') },
+              { id: "checker", label: "🔍 " + t('nav.checker') }
             ].map(t => (
               <button
                 key={t.id}

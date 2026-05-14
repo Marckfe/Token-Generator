@@ -358,6 +358,7 @@ const TOKEN_TEMPLATES = [
 ];
 
 export default function TokenPreviewSinglePtFrame() {
+  const { t } = useLanguage();
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 900);
   const [state, setState] = useState(DEFAULT_STATE);
   const [history, setHistory] = useState([cloneState(DEFAULT_STATE)]);
@@ -635,10 +636,10 @@ export default function TokenPreviewSinglePtFrame() {
       {!isMobile && (
         <nav className="editor-nav">
           <div className={`nav-item ${activeTab === 'templates' ? 'active' : ''}`} onClick={() => setActiveTab('templates')}>
-            <Icon d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /> Template
+            <Icon d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /> {t('common.template')}
           </div>
           <div className={`nav-item ${activeTab === 'art' ? 'active' : ''}`} onClick={() => setActiveTab('art')}>
-            <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /> Artwork
+            <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /> {t('common.artwork')}
           </div>
           <div className={`nav-item ${activeTab === 'frame' ? 'active' : ''}`} onClick={() => setActiveTab('frame')}>
             <Icon d="M4 4h16v16H4zM4 9h16" /> Frames
@@ -647,21 +648,21 @@ export default function TokenPreviewSinglePtFrame() {
             <Icon d="M12 2l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" /> P/T
           </div>
           <div className={`nav-item ${activeTab === 'text' ? 'active' : ''}`} onClick={() => setActiveTab('text')}>
-            <Icon d="M4 7V4h16v3M9 20h6M12 4v16" /> Testi
+            <Icon d="M4 7V4h16v3M9 20h6M12 4v16" /> {t('common.layers')}
           </div>
           <div className={`nav-item ${activeTab === 'info' ? 'active' : ''}`} onClick={() => setActiveTab('info')}>
-            <Icon d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /> Crediti
+            <Icon d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /> {t('token.artist')}
           </div>
           <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')} style={{ marginTop: 'auto' }}>
-            <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /> Export
+            <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /> {t('common.export')}
           </div>
         </nav>
       )}
 
       {isMobile && (
         <div className="mobile-editor-tabs">
-          <button className={`mobile-editor-tab ${activeTab === 'preview' ? 'active' : ''}`} onClick={() => setActiveTab('preview')}>Anteprima</button>
-          <button className={`mobile-editor-tab ${activeTab !== 'preview' ? 'active' : ''}`} onClick={() => setActiveTab('frame')}>Strumenti</button>
+          <button className={`mobile-editor-tab ${activeTab === 'preview' ? 'active' : ''}`} onClick={() => setActiveTab('preview')}>{t('common.preview')}</button>
+          <button className={`mobile-editor-tab ${activeTab !== 'preview' ? 'active' : ''}`} onClick={() => setActiveTab('frame')}>{t('common.tools')}</button>
         </div>
       )}
 
@@ -1014,23 +1015,23 @@ export default function TokenPreviewSinglePtFrame() {
               className={`history-btn ${historyIdx > 0 ? 'active' : ''}`} 
               onClick={undo} 
               disabled={historyIdx === 0} 
-              title="Annulla (Torna indietro)"
+              title={t('token.undo')}
             >
               <Icon d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
-              <span className="history-label">UNDO</span>
+              <span className="history-label">{t('token.undo').toUpperCase()}</span>
             </button>
             <button 
               className={`history-btn ${historyIdx < history.length - 1 ? 'active' : ''}`} 
               onClick={redo} 
               disabled={historyIdx >= history.length - 1} 
-              title="Ripeti (Vai avanti)"
+              title={t('token.redo')}
             >
-              <span className="history-label">REDO</span>
+              <span className="history-label">{t('token.redo').toUpperCase()}</span>
               <Icon d="M21 7v6h-6M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" />
             </button>
             <div style={{ width: 1, height: 24, background: 'var(--border)', margin: '0 8px' }}></div>
             <label className="checkbox-label" style={{ fontSize: '0.8rem' }}>
-              <input type="checkbox" checked={showGuides} onChange={e => setShowGuides(e.target.checked)} className="custom-checkbox"/> Mostra Guide
+              <input type="checkbox" checked={showGuides} onChange={e => setShowGuides(e.target.checked)} className="custom-checkbox"/> {t('common.guides')}
             </label>
             {!isMobile && (
               <div className="ml-auto" style={{ display: 'flex', gap: '8px' }}>

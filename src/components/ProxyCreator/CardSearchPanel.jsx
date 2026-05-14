@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo } from "react";
 import { fetchSuggestions } from "../../utils/scryfallApi";
+import { useLanguage } from "../../context/LanguageContext";
 
 function PrintGrid({ prints, selected, onToggle, onQty }) {
   if (!prints.length) return null;
@@ -34,6 +35,7 @@ function PrintGrid({ prints, selected, onToggle, onQty }) {
 }
 
 export default function CardSearchPanel({ onAddCards }) {
+  const { t, lang } = useLanguage();
   const [query, setQuery] = useState("");
   const [suggestions, setSuggs] = useState([]);
   const [showSugg, setShowSugg] = useState(false);
@@ -189,8 +191,8 @@ export default function CardSearchPanel({ onAddCards }) {
         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-accent">
           <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
         </svg>
-        <span className="panel-title">Cerca carte</span>
-        <span className="panel-subtitle">— tutte le stampe + scelta illustrazione</span>
+        <span className="panel-title">{t('proxy.search_cards')}</span>
+        <span className="panel-subtitle">{t('proxy.search_subtitle')}</span>
       </div>
 
       <div className="search-box-wrapper">
@@ -201,7 +203,7 @@ export default function CardSearchPanel({ onAddCards }) {
               onKeyDown={handleKey}
               onFocus={() => query.length >= 2 && setShowSugg(true)}
               onBlur={() => setTimeout(() => setShowSugg(false), 180)}
-              placeholder="Es. Lightning Bolt, Llanowar Elves…"
+              placeholder={t('proxy.search_placeholder')}
               className="form-input search-input"
             />
             {loadingSugg && <div className="spinner-small absolute-right"></div>}
@@ -211,7 +213,7 @@ export default function CardSearchPanel({ onAddCards }) {
             disabled={loading || !query.trim()}
             className="btn btn-primary"
           >
-            {loading ? "…" : "Cerca"}
+            {loading ? "…" : t('common.search')}
           </button>
         </div>
 
@@ -237,8 +239,8 @@ export default function CardSearchPanel({ onAddCards }) {
       
       {!loading && prints.length > 0 && (
         <div className="results-info">
-          <strong className="text-accent">{prints.length}</strong> stampe trovate per <strong className="text-light">{cardNames.length}</strong> carta{cardNames.length > 1 ? "e" : ""}
-          {" — "}griglia scrollabile, clicca una carta per vedere le art
+          <strong className="text-accent">{prints.length}</strong> {t('proxy.cards_found', { count: prints.length, cards: cardNames.length })}
+          {t('proxy.grid_hint')}
         </div>
       )}
 
@@ -253,6 +255,7 @@ export default function CardSearchPanel({ onAddCards }) {
               const selForCard = cardPrints.filter(p => selected[p.id]);
               const totalQtyForCard = selForCard.reduce((s, p) => s + (selected[p.id]?.qty || 0), 0);
 
+              const suffix = totalQtyForCard === 1 ? (lang === 'it' ? 'ia' : 'y') : (lang === 'it' ? 'ie' : 'ies');
               return (
                 <div key={cardName} className="card-group">
                   <div onClick={() => setExpandedName(isExp ? null : cardName)} className={`card-group-header ${isExp ? 'expanded' : ''}`}>
@@ -262,7 +265,7 @@ export default function CardSearchPanel({ onAddCards }) {
                       <div className="card-group-meta">
                         {cardPrints.length} stampa{cardPrints.length > 1 ? "e" : ""} disponibili
                         {selForCard.length > 0 && (
-                          <span className="text-success ml-2">· {totalQtyForCard} cop{totalQtyForCard === 1 ? "ia" : "ie"}</span>
+                          <span className="text-success ml-2">· {totalQtyForCard} cop{suffix}</span>
                         )}
                       </div>
                     </div>
@@ -293,7 +296,7 @@ export default function CardSearchPanel({ onAddCards }) {
 
       {selPrints > 0 && (
         <button onClick={addSelected} className="btn btn-primary btn-block mt-3">
-          ➕ Aggiungi {selCount} cop{selCount === 1 ? "ia" : "ie"} alla coda ({selPrints} stampa{selPrints === 1 ? "" : "e"})
+          {t('proxy.add_to_queue', { count: selCount, suffix: selCount === 1 ? (lang === 'it' ? 'ia' : 'y') : (lang === 'it' ? 'ie' : 'ies') })} ({selPrints} {t('common.type')}{selPrints === 1 ? "" : "s"})
         </button>
       )}
     </div>
