@@ -125,40 +125,38 @@ export const deleteUserToken = async (userId, tokenId) => {
  * Salva una lista mazzo (limite 10)
  */
 export const saveUserDeck = async (userId, deckData) => {
-  if (!userId) throw new Error("Utente non autenticato");
-  console.log("Salvataggio mazzo per:", userId, deckData.name);
+  if (!userId) throw new Error("ID Utente mancante. Effettua il login.");
+  console.log("Tentativo salvataggio mazzo...", { userId, deckName: deckData.name });
   
   try {
     const decksRef = collection(db, "users", userId, "decks");
     
-    // Controllo limiti (solo per nuovi mazzi)
-    if (!deckData.id) {
-      const snap = await getDocs(decksRef);
-      if (snap.size >= 10) {
-        throw new Error("Limite raggiunto: puoi salvare al massimo 10 mazzi.");
-      }
-    }
-
     const data = {
       ...deckData,
-      updatedAt: serverTimestamp(),
-      createdAt: deckData.createdAt || serverTimestamp()
+      updatedAt: new Date(),
+      createdAt: deckData.createdAt || new Date()
     };
 
     let finalId;
     if (deckData.id) {
+      console.log("Aggiornamento mazzo esistente:", deckData.id);
       await setDoc(doc(decksRef, deckData.id), data);
       finalId = deckData.id;
     } else {
+      console.log("Creazione nuovo mazzo...");
       const docRef = await addDoc(decksRef, data);
       finalId = docRef.id;
     }
     
-    console.log("Mazzo salvato con successo, ID:", finalId);
+    console.log("✅ Mazzo salvato! ID:", finalId);
     return finalId;
   } catch (error) {
-    console.error("Errore dettagliato Firestore:", error);
-    throw error;
+    console.error("❌ Errore critico salvataggio Firestore:", error);
+    // Rethrow a more user-friendly message
+    if (error.code === 'permission-denied') {
+      throw new Error("Permessi database insufficienti. Contatta il supporto.");
+    }
+    throw new Error(`Errore database: ${error.message || 'Unknown error'}`);
   }
 };
 
