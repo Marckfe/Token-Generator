@@ -266,7 +266,7 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (state.showName !== false) {
-    const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1, 40, nameStyle.fontFamily || FT_DEFAULT) : nameStyle.fontSize;
+    const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1, 120, nameStyle.fontFamily || FT_DEFAULT) : nameStyle.fontSize;
     ctx.save();
     ctx.font = `bold ${fittedNameSize}px ${nameStyle.fontFamily || FT_DEFAULT}`;
     ctx.fillStyle = nameStyle.color;
@@ -278,7 +278,7 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (state.showType !== false) {
-    const fittedTypeSize = state.autoFitType ? fitTextBox(type || "Token", typeStyle.fontSize, 14, CW - typeStyle.x - 40, 1, 40, typeStyle.fontFamily || FT_DEFAULT) : typeStyle.fontSize;
+    const fittedTypeSize = state.autoFitType ? fitTextBox(type || "Token", typeStyle.fontSize, 14, CW - typeStyle.x - 40, 1, 120, typeStyle.fontFamily || FT_DEFAULT) : typeStyle.fontSize;
     ctx.save();
     ctx.font = `bold ${fittedTypeSize}px ${typeStyle.fontFamily || FT_DEFAULT}`;
     ctx.fillStyle = typeStyle.color;

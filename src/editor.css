@@ -581,3 +581,51 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
+/* ── MOBILE ENHANCEMENTS ────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .editor-sidebar {
+    width: 100% !important;
+    padding: 0 !important;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .control-group {
+    padding: 16px;
+    background: var(--surface);
+  }
+
+  .template-grid, .asset-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+  }
+
+  .control-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mobile-subnav {
+    background: var(--surface2);
+    padding: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  }
+
+  .context-menu {
+    width: 90%;
+    bottom: 20px;
+    top: auto !important;
+    left: 50%;
+    transform: translateX(-50%);
+    justify-content: center;
+    background: rgba(26, 25, 23, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--accent);
+  }
+}

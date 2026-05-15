@@ -62,6 +62,7 @@ export default {
     add_to_queue: "Aggiungi {{count}} {{suffix}} alla coda",
     add_cards_btn: "Aggiungi {{count}} carte",
     batch_duplicate: "Duplica",
+    batch_singles: "Singoli",
     batch_clear: "Svuota",
     generate_pdf: "Genera PDF",
     generating: "Generando...",

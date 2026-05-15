@@ -800,6 +800,60 @@ input, select, textarea { font: inherit; color: inherit; outline: none; }
   transform: scale(1.1);
 }
 
+/* ── RESPONSIVE OVERRIDES ────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .main-content {
+    padding: 20px 16px;
+    gap: 20px;
+  }
+
+  .main-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .batch-actions-bar {
+    width: 100%;
+    overflow-x: auto;
+    padding: 6px;
+    background: var(--surface2);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .batch-sep {
+    flex-shrink: 0;
+  }
+
+  .btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .queue-header {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  
+  .queue-header > div:first-child {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  
+  .queue-header .control-input {
+    width: 100% !important;
+  }
+}
+
 /* Mobile Header */
 .mobile-header {
   display: flex;
