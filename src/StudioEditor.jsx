@@ -1,9 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { 
-  Move, 
   Type, 
   Image as ImageIcon, 
-  Layers, 
   Trash2, 
   ArrowUp, 
   ArrowDown, 
@@ -19,6 +17,7 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  Settings,
   Layers as LayersIcon
 } from "lucide-react";
 import html2canvas from "html2canvas";
@@ -59,6 +58,7 @@ export default function StudioEditor() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1000);
   const [zoom, setZoom] = useState(0.75);
   const [activeTab, setActiveTab] = useState('preview');
+  const [leftTab, setLeftTab] = useState('tools');
   const [snaps, setSnaps] = useState({ v: null, h: null });
 
   const activeLayer = layers.find(l => l.id === selectedId);
@@ -70,7 +70,7 @@ export default function StudioEditor() {
       if (mobile) {
         setZoom(Math.min((window.innerWidth - 30) / CW, (window.innerHeight - 250) / CH, 0.85));
       } else {
-        setZoom(0.7);
+        setZoom(0.65);
       }
     };
     window.addEventListener("resize", fn);
@@ -122,7 +122,6 @@ export default function StudioEditor() {
         };
         setLayers([...layers, newLayer]);
         setSelectedId(newLayer.id);
-        if(isMobile) setActiveTab('preview');
       };
       img.src = ev.target.result;
     };
@@ -279,59 +278,78 @@ export default function StudioEditor() {
 
   return (
     <div className={`editor-layout studio-mode ${isMobile ? 'is-mobile' : ''}`}>
-      {/* ── TOP BAR ────────────────────────────────────────── */}
       <header className="studio-top-bar">
-        <div className="flex items-center gap-4">
-          <div className="text-accent font-black tracking-tighter text-xl">STUDIO</div>
-          <input className="bg-transparent border-none text-white font-bold outline-none w-32 md:w-48" value={projectName} onChange={e => setProjectName(e.target.value)} />
+        <div className="studio-header-group">
+          <div className="text-accent font-black tracking-tighter text-2xl drop-shadow-[0_0_10px_rgba(0,188,212,0.4)]">STUDIO ELITE</div>
+          <div className="studio-project-box">
+            <span className="studio-project-label">PROGETTO:</span>
+            <input className="studio-project-input" value={projectName} onChange={e => setProjectName(e.target.value)} />
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button className="btn btn-ghost p-2 md:px-3 text-xs" onClick={() => { addLayer('text', 'NUOVO TESTO'); if(isMobile) setActiveTab('preview'); }} title="Testo"><Type size={16}/> <span className="hidden md:inline ml-2">Testo</span></button>
-          <label className="btn btn-ghost p-2 md:px-3 text-xs cursor-pointer" title="Asset">
-            <ImageIcon size={16}/> <span className="hidden md:inline ml-2">Asset</span>
-            <input type="file" hidden accept="image/*" onChange={handleAssetUpload} />
-          </label>
-          <div className="w-[1px] h-6 bg-[#444] mx-1 md:mx-2"></div>
-          <button className="btn btn-primary p-2 md:px-3 text-xs" onClick={exportCanvas} title="Esporta"><Download size={16}/> <span className="hidden md:inline ml-2">Esporta</span></button>
-        </div>
+        <button className="btn btn-primary px-6" onClick={exportCanvas}><Download size={18} style={{marginRight: '8px'}}/> Esporta PNG</button>
       </header>
 
-      {isMobile && (
-        <div className="mobile-editor-tabs">
-          <button className={`mobile-editor-tab ${activeTab === 'preview' ? 'active' : ''}`} onClick={() => setActiveTab('preview')}>Carta</button>
-          <button className={`mobile-editor-tab ${activeTab === 'layers' ? 'active' : ''}`} onClick={() => setActiveTab('layers')}>Livelli</button>
-          <button className={`mobile-editor-tab ${activeTab === 'inspector' ? 'active' : ''}`} onClick={() => setActiveTab('inspector')}>Proprietà</button>
-        </div>
-      )}
+      <div className="studio-main-container">
+        {!isMobile && (
+          <aside className="studio-tools-sidebar">
+            <button className={`tool-btn ${leftTab === 'tools' ? 'active' : ''}`} onClick={() => setLeftTab('tools')} title="Aggiungi"><Plus size={22}/></button>
+            <button className={`tool-btn ${leftTab === 'layers' ? 'active' : ''}`} onClick={() => setLeftTab('layers')} title="Livelli"><LayersIcon size={22}/></button>
+            <button className={`tool-btn ${leftTab === 'cloud' ? 'active' : ''}`} onClick={() => setLeftTab('cloud')} title="Cloud"><Cloud size={22}/></button>
+            <div style={{marginTop: 'auto'}}>
+               <label className="tool-btn" title="Carica Sfondo">
+                  <Maximize size={22}/>
+                  <input type="file" hidden accept="image/*" onChange={handleBgUpload} />
+               </label>
+            </div>
+          </aside>
+        )}
 
-      {/* ── LEFT PANEL (LAYERS) ───────────────────────────── */}
-      {(!isMobile || activeTab === 'layers') && (
-        <aside className="studio-left-panel" style={isMobile ? { gridColumn: '1 / -1' } : {}}>
-          <div className="p-4 border-b border-[#333] text-[10px] font-black uppercase opacity-40 tracking-widest">Livelli</div>
-          <div className="flex-1 overflow-y-auto p-2">
-            {[...layers].reverse().map(l => (
-              <div key={l.id} className={`layer-item ${selectedId === l.id ? 'active' : ''}`} onClick={() => { setSelectedId(l.id); if(isMobile) setActiveTab('inspector'); }}>
-                {l.type === 'text' ? <Type size={14}/> : <ImageIcon size={14}/>}
-                <span className="truncate flex-1">{l.type === 'text' ? l.content : 'Immagine'}</span>
-                <button onClick={(e) => { e.stopPropagation(); deleteLayer(l.id); }}><Trash2 size={12}/></button>
-              </div>
-            ))}
-            {layers.length === 0 && <div className="p-8 text-center text-muted text-xs opacity-30 italic">Nessun elemento</div>}
-          </div>
-          <div className="p-4 border-t border-[#333]">
-             <CloudLibrary user={user} onLoad={t => { setLayers(t.layers); setBgArt(t.bgArt); setProjectName(t.name); setActiveTab('preview'); }} />
-          </div>
-        </aside>
-      )}
+        {!isMobile && (
+           <div className="studio-sub-panel">
+              {leftTab === 'tools' && (
+                 <>
+                    <div className="panel-header-text">Strumenti Rapidi</div>
+                    <div className="panel-content">
+                       <button className="glass-card-btn" onClick={() => addLayer('text', 'NUOVO TESTO')}><Type size={18} style={{marginRight: '12px', color: '#00bcd4'}}/> Aggiungi Testo</button>
+                       <label className="glass-card-btn">
+                         <ImageIcon size={18} style={{marginRight: '12px', color: '#00bcd4'}}/> Aggiungi Immagine
+                         <input type="file" hidden accept="image/*" onChange={handleAssetUpload} />
+                       </label>
+                    </div>
+                 </>
+              )}
+              {leftTab === 'layers' && (
+                 <>
+                    <div className="panel-header-text">Livelli ({layers.length})</div>
+                    <div className="panel-content">
+                       {[...layers].reverse().map(l => (
+                          <div key={l.id} className={`layer-item ${selectedId === l.id ? 'active' : ''}`} onClick={() => setSelectedId(l.id)}>
+                             {l.type === 'text' ? <Type size={14}/> : <ImageIcon size={14}/>}
+                             <span className="truncate" style={{flex: 1, fontSize: '12px'}}>{l.type === 'text' ? l.content : 'Immagine'}</span>
+                             <button onClick={(e) => { e.stopPropagation(); deleteLayer(l.id); }} className="hover:text-error"><Trash2 size={12}/></button>
+                          </div>
+                       ))}
+                       {layers.length === 0 && <div style={{textAlign: 'center', padding: '40px 0', opacity: 0.2, fontSize: '12px', fontStyle: 'italic'}}>Nessun elemento</div>}
+                    </div>
+                 </>
+              )}
+              {leftTab === 'cloud' && (
+                 <>
+                    <div className="panel-header-text">Libreria Cloud</div>
+                    <div className="panel-content">
+                       <CloudLibrary user={user} onLoad={t => { setLayers(t.layers); setBgArt(t.bgArt); setProjectName(t.name); setSelectedId(null); }} />
+                    </div>
+                 </>
+              )}
+           </div>
+        )}
 
-      {/* ── CENTER (CANVAS) ──────────────────────────────── */}
-      {(!isMobile || activeTab === 'preview') && (
         <main className="studio-canvas-area">
           <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', position: 'relative' }}>
             <div 
               ref={canvasRef} 
               className="canvas-wrapper studio-canvas" 
-              style={{ width: CW, height: CH, background: bgArt ? `url(${bgArt}) center/cover no-repeat` : '#000', borderRadius: '26px', position: 'relative', overflow: 'hidden' }}
+              style={{ width: CW, height: CH, background: bgArt ? `url(${bgArt}) center/cover no-repeat` : '#000', borderRadius: '26px', position: 'relative', overflow: 'hidden', boxShadow: '0 50px 100px rgba(0,0,0,0.8)' }}
               onClick={() => setSelectedId(null)}
             >
               {layers.map(l => (
@@ -345,7 +363,6 @@ export default function StudioEditor() {
                 </div>
               ))}
 
-              {/* Bounding Box & Handles */}
               {activeLayer && (
                 <div className="bounding-box" style={{ left: activeLayer.x, top: activeLayer.y, width: activeLayer.width, height: activeLayer.height, transform: `rotate(${activeLayer.rotate}deg)` }}>
                   {['nw','n','ne','e','se','s','sw','w'].map(h => (
@@ -354,126 +371,124 @@ export default function StudioEditor() {
                 </div>
               )}
 
-              {/* Snaps */}
               {snaps.v && <div className="snap-guide snap-v" style={{ left: snaps.v }} />}
               {snaps.h && <div className="snap-guide snap-h" style={{ top: snaps.h }} />}
             </div>
           </div>
         </main>
-      )}
 
-      {/* ── RIGHT PANEL (INSPECTOR) ──────────────────────── */}
-      {(!isMobile || activeTab === 'inspector') && (
-        <aside className="studio-right-panel" style={isMobile ? { gridColumn: '1 / -1' } : {}}>
-          <div className="p-4 border-b border-[#333] text-[10px] font-black uppercase opacity-40 tracking-widest flex justify-between items-center">
-            Proprietà
-            {isMobile && selectedId && <button className="text-accent text-[10px]" onClick={() => setActiveTab('preview')}>Vedi Carta</button>}
-          </div>
-          {activeLayer ? (
-            <div className="p-5 flex flex-col gap-5 overflow-y-auto h-full pb-10">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="control-field"><span className="text-[10px] text-muted uppercase font-bold">X</span><input type="number" value={Math.round(activeLayer.x)} onChange={e => updateLayer(selectedId, { x: parseInt(e.target.value) })} className="control-input" /></div>
-                <div className="control-field"><span className="text-[10px] text-muted uppercase font-bold">Y</span><input type="number" value={Math.round(activeLayer.y)} onChange={e => updateLayer(selectedId, { y: parseInt(e.target.value) })} className="control-input" /></div>
-                <div className="control-field"><span className="text-[10px] text-muted uppercase font-bold">L</span><input type="number" value={Math.round(activeLayer.width)} onChange={e => updateLayer(selectedId, { width: parseInt(e.target.value) })} className="control-input" /></div>
-                <div className="control-field"><span className="text-[10px] text-muted uppercase font-bold">A</span><input type="number" value={Math.round(activeLayer.height)} onChange={e => updateLayer(selectedId, { height: parseInt(e.target.value) })} className="control-input" /></div>
+        {activeLayer && (
+           <aside className="studio-inspector-panel">
+              <div className="inspector-header">
+                 <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                    <Settings size={16} className="text-accent"/>
+                    <span className="panel-header-text" style={{padding: 0, margin: 0, opacity: 1}}>Proprietà</span>
+                 </div>
+                 <button onClick={() => setSelectedId(null)} style={{background: 'none', border: 'none', color: '#fff', opacity: 0.4, cursor: 'pointer'}}>✕</button>
               </div>
 
-              <div className="control-field">
-                <div className="flex justify-between mb-1"><span className="text-[10px] text-muted uppercase font-bold">Rotazione</span><span className="text-xs">{activeLayer.rotate}°</span></div>
-                <input type="range" min="0" max="360" value={activeLayer.rotate} onChange={e => updateLayer(selectedId, { rotate: parseInt(e.target.value) })} className="w-full" />
-              </div>
+              <div className="inspector-section">
+                 <div className="property-grid">
+                    <div className="property-field"><span className="property-label">X</span><input type="number" value={Math.round(activeLayer.x)} onChange={e => updateLayer(selectedId, { x: parseInt(e.target.value) })} className="control-input" /></div>
+                    <div className="property-field"><span className="property-label">Y</span><input type="number" value={Math.round(activeLayer.y)} onChange={e => updateLayer(selectedId, { y: parseInt(e.target.value) })} className="control-input" /></div>
+                    <div className="property-field"><span className="property-label">L</span><input type="number" value={Math.round(activeLayer.width)} onChange={e => updateLayer(selectedId, { width: parseInt(e.target.value) })} className="control-input" /></div>
+                    <div className="property-field"><span className="property-label">A</span><input type="number" value={Math.round(activeLayer.height)} onChange={e => updateLayer(selectedId, { height: parseInt(e.target.value) })} className="control-input" /></div>
+                 </div>
 
-              <div className="control-field">
-                <div className="flex justify-between mb-1"><span className="text-[10px] text-muted uppercase font-bold">Opacità</span><span className="text-xs">{Math.round(activeLayer.opacity * 100)}%</span></div>
-                <input type="range" min="0" max="1" step="0.01" value={activeLayer.opacity} onChange={e => updateLayer(selectedId, { opacity: parseFloat(e.target.value) })} className="w-full" />
-              </div>
+                 <div className="property-row">
+                    <div style={{display: 'flex', justifyContent: 'space-between'}}><span className="property-label">Rotazione</span><span style={{fontSize: '12px', fontWeight: 'bold', color: '#00bcd4'}}>{activeLayer.rotate}°</span></div>
+                    <input type="range" min="0" max="360" value={activeLayer.rotate} onChange={e => updateLayer(selectedId, { rotate: parseInt(e.target.value) })} style={{width: '100%', accentColor: '#00bcd4'}} />
+                 </div>
 
-              {activeLayer.type === 'text' && (
-                <>
-                  <div className="control-field"><span className="text-[10px] text-muted uppercase font-bold">Contenuto</span><textarea value={activeLayer.content} onChange={e => updateLayer(selectedId, { content: e.target.value })} className="control-input h-20" /></div>
-                  <div className="control-field">
-                    <span className="text-[10px] text-muted uppercase font-bold">Allineamento</span>
-                    <div className="flex gap-2 mt-1">
-                      {['left', 'center', 'right'].map(a => (
-                        <button key={a} className={`btn btn-ghost flex-1 py-1 ${activeLayer.style.textAlign === a ? 'active' : ''}`} onClick={() => updateStyle(selectedId, { textAlign: a })}>
-                          {a === 'left' ? <AlignLeft size={14}/> : a === 'center' ? <AlignCenter size={14}/> : <AlignRight size={14}/>}
-                        </button>
-                      ))}
+                 <div className="property-row">
+                    <div style={{display: 'flex', justifyContent: 'space-between'}}><span className="property-label">Opacità</span><span style={{fontSize: '12px', fontWeight: 'bold', color: '#00bcd4'}}>{Math.round(activeLayer.opacity * 100)}%</span></div>
+                    <input type="range" min="0" max="1" step="0.01" value={activeLayer.opacity} onChange={e => updateLayer(selectedId, { opacity: parseFloat(e.target.value) })} style={{width: '100%', accentColor: '#00bcd4'}} />
+                 </div>
+
+                 {activeLayer.type === 'text' && (
+                    <div className="property-row" style={{gap: '20px'}}>
+                       <div className="property-field"><span className="property-label">Contenuto</span><textarea value={activeLayer.content} onChange={e => updateLayer(selectedId, { content: e.target.value })} className="control-input" style={{height: '80px', fontSize: '12px'}} /></div>
+                       
+                       <div className="property-field">
+                          <span className="property-label">Allineamento</span>
+                          <div className="alignment-group">
+                             {['left', 'center', 'right'].map(a => (
+                                <button key={a} className={`align-btn ${activeLayer.style.textAlign === a ? 'active' : ''}`} onClick={() => updateStyle(selectedId, { textAlign: a })}>
+                                   {a === 'left' ? <AlignLeft size={16}/> : a === 'center' ? <AlignCenter size={16}/> : <AlignRight size={16}/>}
+                                </button>
+                             ))}
+                          </div>
+                       </div>
+
+                       <div className="property-field">
+                          <span className="property-label">Font</span>
+                          <select className="control-input" value={activeLayer.style.fontFamily} onChange={e => updateStyle(selectedId, { fontFamily: e.target.value })}>
+                             {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                          </select>
+                       </div>
+
+                       <div className="property-grid">
+                          <div className="property-field"><span className="property-label">Size</span><input type="number" value={activeLayer.style.fontSize} onChange={e => updateStyle(selectedId, { fontSize: parseInt(e.target.value) })} className="control-input" /></div>
+                          <div className="property-field"><span className="property-label">Colore</span><input type="color" value={activeLayer.style.color} onChange={e => updateStyle(selectedId, { color: e.target.value })} style={{height: '38px', width: '100%', background: 'transparent', border: 'none', cursor: 'pointer'}} /></div>
+                       </div>
+
+                       <div className="property-field">
+                          <span className="property-label">Effetti Testo</span>
+                          <div style={{display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px'}}>
+                             <div className="property-row"><span style={{fontSize: '9px', opacity: 0.4}}>Arco ({activeLayer.style.bend})</span><input type="range" min="-20" max="20" step="0.5" value={activeLayer.style.bend} onChange={e => updateStyle(selectedId, { bend: parseFloat(e.target.value) })} /></div>
+                             <div className="property-row"><span style={{fontSize: '9px', opacity: 0.4}}>Inclinazione ({activeLayer.style.skew})</span><input type="range" min="-45" max="45" value={activeLayer.style.skew} onChange={e => updateStyle(selectedId, { skew: parseInt(e.target.value) })} /></div>
+                             <div className="property-row"><span style={{fontSize: '9px', opacity: 0.4}}>Spaziatura ({activeLayer.style.letterSpacing})</span><input type="range" min="-5" max="20" value={activeLayer.style.letterSpacing} onChange={e => updateStyle(selectedId, { letterSpacing: parseInt(e.target.value) })} /></div>
+                          </div>
+                       </div>
                     </div>
-                  </div>
-                  <div className="control-field">
-                    <span className="text-[10px] text-muted uppercase font-bold">Font</span>
-                    <select className="control-input mt-1" value={activeLayer.style.fontFamily} onChange={e => updateStyle(selectedId, { fontFamily: e.target.value })}>
-                      {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="control-field"><span className="text-[10px] text-muted uppercase font-bold">Size</span><input type="number" value={activeLayer.style.fontSize} onChange={e => updateStyle(selectedId, { fontSize: parseInt(e.target.value) })} className="control-input" /></div>
-                    <div className="control-field"><span className="text-[10px] text-muted uppercase font-bold">Colore</span><input type="color" value={activeLayer.style.color} onChange={e => updateStyle(selectedId, { color: e.target.value })} className="h-9 w-full bg-transparent border-none cursor-pointer" /></div>
-                  </div>
-                  <div className="control-field">
-                    <div className="flex justify-between mb-1"><span className="text-[10px] text-muted uppercase font-bold">Arco ({activeLayer.style.bend})</span></div>
-                    <input type="range" min="-20" max="20" step="0.5" value={activeLayer.style.bend} onChange={e => updateStyle(selectedId, { bend: parseFloat(e.target.value) })} className="w-full" />
-                  </div>
-                  <div className="control-field">
-                    <div className="flex justify-between mb-1"><span className="text-[10px] text-muted uppercase font-bold">Inclinazione ({activeLayer.style.skew})</span></div>
-                    <input type="range" min="-45" max="45" value={activeLayer.style.skew} onChange={e => updateStyle(selectedId, { skew: parseInt(e.target.value) })} className="w-full" />
-                  </div>
-                  <div className="control-field">
-                    <div className="flex justify-between mb-1"><span className="text-[10px] text-muted uppercase font-bold">Spaziatura ({activeLayer.style.letterSpacing})</span></div>
-                    <input type="range" min="-5" max="20" value={activeLayer.style.letterSpacing} onChange={e => updateStyle(selectedId, { letterSpacing: parseInt(e.target.value) })} className="w-full" />
-                  </div>
-                </>
-              )}
+                 )}
 
-              <div className="flex flex-col gap-2 pt-4 border-t border-[#333]">
-                <div className="flex gap-2">
-                  <button className="btn btn-ghost flex-1 text-xs" onClick={() => moveLayer(selectedId, 'up')}><ArrowUp size={14}/> Su</button>
-                  <button className="btn btn-ghost flex-1 text-xs" onClick={() => moveLayer(selectedId, 'down')}><ArrowDown size={14}/> Giù</button>
-                </div>
-                <button className="btn btn-ghost w-full text-xs" onClick={() => duplicateLayer(selectedId)}><Copy size={14}/> {t('common.duplicate')}</button>
-              </div>
+                 <div className="action-group">
+                    <div style={{display: 'flex', gap: '10px'}}>
+                       <button className="align-btn" style={{flex: 1}} onClick={() => moveLayer(selectedId, 'up')}><ArrowUp size={14} style={{marginRight: '8px'}}/> Su</button>
+                       <button className="align-btn" style={{flex: 1}} onClick={() => moveLayer(selectedId, 'down')}><ArrowDown size={14} style={{marginRight: '8px'}}/> Giù</button>
+                    </div>
+                    <button className="align-btn" onClick={() => duplicateLayer(selectedId)}><Copy size={14} style={{marginRight: '8px'}}/> {t('common.duplicate')}</button>
+                    <button className="align-btn" style={{color: '#ff4444', borderColor: 'transparent'}} onClick={() => deleteLayer(selectedId)}><Trash2 size={14} style={{marginRight: '8px'}}/> {t('common.delete')}</button>
+                 </div>
 
-              <div className="flex gap-2 mt-4">
-                <button className="btn btn-ghost flex-1 text-xs" onClick={() => handleSaveCloud(true)} disabled={isSaving}>{isSaving ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Bozza</button>
-                <button className="btn btn-primary flex-1 text-xs" onClick={() => handleSaveCloud(false)} disabled={isSaving}>{saveStatus === 'success' ? <Check size={12}/> : <Check size={12}/>} Definitivo</button>
+                 <div className="save-actions">
+                    <button className="align-btn" style={{flex: 1}} onClick={() => handleSaveCloud(true)} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14} style={{marginRight: '8px'}}/>} Bozza</button>
+                    <button className="btn btn-primary" style={{flex: 1}} onClick={() => handleSaveCloud(false)} disabled={isSaving}>{saveStatus === 'success' ? <Check size={14}/> : <Save size={14} style={{marginRight: '8px'}}/>} Definitivo</button>
+                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="p-8 flex flex-col gap-4">
-              <div className="text-center text-muted text-xs italic mb-4">Sfondo della Carta</div>
-              <label className="btn btn-ghost w-full text-center cursor-pointer">
-                 {t('studio.bg_upload')}
-                 <input type="file" hidden accept="image/*" onChange={handleBgUpload} />
-              </label>
-              {bgArt && <button className="btn btn-ghost text-error text-xs" onClick={() => setBgArt(null)}>Rimuovi Sfondo</button>}
-            </div>
-          )}
-        </aside>
-      )}
+           </aside>
+        )}
+      </div>
     </div>
   );
 }
 
 function CloudLibrary({ user, onLoad }) {
   const [tokens, setTokens] = useState([]);
-  const refresh = async () => { if (user) { const d = await getUserTokens(user.uid); setTokens(d.filter(x => x.tool === 'studio')); } };
+  const [loading, setLoading] = useState(false);
+  const refresh = async () => { if (user) { setLoading(true); const d = await getUserTokens(user.uid); setTokens(d.filter(x => x.tool === 'studio')); setLoading(false); } };
   useEffect(() => { refresh(); }, [user]);
   if (!user) return null;
   return (
-    <div className="mt-4">
-      <div className="text-[10px] font-black uppercase opacity-40 mb-3 tracking-widest flex justify-between">
-        Libreria Cloud
-        <RotateCw size={10} className="cursor-pointer" onClick={refresh} />
+    <div style={{display: 'flex', flexDirection: 'column', height: '100%'}}>
+      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
+        <span style={{fontSize: '11px', fontWeight: '900', opacity: 0.4, letterSpacing: '0.15em'}}>CLOUD</span>
+        <button onClick={refresh} style={{background: 'none', border: 'none', color: '#00bcd4', cursor: 'pointer'}}><RotateCw size={14}/></button>
       </div>
-      <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
-        {tokens.map(item => (
+      <div style={{display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '400px', overflowY: 'auto'}}>
+        {loading ? <div style={{textAlign: 'center', padding: '20px', fontSize: '12px', opacity: 0.3}}>Caricamento...</div> : tokens.map(item => (
           <div key={item.id} className="token-item-card" onClick={() => onLoad(item)}>
-            <span className="truncate text-[11px] font-bold">{item.name}</span>
-            <Trash2 size={11} className="opacity-30 hover:opacity-100" />
+            <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+               <div style={{width: '32px', height: '44px', background: '#000', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)'}}>
+                  {item.previewUrl && <img src={item.previewUrl} style={{width: '100%', height: '100%', objectFit: 'cover'}} alt=""/>}
+               </div>
+               <span className="truncate" style={{fontSize: '11px', fontWeight: 'bold'}}>{item.name}</span>
+            </div>
+            <Trash2 size={12} style={{opacity: 0.3}} />
           </div>
         ))}
-        {tokens.length === 0 && <div className="text-[10px] opacity-30 text-center">Vuota</div>}
+        {tokens.length === 0 && !loading && <div style={{textAlign: 'center', padding: '20px', fontSize: '10px', opacity: 0.2}}>Libreria vuota</div>}
       </div>
     </div>
   );

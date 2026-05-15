@@ -247,7 +247,9 @@ export default function CardSearchPanel({ onAddCards }) {
               const selForCard = cardPrints.filter(p => selected[p.id]);
               const totalQtyForCard = selForCard.reduce((s, p) => s + (selected[p.id]?.qty || 0), 0);
 
-              const suffix = totalQtyForCard === 1 ? (lang === 'it' ? 'ia' : 'y') : (lang === 'it' ? 'ie' : 'ies');
+              const copyLabel = totalQtyForCard === 1 
+                ? (lang === 'it' ? 'copia' : 'copy') 
+                : (lang === 'it' ? 'copie' : 'copies');
               return (
                 <div key={cardName} className="card-group">
                   <div onClick={() => setExpandedName(isExp ? null : cardName)} className={`card-group-header ${isExp ? 'expanded' : ''}`}>
@@ -257,7 +259,7 @@ export default function CardSearchPanel({ onAddCards }) {
                       <div className="card-group-meta">
                         {cardPrints.length} stampa{cardPrints.length > 1 ? "e" : ""} disponibili
                         {selForCard.length > 0 && (
-                          <span className="text-success ml-2">· {totalQtyForCard} cop{suffix}</span>
+                          <span className="text-success ml-2">· {totalQtyForCard} {copyLabel}</span>
                         )}
                       </div>
                     </div>
@@ -288,7 +290,15 @@ export default function CardSearchPanel({ onAddCards }) {
 
       {selPrints > 0 && (
         <button onClick={addSelected} className="btn btn-primary btn-block mt-3">
-          {t('proxy.add_to_queue', { count: selCount, suffix: selCount === 1 ? (lang === 'it' ? 'ia' : 'y') : (lang === 'it' ? 'ie' : 'ies') })} ({selPrints} {t('common.type')}{selPrints === 1 ? "" : "s"})
+          {t('proxy.add_to_queue', { 
+            count: selCount, 
+            suffix: selCount === 1 
+              ? (lang === 'it' ? 'copia' : 'copy') 
+              : (lang === 'it' ? 'copie' : 'copies') 
+          })} 
+          <span className="ml-2 opacity-60">
+            — {selPrints} {selPrints === 1 ? t('common.type') : (lang === 'it' ? 'Tipi' : 'Types')}
+          </span>
         </button>
       )}
     </div>
