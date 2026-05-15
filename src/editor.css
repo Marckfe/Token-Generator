@@ -72,7 +72,7 @@
   to { transform: translateX(0); opacity: 1; }
 }
 
-.tool-btn {
+.studio-tool-btn {
   width: 50px;
   height: 50px;
   border-radius: 12px;
@@ -86,21 +86,21 @@
   cursor: pointer;
 }
 
-.tool-btn:hover {
+.studio-tool-btn:hover {
   background: rgba(0, 188, 212, 0.1);
   border-color: rgba(0, 188, 212, 0.4);
   color: #00bcd4;
   transform: translateY(-2px);
 }
 
-.tool-btn.active {
+.studio-tool-btn.active {
   background: linear-gradient(135deg, #00bcd4 0%, #3f51b5 100%);
   border: none;
   color: #fff;
   box-shadow: 0 4px 15px rgba(0, 188, 212, 0.3);
 }
 
-/* Elite Semantic CSS - Zero Tailwind */
+/* Elite Semantic CSS - Studio Prefixed */
 .studio-header-group {
   display: flex;
   align-items: center;
@@ -142,7 +142,7 @@
   flex-direction: column;
 }
 
-.panel-header-text {
+.studio-panel-header-text {
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
@@ -152,13 +152,13 @@
   padding: 24px 24px 0 24px;
 }
 
-.panel-content {
+.studio-panel-content {
   padding: 0 24px 24px 24px;
   flex: 1;
   overflow-y: auto;
 }
 
-.glass-card-btn {
+.studio-glass-card-btn {
   display: flex;
   align-items: center;
   width: 100%;
@@ -173,12 +173,12 @@
   text-align: left;
 }
 
-.glass-card-btn:hover {
+.studio-glass-card-btn:hover {
   background: rgba(255,255,255,0.08);
   border-color: rgba(0, 188, 212, 0.4);
 }
 
-.inspector-header {
+.studio-inspector-header {
   padding: 24px;
   border-bottom: 1px solid rgba(255,255,255,0.1);
   display: flex;
@@ -186,7 +186,7 @@
   align-items: center;
 }
 
-.inspector-section {
+.studio-inspector-section {
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -194,19 +194,19 @@
   overflow-y: auto;
 }
 
-.property-grid {
+.studio-property-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 15px;
 }
 
-.property-field {
+.studio-property-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.property-label {
+.studio-property-label {
   font-size: 10px;
   font-weight: 900;
   text-transform: uppercase;
@@ -214,18 +214,18 @@
   color: #888;
 }
 
-.property-row {
+.studio-property-row {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.alignment-group {
+.studio-alignment-group {
   display: flex;
   gap: 10px;
 }
 
-.align-btn {
+.studio-align-btn {
   flex: 1;
   padding: 8px;
   background: rgba(255,255,255,0.05);
@@ -237,13 +237,13 @@
   cursor: pointer;
 }
 
-.align-btn.active {
+.studio-align-btn.active {
   background: rgba(0, 188, 212, 0.15);
   border-color: rgba(0, 188, 212, 0.4);
   color: #00bcd4;
 }
 
-.action-group {
+.studio-action-group {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -252,13 +252,13 @@
   border-top: 1px solid rgba(255,255,255,0.1);
 }
 
-.save-actions {
+.studio-save-actions {
   display: flex;
   gap: 12px;
   margin-top: 20px;
 }
 
-.layer-item {
+.studio-layer-item {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -271,16 +271,16 @@
   margin-bottom: 8px;
 }
 
-.layer-item:hover {
+.studio-layer-item:hover {
   background: rgba(255,255,255,0.08);
 }
 
-.layer-item.active {
+.studio-layer-item.active {
   background: rgba(0, 188, 212, 0.1);
   border-color: #00bcd4;
 }
 
-.token-item-card {
+.studio-token-item-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -293,9 +293,24 @@
   margin-bottom: 10px;
 }
 
-.token-item-card:hover {
+.studio-token-item-card:hover {
   background: rgba(0, 188, 212, 0.05);
   border-color: rgba(0, 188, 212, 0.3);
+}
+
+/* TOKEN CREATOR GRID RESTORE */
+.templates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+  padding: 20px;
+}
+
+.editor-sidebar-tabs {
+  display: flex;
+  flex-direction: row !important;
+  gap: 10px;
+  padding: 15px;
 }
 .editor-layout.mobile .editor-sidebar {
   width: 100%;

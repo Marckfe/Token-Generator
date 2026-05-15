@@ -292,9 +292,9 @@ export default function StudioEditor() {
       <div className="studio-main-container">
         {!isMobile && (
           <aside className="studio-tools-sidebar">
-            <button className={`tool-btn ${leftTab === 'tools' ? 'active' : ''}`} onClick={() => setLeftTab('tools')} title="Aggiungi"><Plus size={22}/></button>
-            <button className={`tool-btn ${leftTab === 'layers' ? 'active' : ''}`} onClick={() => setLeftTab('layers')} title="Livelli"><LayersIcon size={22}/></button>
-            <button className={`tool-btn ${leftTab === 'cloud' ? 'active' : ''}`} onClick={() => setLeftTab('cloud')} title="Cloud"><Cloud size={22}/></button>
+            <button className={`studio-tool-btn ${leftTab === 'tools' ? 'active' : ''}`} onClick={() => setLeftTab('tools')} title="Aggiungi"><Plus size={22}/></button>
+            <button className={`studio-tool-btn ${leftTab === 'layers' ? 'active' : ''}`} onClick={() => setLeftTab('layers')} title="Livelli"><LayersIcon size={22}/></button>
+            <button className={`studio-tool-btn ${leftTab === 'cloud' ? 'active' : ''}`} onClick={() => setLeftTab('cloud')} title="Cloud"><Cloud size={22}/></button>
           </aside>
         )}
 
@@ -302,15 +302,15 @@ export default function StudioEditor() {
            <div className="studio-sub-panel">
               {leftTab === 'tools' && (
                  <>
-                    <div className="panel-header-text">Strumenti Rapidi</div>
-                    <div className="panel-content">
-                       <label className="glass-card-btn" style={{borderColor: '#00bcd4', background: 'rgba(0,188,212,0.1)'}}>
+                    <div className="studio-panel-header-text">Strumenti Rapidi</div>
+                    <div className="studio-panel-content">
+                       <label className="studio-glass-card-btn" style={{borderColor: '#00bcd4', background: 'rgba(0,188,212,0.1)'}}>
                          <Maximize size={18} style={{marginRight: '12px', color: '#00bcd4'}}/> Carica Sfondo Carta
                          <input type="file" hidden accept="image/*" onChange={handleBgUpload} />
                        </label>
                        <div style={{height: '1px', background: 'rgba(255,255,255,0.1)', margin: '20px 0'}}></div>
-                       <button className="glass-card-btn" onClick={() => addLayer('text', 'NUOVO TESTO')}><Type size={18} style={{marginRight: '12px', color: '#00bcd4'}}/> Aggiungi Testo</button>
-                       <label className="glass-card-btn">
+                       <button className="studio-glass-card-btn" onClick={() => addLayer('text', 'NUOVO TESTO')}><Type size={18} style={{marginRight: '12px', color: '#00bcd4'}}/> Aggiungi Testo</button>
+                       <label className="studio-glass-card-btn">
                          <ImageIcon size={18} style={{marginRight: '12px', color: '#00bcd4'}}/> Aggiungi Immagine
                          <input type="file" hidden accept="image/*" onChange={handleAssetUpload} />
                        </label>
@@ -319,10 +319,10 @@ export default function StudioEditor() {
               )}
               {leftTab === 'layers' && (
                  <>
-                    <div className="panel-header-text">Livelli ({layers.length})</div>
-                    <div className="panel-content">
+                    <div className="studio-panel-header-text">Livelli ({layers.length})</div>
+                    <div className="studio-panel-content">
                        {[...layers].reverse().map(l => (
-                          <div key={l.id} className={`layer-item ${selectedId === l.id ? 'active' : ''}`} onClick={() => setSelectedId(l.id)}>
+                          <div key={l.id} className={`studio-layer-item ${selectedId === l.id ? 'active' : ''}`} onClick={() => setSelectedId(l.id)}>
                              {l.type === 'text' ? <Type size={14}/> : <ImageIcon size={14}/>}
                              <span className="truncate" style={{flex: 1, fontSize: '12px'}}>{l.type === 'text' ? l.content : 'Immagine'}</span>
                              <button onClick={(e) => { e.stopPropagation(); deleteLayer(l.id); }} className="hover:text-error"><Trash2 size={12}/></button>
@@ -334,8 +334,8 @@ export default function StudioEditor() {
               )}
               {leftTab === 'cloud' && (
                  <>
-                    <div className="panel-header-text">Libreria Cloud</div>
-                    <div className="panel-content">
+                    <div className="studio-panel-header-text">Libreria Cloud</div>
+                    <div className="studio-panel-content">
                        <CloudLibrary user={user} onLoad={t => { setLayers(t.layers); setBgArt(t.bgArt); setProjectName(t.name); setSelectedId(null); }} />
                     </div>
                  </>
@@ -378,81 +378,81 @@ export default function StudioEditor() {
 
         {activeLayer && (
            <aside className="studio-inspector-panel">
-              <div className="inspector-header">
+              <div className="studio-inspector-header">
                  <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
                     <Settings size={16} className="text-accent"/>
-                    <span className="panel-header-text" style={{padding: 0, margin: 0, opacity: 1}}>Proprietà</span>
+                    <span className="studio-panel-header-text" style={{padding: 0, margin: 0, opacity: 1}}>Proprietà</span>
                  </div>
                  <button onClick={() => setSelectedId(null)} style={{background: 'none', border: 'none', color: '#fff', opacity: 0.4, cursor: 'pointer'}}>✕</button>
               </div>
 
-              <div className="inspector-section">
-                 <div className="property-grid">
-                    <div className="property-field"><span className="property-label">X</span><input type="number" value={Math.round(activeLayer.x)} onChange={e => updateLayer(selectedId, { x: parseInt(e.target.value) })} className="control-input" /></div>
-                    <div className="property-field"><span className="property-label">Y</span><input type="number" value={Math.round(activeLayer.y)} onChange={e => updateLayer(selectedId, { y: parseInt(e.target.value) })} className="control-input" /></div>
-                    <div className="property-field"><span className="property-label">L</span><input type="number" value={Math.round(activeLayer.width)} onChange={e => updateLayer(selectedId, { width: parseInt(e.target.value) })} className="control-input" /></div>
-                    <div className="property-field"><span className="property-label">A</span><input type="number" value={Math.round(activeLayer.height)} onChange={e => updateLayer(selectedId, { height: parseInt(e.target.value) })} className="control-input" /></div>
+              <div className="studio-inspector-section">
+                 <div className="studio-property-grid">
+                    <div className="studio-property-field"><span className="studio-property-label">X</span><input type="number" value={Math.round(activeLayer.x)} onChange={e => updateLayer(selectedId, { x: parseInt(e.target.value) })} className="control-input" /></div>
+                    <div className="studio-property-field"><span className="studio-property-label">Y</span><input type="number" value={Math.round(activeLayer.y)} onChange={e => updateLayer(selectedId, { y: parseInt(e.target.value) })} className="control-input" /></div>
+                    <div className="studio-property-field"><span className="studio-property-label">L</span><input type="number" value={Math.round(activeLayer.width)} onChange={e => updateLayer(selectedId, { width: parseInt(e.target.value) })} className="control-input" /></div>
+                    <div className="studio-property-field"><span className="studio-property-label">A</span><input type="number" value={Math.round(activeLayer.height)} onChange={e => updateLayer(selectedId, { height: parseInt(e.target.value) })} className="control-input" /></div>
                  </div>
 
-                 <div className="property-row">
-                    <div style={{display: 'flex', justifyContent: 'space-between'}}><span className="property-label">Rotazione</span><span style={{fontSize: '12px', fontWeight: 'bold', color: '#00bcd4'}}>{activeLayer.rotate}°</span></div>
+                 <div className="studio-property-row">
+                    <div style={{display: 'flex', justifyContent: 'space-between'}}><span className="studio-property-label">Rotazione</span><span style={{fontSize: '12px', fontWeight: 'bold', color: '#00bcd4'}}>{activeLayer.rotate}°</span></div>
                     <input type="range" min="0" max="360" value={activeLayer.rotate} onChange={e => updateLayer(selectedId, { rotate: parseInt(e.target.value) })} style={{width: '100%', accentColor: '#00bcd4'}} />
                  </div>
 
-                 <div className="property-row">
-                    <div style={{display: 'flex', justifyContent: 'space-between'}}><span className="property-label">Opacità</span><span style={{fontSize: '12px', fontWeight: 'bold', color: '#00bcd4'}}>{Math.round(activeLayer.opacity * 100)}%</span></div>
+                 <div className="studio-property-row">
+                    <div style={{display: 'flex', justifyContent: 'space-between'}}><span className="studio-property-label">Opacità</span><span style={{fontSize: '12px', fontWeight: 'bold', color: '#00bcd4'}}>{Math.round(activeLayer.opacity * 100)}%</span></div>
                     <input type="range" min="0" max="1" step="0.01" value={activeLayer.opacity} onChange={e => updateLayer(selectedId, { opacity: parseFloat(e.target.value) })} style={{width: '100%', accentColor: '#00bcd4'}} />
                  </div>
 
                  {activeLayer.type === 'text' && (
-                    <div className="property-row" style={{gap: '20px'}}>
-                       <div className="property-field"><span className="property-label">Contenuto</span><textarea value={activeLayer.content} onChange={e => updateLayer(selectedId, { content: e.target.value })} className="control-input" style={{height: '80px', fontSize: '12px'}} /></div>
+                    <div className="studio-property-row" style={{gap: '20px'}}>
+                       <div className="studio-property-field"><span className="studio-property-label">Contenuto</span><textarea value={activeLayer.content} onChange={e => updateLayer(selectedId, { content: e.target.value })} className="control-input" style={{height: '80px', fontSize: '12px'}} /></div>
                        
-                       <div className="property-field">
-                          <span className="property-label">Allineamento</span>
-                          <div className="alignment-group">
+                       <div className="studio-property-field">
+                          <span className="studio-property-label">Allineamento</span>
+                          <div className="studio-alignment-group">
                              {['left', 'center', 'right'].map(a => (
-                                <button key={a} className={`align-btn ${activeLayer.style.textAlign === a ? 'active' : ''}`} onClick={() => updateStyle(selectedId, { textAlign: a })}>
+                                <button key={a} className={`studio-align-btn ${activeLayer.style.textAlign === a ? 'active' : ''}`} onClick={() => updateStyle(selectedId, { textAlign: a })}>
                                    {a === 'left' ? <AlignLeft size={16}/> : a === 'center' ? <AlignCenter size={16}/> : <AlignRight size={16}/>}
                                 </button>
                              ))}
                           </div>
                        </div>
 
-                       <div className="property-field">
-                          <span className="property-label">Font</span>
+                       <div className="studio-property-field">
+                          <span className="studio-property-label">Font</span>
                           <select className="control-input" value={activeLayer.style.fontFamily} onChange={e => updateStyle(selectedId, { fontFamily: e.target.value })}>
                              {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                           </select>
                        </div>
 
-                       <div className="property-grid">
-                          <div className="property-field"><span className="property-label">Size</span><input type="number" value={activeLayer.style.fontSize} onChange={e => updateStyle(selectedId, { fontSize: parseInt(e.target.value) })} className="control-input" /></div>
-                          <div className="property-field"><span className="property-label">Colore</span><input type="color" value={activeLayer.style.color} onChange={e => updateStyle(selectedId, { color: e.target.value })} style={{height: '38px', width: '100%', background: 'transparent', border: 'none', cursor: 'pointer'}} /></div>
+                       <div className="studio-property-grid">
+                          <div className="studio-property-field"><span className="studio-property-label">Size</span><input type="number" value={activeLayer.style.fontSize} onChange={e => updateStyle(selectedId, { fontSize: parseInt(e.target.value) })} className="control-input" /></div>
+                          <div className="studio-property-field"><span className="studio-property-label">Colore</span><input type="color" value={activeLayer.style.color} onChange={e => updateStyle(selectedId, { color: e.target.value })} style={{height: '38px', width: '100%', background: 'transparent', border: 'none', cursor: 'pointer'}} /></div>
                        </div>
 
-                       <div className="property-field">
-                          <span className="property-label">Effetti Testo</span>
+                       <div className="studio-property-field">
+                          <span className="studio-property-label">Effetti Testo</span>
                           <div style={{display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px'}}>
-                             <div className="property-row"><span style={{fontSize: '9px', opacity: 0.4}}>Arco ({activeLayer.style.bend})</span><input type="range" min="-20" max="20" step="0.5" value={activeLayer.style.bend} onChange={e => updateStyle(selectedId, { bend: parseFloat(e.target.value) })} /></div>
-                             <div className="property-row"><span style={{fontSize: '9px', opacity: 0.4}}>Inclinazione ({activeLayer.style.skew})</span><input type="range" min="-45" max="45" value={activeLayer.style.skew} onChange={e => updateStyle(selectedId, { skew: parseInt(e.target.value) })} /></div>
-                             <div className="property-row"><span style={{fontSize: '9px', opacity: 0.4}}>Spaziatura ({activeLayer.style.letterSpacing})</span><input type="range" min="-5" max="20" value={activeLayer.style.letterSpacing} onChange={e => updateStyle(selectedId, { letterSpacing: parseInt(e.target.value) })} /></div>
+                             <div className="studio-property-row"><span style={{fontSize: '9px', opacity: 0.4}}>Arco ({activeLayer.style.bend})</span><input type="range" min="-20" max="20" step="0.5" value={activeLayer.style.bend} onChange={e => updateStyle(selectedId, { bend: parseFloat(e.target.value) })} /></div>
+                             <div className="studio-property-row"><span style={{fontSize: '9px', opacity: 0.4}}>Inclinazione ({activeLayer.style.skew})</span><input type="range" min="-45" max="45" value={activeLayer.style.skew} onChange={e => updateStyle(selectedId, { skew: parseInt(e.target.value) })} /></div>
+                             <div className="studio-property-row"><span style={{fontSize: '9px', opacity: 0.4}}>Spaziatura ({activeLayer.style.letterSpacing})</span><input type="range" min="-5" max="20" value={activeLayer.style.letterSpacing} onChange={e => updateStyle(selectedId, { letterSpacing: parseInt(e.target.value) })} /></div>
                           </div>
                        </div>
                     </div>
                  )}
 
-                 <div className="action-group">
+                 <div className="studio-action-group">
                     <div style={{display: 'flex', gap: '10px'}}>
-                       <button className="align-btn" style={{flex: 1}} onClick={() => moveLayer(selectedId, 'up')}><ArrowUp size={14} style={{marginRight: '8px'}}/> Su</button>
-                       <button className="align-btn" style={{flex: 1}} onClick={() => moveLayer(selectedId, 'down')}><ArrowDown size={14} style={{marginRight: '8px'}}/> Giù</button>
+                       <button className="studio-align-btn" style={{flex: 1}} onClick={() => moveLayer(selectedId, 'up')}><ArrowUp size={14} style={{marginRight: '8px'}}/> Su</button>
+                       <button className="studio-align-btn" style={{flex: 1}} onClick={() => moveLayer(selectedId, 'down')}><ArrowDown size={14} style={{marginRight: '8px'}}/> Giù</button>
                     </div>
-                    <button className="align-btn" onClick={() => duplicateLayer(selectedId)}><Copy size={14} style={{marginRight: '8px'}}/> {t('common.duplicate')}</button>
-                    <button className="align-btn" style={{color: '#ff4444', borderColor: 'transparent'}} onClick={() => deleteLayer(selectedId)}><Trash2 size={14} style={{marginRight: '8px'}}/> {t('common.delete')}</button>
+                    <button className="studio-align-btn" onClick={() => duplicateLayer(selectedId)}><Copy size={14} style={{marginRight: '8px'}}/> {t('common.duplicate')}</button>
+                    <button className="studio-align-btn" style={{color: '#ff4444', borderColor: 'transparent'}} onClick={() => deleteLayer(selectedId)}><Trash2 size={14} style={{marginRight: '8px'}}/> {t('common.delete')}</button>
                  </div>
 
-                 <div className="save-actions">
-                    <button className="align-btn" style={{flex: 1}} onClick={() => handleSaveCloud(true)} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14} style={{marginRight: '8px'}}/>} Bozza</button>
+                 <div className="studio-save-actions">
+                    <button className="studio-align-btn" style={{flex: 1}} onClick={() => handleSaveCloud(true)} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14} style={{marginRight: '8px'}}/>} Bozza</button>
                     <button className="btn btn-primary" style={{flex: 1}} onClick={() => handleSaveCloud(false)} disabled={isSaving}>{saveStatus === 'success' ? <Check size={14}/> : <Save size={14} style={{marginRight: '8px'}}/>} Definitivo</button>
                  </div>
               </div>
@@ -477,7 +477,7 @@ function CloudLibrary({ user, onLoad }) {
       </div>
       <div style={{display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '400px', overflowY: 'auto'}}>
         {loading ? <div style={{textAlign: 'center', padding: '20px', fontSize: '12px', opacity: 0.3}}>Caricamento...</div> : tokens.map(item => (
-          <div key={item.id} className="token-item-card" onClick={() => onLoad(item)}>
+          <div key={item.id} className="studio-token-item-card" onClick={() => onLoad(item)}>
             <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
                <div style={{width: '32px', height: '44px', background: '#000', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)'}}>
                   {item.previewUrl && <img src={item.previewUrl} style={{width: '100%', height: '100%', objectFit: 'cover'}} alt=""/>}

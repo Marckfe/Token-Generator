@@ -255,11 +255,27 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
           <input type="file" ref={inputRef} style={{ display: "none" }} multiple onChange={e => handleFiles(e.target.files)} accept="image/*" />
           
           {dbType === 'single' && (
-            <CardSearchPanel onAddCards={cards => { setImages(prev => [...prev, ...cards]); toast(t('proxy.toast_loaded', { count: cards.length })); }} />
+            <CardSearchPanel onAddCards={cards => { 
+              setImages(prev => [...prev, ...cards]); 
+              toast(t('proxy.toast_loaded', { 
+                count: cards.length,
+                suffix: cards.length === 1 
+                  ? (lang === 'it' ? 'immagine' : 'image') 
+                  : (lang === 'it' ? 'immagini' : 'images')
+              })); 
+            }} />
           )}
           {dbType === 'bulk' && (
             <BulkImportPanel 
-              onAddCards={cards => { setImages(prev => [...prev, ...cards]); toast(t('proxy.toast_loaded', { count: cards.length })); }} 
+              onAddCards={cards => { 
+                setImages(prev => [...prev, ...cards]); 
+                toast(t('proxy.toast_loaded', { 
+                  count: cards.length,
+                  suffix: cards.length === 1 
+                    ? (lang === 'it' ? 'immagine' : 'image') 
+                    : (lang === 'it' ? 'immagini' : 'images')
+                })); 
+              }} 
               toast={toast} 
               initialText={bulkInitialText}
               onClearInitial={() => setBulkInitialText("")}

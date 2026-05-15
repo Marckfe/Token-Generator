@@ -78,7 +78,7 @@ export default {
     modal_clear_body: "Tutte le {count} carte verranno rimosse.",
     modal_clear_confirm: "Sì, svuota",
     toast_no_valid: "Nessuna immagine valida (PNG/JPG/WEBP)",
-    toast_loaded: "{count} immagini caricate",
+    toast_loaded: "{count} {suffix} in coda",
     toast_removed: "Rimossa",
     toast_duplicated: "Duplicata!",
     toast_all_removed: "Tutte rimosse",
