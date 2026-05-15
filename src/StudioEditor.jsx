@@ -295,12 +295,6 @@ export default function StudioEditor() {
             <button className={`tool-btn ${leftTab === 'tools' ? 'active' : ''}`} onClick={() => setLeftTab('tools')} title="Aggiungi"><Plus size={22}/></button>
             <button className={`tool-btn ${leftTab === 'layers' ? 'active' : ''}`} onClick={() => setLeftTab('layers')} title="Livelli"><LayersIcon size={22}/></button>
             <button className={`tool-btn ${leftTab === 'cloud' ? 'active' : ''}`} onClick={() => setLeftTab('cloud')} title="Cloud"><Cloud size={22}/></button>
-            <div style={{marginTop: 'auto'}}>
-               <label className="tool-btn" title="Carica Sfondo">
-                  <Maximize size={22}/>
-                  <input type="file" hidden accept="image/*" onChange={handleBgUpload} />
-               </label>
-            </div>
           </aside>
         )}
 
@@ -310,6 +304,11 @@ export default function StudioEditor() {
                  <>
                     <div className="panel-header-text">Strumenti Rapidi</div>
                     <div className="panel-content">
+                       <label className="glass-card-btn" style={{borderColor: '#00bcd4', background: 'rgba(0,188,212,0.1)'}}>
+                         <Maximize size={18} style={{marginRight: '12px', color: '#00bcd4'}}/> Carica Sfondo Carta
+                         <input type="file" hidden accept="image/*" onChange={handleBgUpload} />
+                       </label>
+                       <div style={{height: '1px', background: 'rgba(255,255,255,0.1)', margin: '20px 0'}}></div>
                        <button className="glass-card-btn" onClick={() => addLayer('text', 'NUOVO TESTO')}><Type size={18} style={{marginRight: '12px', color: '#00bcd4'}}/> Aggiungi Testo</button>
                        <label className="glass-card-btn">
                          <ImageIcon size={18} style={{marginRight: '12px', color: '#00bcd4'}}/> Aggiungi Immagine
