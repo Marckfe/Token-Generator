@@ -1,60 +1,45 @@
-/* Editor Layout */
-.editor-layout {
-  display: flex;
-  height: 100%;
-  overflow: hidden;
-  position: relative;
-  background: #11100e;
-}
-.editor-layout.mobile {
-  flex-direction: column;
-  overflow-y: auto;
-}
-
-/* Sidebar navigation (Canva style left menu) */
-.editor-nav {
-  width: 72px;
-  background: #1a1917;
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 16px 0;
-  gap: 8px;
-  z-index: 15;
-}
-.nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 4px;
-  width: 56px;
-  border-radius: 8px;
-  color: var(--muted);
-  font-size: 0.65rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--tr);
-}
-.nav-item:hover { color: var(--text-light); background: rgba(255,255,255,0.05); }
-.nav-item.active { 
-  color: #fff; 
-  background: linear-gradient(135deg, var(--accent) 0%, #4f98a3 100%); 
-  box-shadow: 0 4px 12px rgba(109, 170, 69, 0.2);
-}
-
-/* Sidebar panels */
-.editor-sidebar {
-  width: 320px;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  z-index: 10;
+.editor-layout.studio-mode {
+  display: grid;
+  grid-template-columns: 260px 1fr 300px;
+  grid-template-rows: 60px 1fr;
   height: 100vh;
+  background: #1e1e1e;
+}
+
+.studio-top-bar {
+  grid-column: 1 / -1;
+  background: #2c2c2c;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  z-index: 100;
+}
+
+.studio-left-panel {
+  background: #2c2c2c;
+  border-right: 1px solid #333;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
+}
+
+.studio-right-panel {
+  background: #2c2c2c;
+  border-left: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.studio-canvas-area {
+  background: #181818;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
 }
 .editor-layout.mobile .editor-sidebar {
   width: 100%;
@@ -305,23 +290,42 @@
   hover: var(--error);
 }
 
-.layer-resize-handle {
+/* Selection Bounding Box */
+.bounding-box {
   position: absolute;
-  right: -5px;
-  bottom: -5px;
-  width: 10px;
-  height: 10px;
-  background: var(--accent);
-  border-radius: 50%;
-  cursor: nwse-resize;
-  border: 2px solid #fff;
+  border: 2px solid #00bcd4;
+  pointer-events: none;
+  z-index: 1000;
 }
 
-.studio-canvas {
-  background-color: #000;
-  box-shadow: 0 40px 100px rgba(0,0,0,0.7);
-  outline: 1px solid rgba(255,255,255,0.1);
+.resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border: 2px solid #00bcd4;
+  border-radius: 2px;
+  pointer-events: auto;
+  z-index: 1001;
 }
+
+.handle-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.handle-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.handle-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.handle-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+.handle-n { top: -6px; left: 50%; transform: translateX(-50%); cursor: n-resize; }
+.handle-s { bottom: -6px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
+.handle-e { right: -6px; top: 50%; transform: translateY(-50%); cursor: e-resize; }
+.handle-w { left: -6px; top: 50%; transform: translateY(-50%); cursor: w-resize; }
+
+.snap-guide {
+  position: absolute;
+  background: #ff00ff;
+  pointer-events: none;
+  z-index: 2000;
+}
+.snap-v { width: 1px; top: 0; bottom: 0; }
+.snap-h { height: 1px; left: 0; right: 0; }
 
 /* History / Undo-Redo Buttons */
 .history-btn {

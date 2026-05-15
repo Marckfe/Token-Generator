@@ -552,15 +552,16 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
                 onChange={e => setPlayerData({ ...playerData, firstName: e.target.value })} />
             </div>
             <div className="dc-field-row">
-              <input className="dc-input" placeholder={t('checker.location') || "Location"}
+              <input className="dc-input" placeholder={t('checker.location') || "Luogo"}
+                style={{ flex: '2 1 0' }}
                 value={playerData.location}
                 onChange={e => setPlayerData({ ...playerData, location: e.target.value })} />
               <input className="dc-input" placeholder={t('checker.table')}
-                style={{ flex: '0 0 60px' }}
+                style={{ flex: '0 0 80px' }}
                 value={playerData.tableNumber}
                 onChange={e => setPlayerData({ ...playerData, tableNumber: e.target.value })} />
               <input type="date" className="dc-input dc-date-input"
-                style={{ flex: '1 0 130px' }}
+                style={{ flex: '1.2 1 140px' }}
                 value={playerData.date}
                 onChange={e => setPlayerData({ ...playerData, date: e.target.value })} />
             </div>
@@ -601,20 +602,8 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
           </div>
         </div>
 
-        {/* Maindeck */}
-        <div className="dc-panel dc-panel-flex">
-          <label className="dc-label">{t('checker.maindeck_list')}</label>
-          <textarea
-            className="dc-textarea"
-            rows={isSingleton ? 10 : 7}
-            placeholder={'4x Brainstorm\n1 Lightning Bolt'}
-            value={maindeck}
-            onChange={e => setMaindeck(e.target.value)}
-          />
-        </div>
-
-        {/* Commander or Sideboard */}
-        {isSingleton ? (
+        {/* Commander (Only for Singleton) */}
+        {isSingleton && (
           <div className="dc-panel">
             <label className="dc-label">{t('checker.commanders')}</label>
             <div className="dc-search-row">
@@ -641,7 +630,22 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
               {cmdSuggestions.map(s => <option key={s} value={s} />)}
             </datalist>
           </div>
-        ) : (
+        )}
+
+        {/* Maindeck */}
+        <div className="dc-panel dc-panel-flex">
+          <label className="dc-label">{t('checker.maindeck_list')}</label>
+          <textarea
+            className="dc-textarea"
+            rows={isSingleton ? 10 : 7}
+            placeholder={'4x Brainstorm\n1 Lightning Bolt'}
+            value={maindeck}
+            onChange={e => setMaindeck(e.target.value)}
+          />
+        </div>
+
+        {/* Sideboard (Only for Standard/Modern/etc) */}
+        {!isSingleton && (
           <div className="dc-panel dc-panel-flex">
             <label className="dc-label">{t('checker.sideboard')}</label>
             <textarea
