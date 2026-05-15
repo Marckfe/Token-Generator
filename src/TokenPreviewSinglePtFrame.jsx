@@ -199,31 +199,48 @@ function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 
 // --- REUSABLE UI COMPONENTS ---
 const ColorPickerField = ({ label, value, onChange, onTarget, fontValue, onFontChange }) => (
-  <div className="control-field mb-4">
+  <div className="control-field mb-6">
     <div className="flex justify-between items-center mb-2">
       <span className="control-label m-0">{label}</span>
-      {onTarget && <span className="text-xs opacity-50 hover:opacity-100 cursor-pointer transition-opacity" onClick={onTarget}>🎯 Seleziona Layer</span>}
+      {onTarget && (
+        <span 
+          className="text-[10px] opacity-40 hover:opacity-100 cursor-pointer transition-opacity uppercase tracking-wider" 
+          onClick={onTarget}
+        >
+          🎯 Seleziona Layer
+        </span>
+      )}
     </div>
     
-    <div className="flex gap-2 items-center">
+    {/* Row 1: Color Preview + Hex Input */}
+    <div className="flex gap-2 items-center mb-2">
       <div className="color-preview-wrapper">
         <input type="color" value={value} onChange={e => onChange(e.target.value)} className="color-input-hidden" />
         <div className="color-preview-circle" style={{ backgroundColor: value }} />
       </div>
       <input 
         type="text" 
-        className="control-input flex-1 py-1 px-2 text-xs font-mono uppercase" 
+        className="control-input flex-1 py-1 px-3 text-xs font-mono uppercase" 
         value={value} 
         onChange={e => onChange(e.target.value)}
         placeholder="#FFFFFF"
-        style={{ height: '32px' }}
+        style={{ height: '36px' }}
       />
-      {onFontChange && (
-        <select className="control-input py-1 text-xs flex-1 min-w-[100px]" value={fontValue} onChange={e => onFontChange(e.target.value)} style={{ height: '32px' }}>
-          {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-        </select>
-      )}
     </div>
+
+    {/* Row 2: Font Selection (Full Width) */}
+    {onFontChange && (
+      <select 
+        className="control-input py-1 text-xs w-full" 
+        value={fontValue} 
+        onChange={e => onFontChange(e.target.value)} 
+        style={{ height: '36px' }}
+      >
+        {FONT_OPTIONS.map(f => (
+          <option key={f.id} value={f.id}>{f.name}</option>
+        ))}
+      </select>
+    )}
   </div>
 );
 
@@ -255,17 +272,27 @@ function renderCardSync(canvas, state, withBleed = false) {
       const offsetX = artTransform?.x || 0;
       const offsetY = artTransform?.y || 0;
       
-      // Calculate "cover" scale to preserve aspect ratio
+      // --- SMART BLURRED FILL (Background) ---
+      if (state.smartFill) {
+        ctx.save();
+        ctx.filter = 'blur(40px) brightness(0.8)';
+        // Draw image covering the whole card area with extra scale for blur margins
+        const fillScale = Math.max(TW / img.width, TH / img.height) * 1.3;
+        const fillW = img.width * fillScale;
+        const fillH = img.height * fillScale;
+        ctx.drawImage(img, (TW - fillW) / 2, (TH - fillH) / 2, fillW, fillH);
+        ctx.restore();
+      }
+
+      // --- MAIN ARTWORK ---
       const imgAR = img.width / img.height;
       const cardAR = TW / TH;
       let drawW, drawH;
       
       if (imgAR > cardAR) {
-        // Image is wider than card
         drawH = TH * zoom;
         drawW = drawH * imgAR;
       } else {
-        // Image is taller than card
         drawW = TW * zoom;
         drawH = drawW / imgAR;
       }
@@ -414,6 +441,7 @@ const DEFAULT_STATE = {
   infoLeft: { text: "SET • EN", x: 18, y: 12, color: "#FFFFFF", fontSize: 11, fontFamily: 'BelerenBold' }, showInfoLeft: true,
   artist: "Artist Name", artistStyle: { x: 18, y: 26, color: "#FFFFFF", fontSize: 11, fontFamily: 'BelerenBold' }, showArtist: true,
   copyright: { text: `™ & © ${new Date().getFullYear()} Wizards of the Coast`, x: 18, y: 12, color: "#FFFFFF", fontSize: 9, fontFamily: 'Mplantin' }, showCopyright: true,
+  smartFill: true,
 };
 
 // ptFrame name maps to files in /src/assets/frames/pt/
@@ -898,43 +926,66 @@ export default function TokenPreviewSinglePtFrame() {
           )}
 
           {/* TAB: ARTWORK */}
-          {activeTab === 'art' && (
-            <>
-              <div className="sidebar-panel-title">🎨 {t('studio.bg_placeholder')}</div>
-              <div className="control-group">
-                <div className="control-field">
-                  <label className="btn btn-primary" style={{ textAlign: 'center', cursor: 'pointer' }}>
-                    {t('studio.upload_bg_btn')}
-                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+          {(activeTab === 'artwork' || activeTab === 'art') && (
+            <div className="sidebar-scroll-content">
+              <div className="sidebar-panel-title">🖼️ {t('token.artwork')}</div>
+              
+              <div className="p-5 flex flex-col gap-6">
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Sorgente Immagine</span>
+                  </div>
+                  <div className="editor-card-body">
+                    <div className="flex gap-2 mb-4">
+                      <button className="btn btn-primary flex-1 py-3 text-xs" onClick={() => document.getElementById('artwork-upload').click()}>📤 Carica Foto</button>
+                      <button className="btn btn-ghost flex-1 py-3 text-xs border border-white/10" onClick={() => setShowArtSearch(true)}>🔍 Cerca Art</button>
+                    </div>
+                    <input id="artwork-upload" type="file" className="hidden" accept="image/*" onChange={e => {
                       const f = e.target.files?.[0]; if(!f) return;
                       const r = new FileReader(); r.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
                       r.readAsDataURL(f);
                     }} />
-                  </label>
-                  <p className="text-xs text-muted mt-2 text-center">{t('proxy.dropzone_title')}</p>
+                    <p className="text-[10px] text-white/40 text-center italic">Trascina un'immagine direttamente sulla carta per caricarla.</p>
+                  </div>
                 </div>
-                <hr className="my-4 border-[var(--border)]" />
-                <div className="control-field mt-4">
-                  <span className="control-label">Zoom ({state.artTransform.zoom}x)</span>
-                  <input type="range" min="0.8" max="2.2" step="0.01" value={state.artTransform.zoom} onChange={e => update('artTransform', { zoom: Number(e.target.value) })} className="control-input" />
-                </div>
-                <div className="control-row mt-4">
-                  <div className="control-field"><span className="control-label">Pos X</span><input type="number" className="control-input" value={state.artTransform.x} onChange={e => update('artTransform', { x: Number(e.target.value) })} /></div>
-                  <div className="control-field"><span className="control-label">Pos Y</span><input type="number" className="control-input" value={state.artTransform.y} onChange={e => update('artTransform', { y: Number(e.target.value) })} /></div>
+
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Trasformazione</span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 pr-3 border-r border-white/10">
+                        <span className="text-[9px] text-white/30 uppercase font-bold">Smart Fill</span>
+                        <label className="switch">
+                          <input type="checkbox" checked={state.smartFill} onChange={e => applyState({ ...state, smartFill: e.target.checked })} />
+                          <span className="slider round"></span>
+                        </label>
+                      </div>
+                      <button className="text-[10px] text-cyan-400 font-bold hover:underline" onClick={() => update('artTransform', { zoom: 1, x: 0, y: 0 })}>RESET</button>
+                    </div>
+                  </div>
+                  <div className="editor-card-body">
+                    <div className="control-field mb-4">
+                      <span className="control-label">Zoom ({state.artTransform?.zoom || 1}x)</span>
+                      <input type="range" min="0.1" max="3" step="0.01" value={state.artTransform?.zoom || 1} onChange={e => update('artTransform', { zoom: Number(e.target.value) })} className="control-input" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="control-field">
+                        <span className="control-label">Orizzontale</span>
+                        <input type="range" min="-500" max="500" value={state.artTransform?.x || 0} onChange={e => update('artTransform', { x: Number(e.target.value) })} className="control-input" />
+                      </div>
+                      <div className="control-field">
+                        <span className="control-label">Verticale</span>
+                        <input type="range" min="-500" max="500" value={state.artTransform?.y || 0} onChange={e => update('artTransform', { y: Number(e.target.value) })} className="control-input" />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
 
-          {/* TAB: FRAMES */}
+          {/* TAB: FRAME */}
           {activeTab === 'frame' && (
-            <>
-              <div className="sidebar-panel-title">🎴 {t('token.set_frame')}</div>
-              <div className="control-group">
-                <div className="control-field">
-                  <span className="control-label">{t('common.settings')}</span>
-                  <select className="control-input control-select" value={state.frameSet} onChange={e => {
-                    const setName = e.target.value;
                     applyState({ ...state, frameSet: setName, frame: FRAME_MAP[setName][0] || null });
                   }}>
                     {Object.keys(FRAME_MAP).map(n => <option key={n} value={n}>{n}</option>)}
@@ -1001,202 +1052,366 @@ export default function TokenPreviewSinglePtFrame() {
 
           {/* TAB: TEXT */}
           {activeTab === 'text' && (
-            <>
-              <div className="sidebar-panel-title">📝 {t('token.title')}</div>
-              <div className="control-group">
-                <div className="control-field mb-4">
-                  <span className="control-label">{t('token.card_name')}</span>
-                  <input type="text" className="control-input" value={state.name} onChange={e => applyState({ ...state, name: e.target.value })} onClick={() => setActiveLayer('name')} list="token-names" />
-                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showName !== false} onChange={e => applyState({ ...state, showName: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.card_name')}</label>
-                </div>
-                
-                <ColorPickerField 
-                  label="Colore Nome" 
-                  value={state.nameStyle.color} 
-                  onChange={v => update('nameStyle', { color: v })}
-                  onTarget={() => setActiveLayer('name')}
-                  fontValue={state.nameStyle.fontFamily}
-                  onFontChange={v => update('nameStyle', { fontFamily: v })}
-                />
-
-                <div className="control-row">
-                  <div className="control-field">
-                    <span className="control-label">Dimensione Nome ({state.nameStyle.fontSize}px)</span>
-                    <input type="range" min="10" max="60" value={state.nameStyle.fontSize} onChange={e => update('nameStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+            <div className="sidebar-scroll-content">
+              <div className="sidebar-panel-title">🪄 {t('token.card_layers')}</div>
+              
+              <div className="p-5 flex flex-col gap-6">
+                {/* SECTION: CARD NAME */}
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">{t('token.card_name')}</span>
+                    <label className="switch">
+                      <input type="checkbox" checked={state.showName !== false} onChange={e => applyState({ ...state, showName: e.target.checked })} />
+                      <span className="slider round"></span>
+                    </label>
                   </div>
-                </div>
+                  
+                  <div className="editor-card-body">
+                    <input 
+                      type="text" 
+                      className="control-input mb-5" 
+                      value={state.name} 
+                      onChange={e => applyState({ ...state, name: e.target.value })} 
+                      onClick={() => setActiveLayer('name')} 
+                    />
+                    
+                    <ColorPickerField 
+                      label="Stile Nome" 
+                      value={state.nameStyle.color} 
+                      onChange={v => update('nameStyle', { color: v })}
+                      onTarget={() => setActiveLayer('name')}
+                      fontValue={state.nameStyle.fontFamily}
+                      onFontChange={v => update('nameStyle', { fontFamily: v })}
+                    />
 
-                <div className="control-row mb-4">
-                  <div className="control-field">
-                    <span className="control-label">Allineamento</span>
-                    <div className="flex gap-2">
-                      <button className={`btn btn-ghost flex-1 py-2 ${state.nameStyle.align === 'left' ? 'active text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => update('nameStyle', { align: 'left' })}> sinistra </button>
-                      <button className={`btn btn-ghost flex-1 py-2 ${state.nameStyle.align === 'center' ? 'active text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => update('nameStyle', { align: 'center' })}> centro </button>
+                    <div className="grid grid-cols-2 gap-4 mt-5">
+                      <div className="control-field">
+                        <span className="control-label">Taglia ({state.nameStyle.fontSize}px)</span>
+                        <input type="range" min="12" max="60" value={state.nameStyle.fontSize} onChange={e => update('nameStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+                      </div>
+                      <div className="control-field">
+                        <span className="control-label">Allineamento</span>
+                        <div className="flex gap-1 p-1 bg-black/20 rounded-lg">
+                          <button className={`flex-1 py-2 rounded-md text-[10px] uppercase font-bold transition-all ${state.nameStyle.align === 'left' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('nameStyle', { align: 'left' })}>SX</button>
+                          <button className={`flex-1 py-2 rounded-md text-[10px] uppercase font-bold transition-all ${state.nameStyle.align === 'center' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('nameStyle', { align: 'center' })}>CX</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="control-field">
-                    <span className="control-label">AutoFit</span>
-                    <button className={`btn btn-ghost py-2 ${state.autoFitName ? 'text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => applyState({ ...state, autoFitName: !state.autoFitName })}>
-                      {state.autoFitName ? 'ON' : 'OFF'}
-                    </button>
+                </div>
+
+                {/* SECTION: TYPE LINE */}
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">{t('token.type_line')}</span>
+                    <label className="switch">
+                      <input type="checkbox" checked={state.showType !== false} onChange={e => applyState({ ...state, showType: e.target.checked })} />
+                      <span className="slider round"></span>
+                    </label>
                   </div>
-                </div>
+                  
+                  <div className="editor-card-body">
+                    <input 
+                      type="text" 
+                      className="control-input mb-5" 
+                      value={state.type} 
+                      onChange={e => applyState({ ...state, type: e.target.value })} 
+                      onClick={() => setActiveLayer('type')} 
+                    />
+                    
+                    <ColorPickerField 
+                      label="Stile Tipo" 
+                      value={state.typeStyle.color} 
+                      onChange={v => update('typeStyle', { color: v })}
+                      onTarget={() => setActiveLayer('type')}
+                      fontValue={state.typeStyle.fontFamily}
+                      onFontChange={v => update('typeStyle', { fontFamily: v })}
+                    />
 
-                <hr className="my-4 border-[var(--border)] opacity-30" />
-
-                <div className="control-field mb-4">
-                  <span className="control-label">{t('token.type_line')}</span>
-                  <input type="text" className="control-input" value={state.type} onChange={e => applyState({ ...state, type: e.target.value })} onClick={() => setActiveLayer('type')} list="token-types" />
-                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showType !== false} onChange={e => applyState({ ...state, showType: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.type_line')}</label>
-                </div>
-
-                <ColorPickerField 
-                  label="Colore Tipo" 
-                  value={state.typeStyle.color} 
-                  onChange={v => update('typeStyle', { color: v })}
-                  onTarget={() => setActiveLayer('type')}
-                  fontValue={state.typeStyle.fontFamily}
-                  onFontChange={v => update('typeStyle', { fontFamily: v })}
-                />
-                
-                <div className="control-row">
-                  <div className="control-field">
-                    <span className="control-label">Dimensione Tipo ({state.typeStyle.fontSize}px)</span>
-                    <input type="range" min="10" max="40" value={state.typeStyle.fontSize} onChange={e => update('typeStyle', { fontSize: Number(e.target.value) })} className="control-input" />
-                  </div>
-                </div>
-
-                <div className="control-row mb-4">
-                  <div className="control-field">
-                    <span className="control-label">Allineamento</span>
-                    <div className="flex gap-2">
-                      <button className={`btn btn-ghost flex-1 py-2 ${state.typeStyle.align === 'left' ? 'active text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => update('typeStyle', { align: 'left' })}> sinistra </button>
-                      <button className={`btn btn-ghost flex-1 py-2 ${state.typeStyle.align === 'center' ? 'active text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => update('typeStyle', { align: 'center' })}> centro </button>
+                    <div className="grid grid-cols-2 gap-4 mt-5">
+                      <div className="control-field">
+                        <span className="control-label">Taglia ({state.typeStyle.fontSize}px)</span>
+                        <input type="range" min="10" max="40" value={state.typeStyle.fontSize} onChange={e => update('typeStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+                      </div>
+                      <div className="control-field">
+                        <span className="control-label">Allineamento</span>
+                        <div className="flex gap-1 p-1 bg-black/20 rounded-lg">
+                          <button className={`flex-1 py-2 rounded-md text-[10px] uppercase font-bold transition-all ${state.typeStyle.align === 'left' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('typeStyle', { align: 'left' })}>SX</button>
+                          <button className={`flex-1 py-2 rounded-md text-[10px] uppercase font-bold transition-all ${state.typeStyle.align === 'center' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('typeStyle', { align: 'center' })}>CX</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="control-field">
-                    <span className="control-label">AutoFit</span>
-                    <button className={`btn btn-ghost py-2 ${state.autoFitType ? 'text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => applyState({ ...state, autoFitType: !state.autoFitType })}>
-                      {state.autoFitType ? 'ON' : 'OFF'}
-                    </button>
+                </div>
+
+                {/* SECTION: RULES TEXT */}
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">{t('token.rules_text')}</span>
+                    <label className="switch">
+                      <input type="checkbox" checked={state.showAbility !== false} onChange={e => applyState({ ...state, showAbility: e.target.checked })} />
+                      <span className="slider round"></span>
+                    </label>
+                  </div>
+                  
+                  <div className="editor-card-body">
+                    <textarea 
+                      className="control-input control-textarea mb-5 w-full" 
+                      value={state.ability} 
+                      onChange={e => applyState({ ...state, ability: e.target.value })}
+                      onClick={() => setActiveLayer('ability')}
+                      placeholder="Abilità (es. Haste)"
+                      style={{ minHeight: '100px' }}
+                    />
+                    
+                    <ColorPickerField 
+                      label="Stile Regole" 
+                      value={state.abilityStyle.color} 
+                      onChange={v => update('abilityStyle', { color: v })}
+                      onTarget={() => setActiveLayer('ability')}
+                      fontValue={state.abilityStyle.fontFamily}
+                      onFontChange={v => update('abilityStyle', { fontFamily: v })}
+                    />
+
+                    <div className="grid grid-cols-2 gap-4 mt-5">
+                      <div className="control-field">
+                        <span className="control-label">Taglia ({state.abilityStyle.fontSize}px)</span>
+                        <input type="range" min="8" max="40" value={state.abilityStyle.fontSize} onChange={e => update('abilityStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+              
+              <div className="p-5 flex flex-col gap-6">
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Parametri P/T</span>
+                    <label className="switch">
+                      <input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} />
+                      <span className="slider round"></span>
+                    </label>
+                  </div>
+                  <div className="editor-card-body">
+                    <div className="grid grid-cols-2 gap-4 mb-5">
+                      <div className="control-field">
+                        <span className="control-label">{t('common.power')}</span>
+                        <input type="text" className="control-input text-center font-bold" value={state.pt.power} onChange={e => applyState({ ...state, pt: { ...state.pt, power: e.target.value } })} />
+                      </div>
+                      <div className="control-field">
+                        <span className="control-label">{t('common.toughness')}</span>
+                        <input type="text" className="control-input text-center font-bold" value={state.pt.toughness} onChange={e => applyState({ ...state, pt: { ...state.pt, toughness: e.target.value } })} />
+                      </div>
+                    </div>
+
+                    <ColorPickerField 
+                      label="Stile Testo" 
+                      value={state.ptStyle.color} 
+                      onChange={v => update('ptStyle', { color: v })}
+                      fontValue={state.ptStyle.fontFamily}
+                      onFontChange={v => update('ptStyle', { fontFamily: v })}
+                    />
+
+                    <div className="control-field mt-5">
+                      <span className="control-label">Taglia ({state.ptStyle.fontSize}px)</span>
+                      <input type="range" min="10" max="80" value={state.ptStyle.fontSize} onChange={e => update('ptStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+                    </div>
                   </div>
                 </div>
 
-                <hr className="my-4 border-[var(--border)] opacity-30" />
-
-                <div className="control-field mb-4">
-                  <span className="control-label">{t('token.rules_text')}</span>
-                  <textarea className="control-input control-textarea" value={state.ability} onChange={e => applyState({ ...state, ability: e.target.value })} onClick={() => setActiveLayer('ability')} />
-                  <label className="checkbox-label mt-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showAbility} onChange={e => applyState({ ...state, showAbility: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.rules_text')}</label>
-                </div>
-
-                <ColorPickerField 
-                  label="Colore Regole" 
-                  value={state.abilityStyle.color} 
-                  onChange={v => update('abilityStyle', { color: v })}
-                  onTarget={() => setActiveLayer('ability')}
-                  fontValue={state.abilityStyle.fontFamily}
-                  onFontChange={v => update('abilityStyle', { fontFamily: v })}
-                />
-
-                <div className="control-row">
-                  <div className="control-field">
-                    <span className="control-label">Dimensione ({state.abilityStyle.fontSize}px)</span>
-                    <input type="range" min="8" max="40" value={state.abilityStyle.fontSize} onChange={e => update('abilityStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Cornice P/T</span>
                   </div>
-                  <div className="control-field">
-                    <span className="control-label">Interlinea ({state.abilityStyle.lineGap}px)</span>
-                    <input type="range" min="0" max="20" value={state.abilityStyle.lineGap} onChange={e => update('abilityStyle', { lineGap: Number(e.target.value) })} className="control-input" />
-                  </div>
-                  <div className="control-field">
-                    <span className="control-label">AutoFit</span>
-                    <button className={`btn btn-ghost py-2 ${state.autoFitRules ? 'text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => applyState({ ...state, autoFitRules: !state.autoFitRules })}>
-                      {state.autoFitRules ? 'ON' : 'OFF'}
-                    </button>
+                  <div className="editor-card-body">
+                    <div className="pt-badge-grid">
+                      {PT_FRAMES.map(f => (
+                        <div key={f.name} className={`pt-badge-item ${state.ptFrame?.name === f.name ? 'active' : ''}`} onClick={() => applyState({ ...state, ptFrame: f })}>
+                          <img src={f.url} alt={f.name} />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
 
           {/* TAB: INFO / CREDITS */}
           {activeTab === 'info' && (
-            <>
+            <div className="sidebar-scroll-content">
               <div className="sidebar-panel-title">📜 SET & {t('token.copyright')}</div>
-              <div className="control-group">
-                <ColorPickerField 
-                  label="SET" 
-                  value={state.infoLeft.color} 
-                  onChange={v => update('infoLeft', { color: v })}
-                  onTarget={() => setActiveLayer('infoLeft')}
-                  fontValue={state.infoLeft.fontFamily}
-                  onFontChange={v => update('infoLeft', { fontFamily: v })}
-                />
-                <input type="text" className="control-input mb-4" value={state.infoLeft.text} onChange={e => update('infoLeft', { text: e.target.value })} placeholder="SET • EN" />
-                <label className="checkbox-label mb-6" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showInfoLeft !== false} onChange={e => applyState({ ...state, showInfoLeft: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} SET</label>
-
-                <hr className="my-6 border-[var(--border)] opacity-30" />
-
-                <ColorPickerField 
-                  label={t('token.artist')} 
-                  value={state.artistStyle?.color || "#FFFFFF"} 
-                  onChange={v => update('artistStyle', { color: v })}
-                  onTarget={() => setActiveLayer('artist')}
-                  fontValue={state.artistStyle.fontFamily}
-                  onFontChange={v => update('artistStyle', { fontFamily: v })}
-                />
-                <input type="text" className="control-input mb-4" value={state.artist} onChange={e => applyState({ ...state, artist: e.target.value })} placeholder={t('token.artist')} />
-                <label className="checkbox-label mb-6" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showArtist !== false} onChange={e => applyState({ ...state, showArtist: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.artist')}</label>
-
-                <hr className="my-6 border-[var(--border)] opacity-30" />
-
-                <ColorPickerField 
-                  label={t('token.copyright')} 
-                  value={state.copyright.color} 
-                  onChange={v => update('copyright', { color: v })}
-                  onTarget={() => setActiveLayer('copyright')}
-                  fontValue={state.copyright.fontFamily}
-                  onFontChange={v => update('copyright', { fontFamily: v })}
-                />
-                <input type="text" className="control-input mb-2" value={state.copyright.text} onChange={e => update('copyright', { text: e.target.value })} placeholder="TM & © 2024 Wizards" />
-                
-                <div className="control-row">
-                  <div className="control-field">
-                    <span className="control-label">Dimensione ({state.copyright.fontSize}px)</span>
-                    <input type="range" min="6" max="20" value={state.copyright.fontSize} onChange={e => update('copyright', { fontSize: Number(e.target.value) })} className="control-input" />
+              
+              <div className="p-5 flex flex-col gap-6">
+                {/* SECTION: SET */}
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Espansione (SET)</span>
+                    <label className="switch">
+                      <input type="checkbox" checked={state.showInfoLeft !== false} onChange={e => applyState({ ...state, showInfoLeft: e.target.checked })} />
+                      <span className="slider round"></span>
+                    </label>
+                  </div>
+                  <div className="editor-card-body">
+                    <input type="text" className="control-input mb-5" value={state.infoLeft.text} onChange={e => update('infoLeft', { text: e.target.value })} placeholder="SET • EN" />
+                    <ColorPickerField 
+                      label="Stile SET" 
+                      value={state.infoLeft.color} 
+                      onChange={v => update('infoLeft', { color: v })}
+                      onTarget={() => setActiveLayer('infoLeft')}
+                      fontValue={state.infoLeft.fontFamily}
+                      onFontChange={v => update('infoLeft', { fontFamily: v })}
+                    />
                   </div>
                 </div>
 
-                <label className="checkbox-label mb-2" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showCopyright !== false} onChange={e => applyState({ ...state, showCopyright: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.copyright')}</label>
+                {/* SECTION: ARTIST */}
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">{t('token.artist')}</span>
+                    <label className="switch">
+                      <input type="checkbox" checked={state.showArtist !== false} onChange={e => applyState({ ...state, showArtist: e.target.checked })} />
+                      <span className="slider round"></span>
+                    </label>
+                  </div>
+                  <div className="editor-card-body">
+                    <input type="text" className="control-input mb-5" value={state.artist} onChange={e => applyState({ ...state, artist: e.target.value })} placeholder={t('token.artist')} />
+                    <ColorPickerField 
+                      label="Stile Artista" 
+                      value={state.artistStyle?.color || "#FFFFFF"} 
+                      onChange={v => update('artistStyle', { color: v })}
+                      onTarget={() => setActiveLayer('artist')}
+                      fontValue={state.artistStyle.fontFamily}
+                      onFontChange={v => update('artistStyle', { fontFamily: v })}
+                    />
+                  </div>
+                </div>
 
-                <button className="btn btn-ghost w-full mt-6 text-xs" style={{ background: 'var(--surf-off)' }} onClick={resetFooterAlign}>🔄 {t('studio.refresh_lib')}</button>
+                {/* SECTION: COPYRIGHT */}
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">{t('token.copyright')}</span>
+                    <label className="switch">
+                      <input type="checkbox" checked={state.showCopyright !== false} onChange={e => applyState({ ...state, showCopyright: e.target.checked })} />
+                      <span className="slider round"></span>
+                    </label>
+                  </div>
+                  <div className="editor-card-body">
+                    <input type="text" className="control-input mb-5" value={state.copyright.text} onChange={e => update('copyright', { text: e.target.value })} placeholder="TM & © 2024 Wizards" />
+                    <ColorPickerField 
+                      label="Stile Copyright" 
+                      value={state.copyright.color} 
+                      onChange={v => update('copyright', { color: v })}
+                      onTarget={() => setActiveLayer('copyright')}
+                      fontValue={state.copyright.fontFamily}
+                      onFontChange={v => update('copyright', { fontFamily: v })}
+                    />
+                    <div className="control-field mt-5">
+                      <span className="control-label">Taglia ({state.copyright.fontSize}px)</span>
+                      <input type="range" min="6" max="20" value={state.copyright.fontSize} onChange={e => update('copyright', { fontSize: Number(e.target.value) })} className="control-input" />
+                    </div>
+                  </div>
+                </div>
+
+                <button className="btn btn-ghost w-full text-xs py-3" style={{ background: 'var(--surf-off)' }} onClick={resetFooterAlign}>🔄 {t('studio.refresh_lib')}</button>
               </div>
-            </>
+            </div>
+          )}
+
+          {/* TAB: EXPORT */}
+          {activeTab === 'export' && (
+            <div className="sidebar-scroll-content">
+              <div className="sidebar-panel-title">📤 {t('common.export')}</div>
+              
+              <div className="p-5 flex flex-col gap-6">
+                {/* SECTION: IMAGE EXPORT */}
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Esporta Immagine</span>
+                  </div>
+                  <div className="editor-card-body">
+                    <p className="text-[10px] text-white/40 mb-4 uppercase tracking-widest">Download Diretto</p>
+                    <button className="btn btn-primary w-full py-4 font-bold flex items-center justify-center gap-2" onClick={exportPNG}>
+                      <Download size={18} />
+                      {t('token.export_png')} (300DPI)
+                    </button>
+                  </div>
+                </div>
+
+                {/* SECTION: PRINT SETTINGS */}
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Opzioni di Stampa</span>
+                  </div>
+                  <div className="editor-card-body">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex justify-between items-center">
+                        <span className="control-label m-0">Margine di Abbondanza (Bleed)</span>
+                        <label className="switch">
+                          <input type="checkbox" checked={exportBleed} onChange={e => setExportBleed(e.target.checked)} />
+                          <span className="slider round"></span>
+                        </label>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="control-label m-0">Segni di Taglio (Crop Marks)</span>
+                        <label className="switch">
+                          <input type="checkbox" checked={exportCropMarks} onChange={e => setExportCropMarks(e.target.checked)} />
+                          <span className="slider round"></span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION: PROJECT MANAGEMENT */}
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Gestione Progetto</span>
+                  </div>
+                  <div className="editor-card-body">
+                    <div className="grid grid-cols-2 gap-3">
+                      <button className="btn btn-ghost py-3 text-[10px] uppercase font-black border border-white/5" style={{ background: 'rgba(255,255,255,0.02)' }} onClick={saveProject}>
+                        💾 Salva JSON
+                      </button>
+                      <label className="btn btn-ghost py-3 text-[10px] uppercase font-black border border-white/5 text-center cursor-pointer" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                        📂 Apri JSON
+                        <input type="file" accept=".json" style={{ display: 'none' }} onChange={loadProject} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <button className="btn btn-ghost w-full mt-4 text-xs text-error/60 hover:text-error transition-colors uppercase tracking-widest font-black" onClick={() => applyState(DEFAULT_STATE)}>
+                  🗑️ {t('token.reset')} Progetto
+                </button>
+              </div>
+            </div>
           )}
 
           {/* TAB: SETTINGS */}
           {activeTab === 'settings' && (
-            <>
-              <div className="sidebar-panel-title">⚙️ {t('common.export')} & {t('common.settings')}</div>
-              <div className="control-group">
-                <div className="control-field mb-2">
-                  <label className="checkbox-label"><input type="checkbox" checked={exportBleed} onChange={e => setExportBleed(e.target.checked)} className="custom-checkbox"/> {t('pdf_settings.bleed')}</label>
+            <div className="sidebar-scroll-content">
+              <div className="sidebar-panel-title">⚙️ {t('common.settings')}</div>
+              
+              <div className="p-5 flex flex-col gap-6">
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Opzioni Editor</span>
+                  </div>
+                  <div className="editor-card-body">
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="control-label m-0">Alta Risoluzione (2x)</span>
+                      <label className="switch">
+                        <input type="checkbox" checked={state.highRes} onChange={e => applyState({ ...state, highRes: e.target.checked })} />
+                        <span className="slider round"></span>
+                      </label>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="control-label m-0">Linee Guida (Guides)</span>
+                      <label className="switch">
+                        <input type="checkbox" checked={showGuides} onChange={e => setShowGuides(e.target.checked)} />
+                        <span className="slider round"></span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
-                <div className="control-field mb-4">
-                  <label className="checkbox-label"><input type="checkbox" checked={exportCropMarks} onChange={e => setExportCropMarks(e.target.checked)} className="custom-checkbox"/> {t('pdf_settings.cut_marks')}</label>
-                </div>
-                <button className="btn btn-primary w-full" onClick={exportPNG}>⬇ {t('token.export_png')}</button>
-                
-                <hr className="my-4 border-[var(--border)]" />
-                <div className="sidebar-panel-title" style={{ border: 'none', padding: '0 0 12px 0' }}>💾 {t('token.reset')}</div>
-                <button className="btn btn-ghost w-full mb-2" style={{ background: 'var(--surf-off)' }} onClick={saveProject}>💾 {t('common.save')} JSON</button>
-                <label className="btn btn-ghost w-full" style={{ background: 'var(--surf-off)', textAlign: 'center', cursor: 'pointer' }}>
-                  📂 {t('common.open')} JSON
-                  <input type="file" accept=".json" style={{ display: 'none' }} onChange={loadProject} />
-                </label>
-                <button className="btn btn-ghost w-full mt-4 text-error" onClick={() => applyState(DEFAULT_STATE)}>🗑️ {t('token.reset')}</button>
               </div>
-            </>
+            </div>
           )}
         </aside>
       )}

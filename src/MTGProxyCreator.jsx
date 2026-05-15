@@ -159,13 +159,18 @@ export default function MTGProxyCreator() {
 
   return (
     <div className="shell">
+      {/* GLOBAL LANGUAGE TOGGLE - Fixed Top Right */}
+      {!isMobile && (
+        <div style={{ position: 'fixed', top: '24px', right: '32px', zIndex: 1000 }}>
+          <LanguageToggle lang={lang} setLang={setLang} />
+        </div>
+      )}
       {/* ── DESKTOP ─────────────────────────────────────────────── */}
       {!isMobile && (
         <div className="desktop-layout">
           <aside className="sidebar">
-            <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 0 20px' }}>
-              <div className="sidebar-logo" style={{ padding: 0 }}>🃏 Mythic Studio</div>
-              <LanguageToggle lang={lang} setLang={setLang} />
+            <div className="sidebar-header" style={{ padding: '24px 20px 0 20px', textAlign: 'center' }}>
+              <div className="sidebar-logo" style={{ padding: 0, justifyContent: 'center' }}>🃏 Mythic Studio</div>
             </div>
 
             <nav className="nav-group">
