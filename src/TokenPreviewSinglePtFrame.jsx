@@ -142,7 +142,7 @@ function measureTextWidth(text, fontSize, family = FT_DEFAULT, weight = "bold") 
   return measureCtx.measureText(text || "").width;
 }
 
-function calculateAbilityHeight(text, fontSize, width, family = FB_DEFAULT, lineGap = 4) {
+function calculateAbilityHeight(text, fontSize, width, family = FB_DEFAULT, lineGap = 4, linesLimit = 99) {
   const lines = String(text || "").split("\n");
   const lineH = fontSize * 1.45 + lineGap;
   const symSize = fontSize * 1.1;
@@ -176,14 +176,15 @@ function calculateAbilityHeight(text, fontSize, width, family = FB_DEFAULT, line
       }
     }
     totalH += lineCount * lineH;
+    if (linesLimit > 0 && lineCount > linesLimit) return 99999;
   }
   return totalH;
 }
 
-function fitTextBox(text, startSize, minSize, width, linesLimit = 99, maxHeight = 9999, lineGap = 4) {
+function fitTextBox(text, startSize, minSize, width, linesLimit = 99, maxHeight = 9999, family = FB_DEFAULT, lineGap = 4) {
   let size = startSize;
   while (size > minSize) {
-    const totalH = calculateAbilityHeight(text, size, width, FB_DEFAULT, lineGap);
+    const totalH = calculateAbilityHeight(text, size, width, family, lineGap, linesLimit);
     if (totalH <= maxHeight) return size;
     size -= 0.5;
   }
@@ -266,7 +267,7 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (state.showName !== false) {
-    const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1, 120, nameStyle.fontFamily || FT_DEFAULT) : nameStyle.fontSize;
+    const fittedNameSize = state.autoFitName ? fitTextBox((name || "TOKEN").toUpperCase(), nameStyle.fontSize, 16, CW - 90, 1, 200, nameStyle.fontFamily || FT_DEFAULT) : nameStyle.fontSize;
     ctx.save();
     ctx.font = `bold ${fittedNameSize}px ${nameStyle.fontFamily || FT_DEFAULT}`;
     ctx.fillStyle = nameStyle.color;
@@ -278,7 +279,7 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (state.showType !== false) {
-    const fittedTypeSize = state.autoFitType ? fitTextBox(type || "Token", typeStyle.fontSize, 14, CW - typeStyle.x - 40, 1, 120, typeStyle.fontFamily || FT_DEFAULT) : typeStyle.fontSize;
+    const fittedTypeSize = state.autoFitType ? fitTextBox(type || "Token", typeStyle.fontSize, 14, CW - typeStyle.x - 40, 1, 200, typeStyle.fontFamily || FT_DEFAULT) : typeStyle.fontSize;
     ctx.save();
     ctx.font = `bold ${fittedTypeSize}px ${typeStyle.fontFamily || FT_DEFAULT}`;
     ctx.fillStyle = typeStyle.color;
@@ -289,7 +290,7 @@ function renderCardSync(canvas, state, withBleed = false) {
   }
 
   if (showAbility && ability) {
-    const size = state.autoFitRules ? fitTextBox(ability, abilityStyle.fontSize, 14, abilityStyle.width || (CW - abilityStyle.x * 2), 10, 840 - abilityStyle.y, abilityStyle.lineGap || 4) : abilityStyle.fontSize;
+    const size = state.autoFitRules ? fitTextBox(ability, abilityStyle.fontSize, 14, abilityStyle.width || (CW - abilityStyle.x * 2), 10, 840 - abilityStyle.y, abilityStyle.fontFamily || FB_DEFAULT, abilityStyle.lineGap || 4) : abilityStyle.fontSize;
     const lines = String(ability).split("\n");
     let nextY = abilityStyle.y;
     for (const line of lines) {
@@ -360,9 +361,9 @@ function renderCardSync(canvas, state, withBleed = false) {
 }
 
 function getGuideMetrics(state) {
-  const nameSize = state.autoFitName ? fitTextBox((state.name || "TOKEN").toUpperCase(), state.nameStyle.fontSize, 16, CW - 90, 1, state.nameStyle.fontFamily || FT_DEFAULT) : state.nameStyle.fontSize;
-  const typeSize = state.autoFitType ? fitTextBox(state.type || "Token", state.typeStyle.fontSize, 14, CW - state.typeStyle.x - 40, 1, state.typeStyle.fontFamily || FT_DEFAULT) : state.typeStyle.fontSize;
-  const abilitySize = state.autoFitRules ? fitTextBox(state.ability || "", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, 840 - state.abilityStyle.y, state.abilityStyle.lineGap || 4) : state.abilityStyle.fontSize;
+  const nameSize = state.autoFitName ? fitTextBox((state.name || "TOKEN").toUpperCase(), state.nameStyle.fontSize, 16, CW - 90, 1, 200, state.nameStyle.fontFamily || FT_DEFAULT) : state.nameStyle.fontSize;
+  const typeSize = state.autoFitType ? fitTextBox(state.type || "Token", state.typeStyle.fontSize, 14, CW - state.typeStyle.x - 40, 1, 200, state.typeStyle.fontFamily || FT_DEFAULT) : state.typeStyle.fontSize;
+  const abilitySize = state.autoFitRules ? fitTextBox(state.ability || "", state.abilityStyle.fontSize, 14, state.abilityStyle.width || (CW - state.abilityStyle.x * 2), 10, 840 - state.abilityStyle.y, state.abilityStyle.fontFamily || FB_DEFAULT, state.abilityStyle.lineGap || 4) : state.abilityStyle.fontSize;
   const typeWidth = measureTextWidth(state.type || "Token", typeSize, state.typeStyle.fontFamily || FT_DEFAULT, "bold");
   const nameWidth = measureTextWidth((state.name || "TOKEN").toUpperCase(), nameSize, state.nameStyle.fontFamily || FT_DEFAULT, "bold");
   const abilityLines = Math.max(1, String(state.ability || '').split('\n').length || 1);

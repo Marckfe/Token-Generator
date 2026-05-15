@@ -70,6 +70,7 @@ export default function MTGProxyCreator() {
 
   // Scanner → Checker cross-tab state
   const [pendingDeck, setPendingDeck] = useState(null);
+  const [tokenState, setTokenState] = useState(null);
 
   const [globalQueue, setGlobalQueue] = useState(() => {
     try {
@@ -141,7 +142,7 @@ export default function MTGProxyCreator() {
       case "ocr":
         return <DeckScanner onAddToQueue={addToGlobalQueue} onValidateDeck={handleValidateDeck} />;
       case "token":
-        return <TokenPreviewSinglePtFrame />;
+        return <TokenPreviewSinglePtFrame state={tokenState} onStateChange={setTokenState} />;
       case "studio":
         return <StudioEditor />;
       case "checker":
