@@ -164,7 +164,7 @@ export default function MTGProxyCreator() {
         <div className="desktop-layout">
           <aside className="sidebar">
             <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 0 20px' }}>
-              <div className="sidebar-logo" style={{ padding: 0 }}>🃏 MTG Tools</div>
+              <div className="sidebar-logo" style={{ padding: 0 }}>🃏 Mythic Studio</div>
               <LanguageToggle lang={lang} setLang={setLang} />
             </div>
 
@@ -227,7 +227,7 @@ export default function MTGProxyCreator() {
       {isMobile && (
         <div className="mobile-layout">
           <div className="mobile-header">
-            <div className="mobile-logo">🃏 MTG Tools</div>
+            <div className="mobile-logo">🃏 Mythic Studio</div>
             <div className="mobile-user-actions">
               <LanguageToggle lang={lang} setLang={setLang} />
               {user?.photoURL && <img src={user.photoURL} alt="avatar" className="user-avatar-sm" />}

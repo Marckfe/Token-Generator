@@ -116,7 +116,9 @@ function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
       if (url) {
         const img = getCachedImage(url);
         if (img) { 
-          ctx.drawImage(img, curX, curY + (lineH - symSize)/2, symSize, symSize); 
+          // Better vertical alignment for symbols relative to text baseline
+          const vOffset = (fontSize - symSize) / 2 + (fontSize * 0.08);
+          ctx.drawImage(img, curX, curY + vOffset, symSize, symSize); 
           curX += symSize + 2; 
         } else { 
           const token = `{${p.v}}`; 
@@ -197,29 +199,30 @@ function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
 // --- REUSABLE UI COMPONENTS ---
 const ColorPickerField = ({ label, value, onChange, onTarget, fontValue, onFontChange }) => (
   <div className="control-field mb-4">
-    <div className="flex justify-between items-center mb-1">
+    <div className="flex justify-between items-center mb-2">
       <span className="control-label m-0">{label}</span>
-      {onTarget && <span className="text-xs opacity-60 hover:opacity-100 cursor-pointer" onClick={onTarget}>🎯 Seleziona Layer</span>}
+      {onTarget && <span className="text-xs opacity-50 hover:opacity-100 cursor-pointer transition-opacity" onClick={onTarget}>🎯 Seleziona Layer</span>}
     </div>
     
-    <div className="color-picker-input-group mb-2">
-      <div className="color-preview-block" style={{ backgroundColor: value }}>
-        <input type="color" value={value} onChange={e => onChange(e.target.value)} />
+    <div className="flex gap-2 items-center">
+      <div className="color-preview-wrapper">
+        <input type="color" value={value} onChange={e => onChange(e.target.value)} className="color-input-hidden" />
+        <div className="color-preview-circle" style={{ backgroundColor: value }} />
       </div>
       <input 
         type="text" 
-        className="control-input hex-input" 
+        className="control-input flex-1 py-1 px-2 text-xs font-mono uppercase" 
         value={value} 
         onChange={e => onChange(e.target.value)}
         placeholder="#FFFFFF"
+        style={{ height: '32px' }}
       />
+      {onFontChange && (
+        <select className="control-input py-1 text-xs w-1/2" value={fontValue} onChange={e => onFontChange(e.target.value)} style={{ height: '32px' }}>
+          {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+      )}
     </div>
-
-    {onFontChange && (
-      <select className="control-input py-1 text-xs" value={fontValue} onChange={e => onFontChange(e.target.value)}>
-        {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-      </select>
-    )}
   </div>
 );
 
@@ -250,8 +253,22 @@ function renderCardSync(canvas, state, withBleed = false) {
       const zoom = artTransform?.zoom || 1;
       const offsetX = artTransform?.x || 0;
       const offsetY = artTransform?.y || 0;
-      const drawW = TW * zoom;
-      const drawH = TH * zoom;
+      
+      // Calculate "cover" scale to preserve aspect ratio
+      const imgAR = img.width / img.height;
+      const cardAR = TW / TH;
+      let drawW, drawH;
+      
+      if (imgAR > cardAR) {
+        // Image is wider than card
+        drawH = TH * zoom;
+        drawW = drawH * imgAR;
+      } else {
+        // Image is taller than card
+        drawW = TW * zoom;
+        drawH = drawW / imgAR;
+      }
+      
       const dx = (TW - drawW) / 2 + offsetX;
       const dy = (TH - drawH) / 2 + offsetY;
       ctx.drawImage(img, dx, dy, drawW, drawH);
@@ -393,9 +410,9 @@ const DEFAULT_STATE = {
   type: "Token Creature — Goblin", showType: true, typeStyle: { x: 44, y: 602, fontSize: 24, color: "#111111", align: "left", fontFamily: 'BelerenBold' },
   ability: "Haste", abilityStyle: { x: 44, y: 644, width: 532, fontSize: 24, color: "#111111", lineGap: 4, fontFamily: 'Mplantin' }, showAbility: true,
   pt: { power: "1", toughness: "1" }, ptStyle: { frameX: 457, frameY: 789, width: 126, height: 54, fontSize: 36, color: "#111111", powerOffsetX: 0, fontFamily: 'BelerenBold' }, showPT: true,
-  infoLeft: { text: "SET • EN", x: 18, y: 12, color: "#111111", fontSize: 11, fontFamily: 'BelerenBold' }, showInfoLeft: true,
-  artist: "Artist Name", artistStyle: { x: 18, y: 26, color: "#111111", fontSize: 11, fontFamily: 'BelerenBold' }, showArtist: true,
-  copyright: { text: `™ & © ${new Date().getFullYear()} Wizards of the Coast`, x: 18, y: 12, color: "#111111", fontSize: 9, fontFamily: 'Mplantin' }, showCopyright: true,
+  infoLeft: { text: "SET • EN", x: 18, y: 12, color: "#FFFFFF", fontSize: 11, fontFamily: 'BelerenBold' }, showInfoLeft: true,
+  artist: "Artist Name", artistStyle: { x: 18, y: 26, color: "#FFFFFF", fontSize: 11, fontFamily: 'BelerenBold' }, showArtist: true,
+  copyright: { text: `™ & © ${new Date().getFullYear()} Wizards of the Coast`, x: 18, y: 12, color: "#FFFFFF", fontSize: 9, fontFamily: 'Mplantin' }, showCopyright: true,
 };
 
 // ptFrame name maps to files in /src/assets/frames/pt/
@@ -1008,6 +1025,22 @@ export default function TokenPreviewSinglePtFrame() {
                   </div>
                 </div>
 
+                <div className="control-row mb-4">
+                  <div className="control-field">
+                    <span className="control-label">Allineamento</span>
+                    <div className="flex gap-2">
+                      <button className={`btn btn-ghost flex-1 py-2 ${state.nameStyle.align === 'left' ? 'active text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => update('nameStyle', { align: 'left' })}> sinistra </button>
+                      <button className={`btn btn-ghost flex-1 py-2 ${state.nameStyle.align === 'center' ? 'active text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => update('nameStyle', { align: 'center' })}> centro </button>
+                    </div>
+                  </div>
+                  <div className="control-field">
+                    <span className="control-label">AutoFit</span>
+                    <button className={`btn btn-ghost py-2 ${state.autoFitName ? 'text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => applyState({ ...state, autoFitName: !state.autoFitName })}>
+                      {state.autoFitName ? 'ON' : 'OFF'}
+                    </button>
+                  </div>
+                </div>
+
                 <hr className="my-4 border-[var(--border)] opacity-30" />
 
                 <div className="control-field mb-4">
@@ -1029,6 +1062,22 @@ export default function TokenPreviewSinglePtFrame() {
                   <div className="control-field">
                     <span className="control-label">Dimensione Tipo ({state.typeStyle.fontSize}px)</span>
                     <input type="range" min="10" max="40" value={state.typeStyle.fontSize} onChange={e => update('typeStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+                  </div>
+                </div>
+
+                <div className="control-row mb-4">
+                  <div className="control-field">
+                    <span className="control-label">Allineamento</span>
+                    <div className="flex gap-2">
+                      <button className={`btn btn-ghost flex-1 py-2 ${state.typeStyle.align === 'left' ? 'active text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => update('typeStyle', { align: 'left' })}> sinistra </button>
+                      <button className={`btn btn-ghost flex-1 py-2 ${state.typeStyle.align === 'center' ? 'active text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => update('typeStyle', { align: 'center' })}> centro </button>
+                    </div>
+                  </div>
+                  <div className="control-field">
+                    <span className="control-label">AutoFit</span>
+                    <button className={`btn btn-ghost py-2 ${state.autoFitType ? 'text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => applyState({ ...state, autoFitType: !state.autoFitType })}>
+                      {state.autoFitType ? 'ON' : 'OFF'}
+                    </button>
                   </div>
                 </div>
 
@@ -1058,6 +1107,12 @@ export default function TokenPreviewSinglePtFrame() {
                     <span className="control-label">Interlinea ({state.abilityStyle.lineGap}px)</span>
                     <input type="range" min="0" max="20" value={state.abilityStyle.lineGap} onChange={e => update('abilityStyle', { lineGap: Number(e.target.value) })} className="control-input" />
                   </div>
+                  <div className="control-field">
+                    <span className="control-label">AutoFit</span>
+                    <button className={`btn btn-ghost py-2 ${state.autoFitRules ? 'text-accent' : ''}`} style={{ background: 'var(--surf-off)' }} onClick={() => applyState({ ...state, autoFitRules: !state.autoFitRules })}>
+                      {state.autoFitRules ? 'ON' : 'OFF'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </>
@@ -1066,33 +1121,33 @@ export default function TokenPreviewSinglePtFrame() {
           {/* TAB: INFO / CREDITS */}
           {activeTab === 'info' && (
             <>
-              <div className="sidebar-panel-title">📜 {t('token.artist')} & {t('token.copyright')}</div>
+              <div className="sidebar-panel-title">📜 SET & {t('token.copyright')}</div>
               <div className="control-group">
                 <ColorPickerField 
-                  label="Testo Extra (Sx)" 
+                  label="SET" 
                   value={state.infoLeft.color} 
                   onChange={v => update('infoLeft', { color: v })}
                   onTarget={() => setActiveLayer('infoLeft')}
                   fontValue={state.infoLeft.fontFamily}
                   onFontChange={v => update('infoLeft', { fontFamily: v })}
                 />
-                <input type="text" className="control-input mb-2" value={state.infoLeft.text} onChange={e => update('infoLeft', { text: e.target.value })} placeholder="Es. C10/C20" />
-                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showInfoLeft !== false} onChange={e => applyState({ ...state, showInfoLeft: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} Extra</label>
+                <input type="text" className="control-input mb-4" value={state.infoLeft.text} onChange={e => update('infoLeft', { text: e.target.value })} placeholder="SET • EN" />
+                <label className="checkbox-label mb-6" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showInfoLeft !== false} onChange={e => applyState({ ...state, showInfoLeft: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} SET</label>
 
-                <hr className="my-4 border-[var(--border)] opacity-30" />
+                <hr className="my-6 border-[var(--border)] opacity-30" />
 
                 <ColorPickerField 
                   label={t('token.artist')} 
-                  value={state.artistStyle?.color || "#111111"} 
+                  value={state.artistStyle?.color || "#FFFFFF"} 
                   onChange={v => update('artistStyle', { color: v })}
                   onTarget={() => setActiveLayer('artist')}
                   fontValue={state.artistStyle.fontFamily}
                   onFontChange={v => update('artistStyle', { fontFamily: v })}
                 />
-                <input type="text" className="control-input mb-2" value={state.artist} onChange={e => applyState({ ...state, artist: e.target.value })} placeholder={t('token.artist')} />
-                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showArtist !== false} onChange={e => applyState({ ...state, showArtist: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.artist')}</label>
+                <input type="text" className="control-input mb-4" value={state.artist} onChange={e => applyState({ ...state, artist: e.target.value })} placeholder={t('token.artist')} />
+                <label className="checkbox-label mb-6" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showArtist !== false} onChange={e => applyState({ ...state, showArtist: e.target.checked })} className="custom-checkbox"/> {t('common.preview')} {t('token.artist')}</label>
 
-                <hr className="my-4 border-[var(--border)] opacity-30" />
+                <hr className="my-6 border-[var(--border)] opacity-30" />
 
                 <ColorPickerField 
                   label={t('token.copyright')} 
@@ -1192,33 +1247,6 @@ export default function TokenPreviewSinglePtFrame() {
           </div>
 
           <div className="editor-canvas-container">
-            {/* FLOATING CONTEXT MENU (Visible when a text layer is selected) */}
-            {activeLayer !== 'art' && activeLayer !== 'frame' && activeLayer !== 'footer' && (
-              <div className="context-menu" style={{ transform: `translateX(-50%) translateY(${isMobile ? 0 : -20}px)` }}>
-                {activeLayer === 'name' && <input type="color" className="control-color" value={state.nameStyle.color} onChange={e => update('nameStyle', { color: e.target.value })} title="Colore Nome" />}
-                {activeLayer === 'type' && <input type="color" className="control-color" value={state.typeStyle.color} onChange={e => update('typeStyle', { color: e.target.value })} title="Colore Tipo" />}
-                {activeLayer === 'ability' && <input type="color" className="control-color" value={state.abilityStyle.color} onChange={e => update('abilityStyle', { color: e.target.value })} title="Colore Regole" />}
-                {activeLayer === 'pt' && <input type="color" className="control-color" value={state.ptStyle.color} onChange={e => update('ptStyle', { color: e.target.value })} title="Colore PT" />}
-                {activeLayer === 'infoLeft' && <input type="color" className="control-color" value={state.infoLeft.color} onChange={e => update('infoLeft', { color: e.target.value })} title="Colore Extra" />}
-                {activeLayer === 'artist' && <input type="color" className="control-color" value={state.artistStyle.color} onChange={e => update('artistStyle', { color: e.target.value })} title="Colore Artista" />}
-                {activeLayer === 'copyright' && <input type="color" className="control-color" value={state.copyright.color} onChange={e => update('copyright', { color: e.target.value })} title="Colore Copyright" />}
-                <div style={{ width: 1, background: 'var(--border)', margin: '0 4px' }}></div>
-                {activeLayer === 'name' && (
-                  <>
-                    <button className="btn btn-icon" onClick={() => update('nameStyle', { align: 'left' })}><Icon d="M3 6h18 M3 12h12 M3 18h18"/></button>
-                    <button className="btn btn-icon" onClick={() => update('nameStyle', { align: 'center' })}><Icon d="M3 6h18 M6 12h12 M3 18h18"/></button>
-                  </>
-                )}
-                {/* AutoFit Toggle */}
-                <button className="btn btn-ghost text-xs px-2" onClick={() => {
-                  if(activeLayer === 'name') update('autoFitName', !state.autoFitName);
-                  if(activeLayer === 'type') update('autoFitType', !state.autoFitType);
-                  if(activeLayer === 'ability') update('autoFitRules', !state.autoFitRules);
-                }}>
-                  { (activeLayer==='name'&&state.autoFitName) || (activeLayer==='type'&&state.autoFitType) || (activeLayer==='ability'&&state.autoFitRules) ? 'AutoFit: ON' : 'AutoFit: OFF' }
-                </button>
-              </div>
-            )}
 
             <div className="canvas-wrapper" style={{ 
               width: CW * pScale, 

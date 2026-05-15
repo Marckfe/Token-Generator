@@ -161,6 +161,70 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+  display: block;
+}
+
+.asset-item-name {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 8px;
+  padding: 4px;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.asset-item:hover .asset-item-name {
+  opacity: 1;
+}
+
+/* P/T Badge Grid */
+.editor-sidebar .pt-badge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.editor-sidebar .pt-badge-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  overflow: hidden;
+}
+
+.pt-badge-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: #00bcd4;
+}
+
+.pt-badge-item.active {
+  border-color: #00bcd4;
+  background: rgba(0, 188, 212, 0.1);
+  box-shadow: 0 0 10px rgba(0, 188, 212, 0.2);
+}
+
+.pt-badge-item img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 /* Main Workspace Area */
@@ -238,6 +302,13 @@
   flex-direction: column;
   gap: 10px;
   margin-bottom: 20px;
+  flex: 1;
+}
+
+.control-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
 }
 
 .control-label {
@@ -261,8 +332,44 @@
 
 .control-input:focus {
   border-color: #00bcd4;
-  background: rgba(0, 188, 212, 0.03);
+  background: rgba(0, 188, 212, 0.05);
+  box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.1);
 }
+
+/* Color Picker Modern Styles */
+.color-preview-wrapper {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.color-input-hidden {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.color-preview-circle {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.control-textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.my-6 { margin-top: 24px; margin-bottom: 24px; }
+.mb-6 { margin-bottom: 24px; }
 
 /* Mobile Layouts */
 .editor-layout.mobile {
@@ -308,3 +415,44 @@
 .w-full { width: 100%; }
 .mt-8 { margin-top: 32px; }
 .mb-4 { margin-bottom: 16px; }
+
+/* Snap Lines & Guides */
+.snap-line {
+  position: absolute;
+  background: #00bcd4;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.snap-line.visible {
+  opacity: 1;
+}
+
+.snap-line.vertical {
+  width: 1px;
+  top: 0;
+  bottom: 0;
+}
+
+.snap-line.horizontal {
+  height: 1px;
+  left: 0;
+  right: 0;
+}
+
+.canvas-layer-guide {
+  position: absolute;
+  border: 1px solid rgba(0, 188, 212, 0.4);
+  pointer-events: none;
+  z-index: 60;
+  box-shadow: 0 0 5px rgba(0,0,0,0.2);
+}
+
+.canvas-layer-guide.active {
+  border: 2px solid #00bcd4;
+  border-style: solid;
+  box-shadow: 0 0 10px rgba(0, 188, 212, 0.4);
+  z-index: 61;
+}

@@ -135,11 +135,17 @@ input, select, textarea { font: inherit; color: inherit; outline: none; }
 
 /* Sidebar Nav */
 .sidebar-logo {
-  font-weight: 900; font-size: 1.3rem; 
+  font-weight: 900; 
+  font-size: 1.25rem; 
   background: linear-gradient(135deg, #00bcd4 0%, #3f51b5 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin-bottom: 48px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px;
+  margin-bottom: 40px; 
+  letter-spacing: -0.01em; 
+  display: flex; 
+  align-items: center; 
+  gap: 12px;
+  white-space: nowrap;
 }
 .nav-btn {
   display: flex; align-items: center; gap: 14px; padding: 14px 18px;
