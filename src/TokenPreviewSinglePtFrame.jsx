@@ -112,12 +112,13 @@ function drawManaText(ctx, text, x, y, fontSize, color, font, maxWidth) {
         curX += ctx.measureText(word).width;
       }
     } else {
+      const symSize = fontSize * 1.05;
       const url = symbolUrl(p.v);
       if (url) {
         const img = getCachedImage(url);
         if (img) { 
-          // Better vertical alignment for symbols relative to text baseline
-          const vOffset = (fontSize - symSize) / 2 + (fontSize * 0.08);
+          // Dynamic centering: aligns the symbol's middle with the text's middle
+          const vOffset = (fontSize - symSize) / 2;
           ctx.drawImage(img, curX, curY + vOffset, symSize, symSize); 
           curX += symSize + 2; 
         } else { 
@@ -218,7 +219,7 @@ const ColorPickerField = ({ label, value, onChange, onTarget, fontValue, onFontC
         style={{ height: '32px' }}
       />
       {onFontChange && (
-        <select className="control-input py-1 text-xs w-1/2" value={fontValue} onChange={e => onFontChange(e.target.value)} style={{ height: '32px' }}>
+        <select className="control-input py-1 text-xs flex-1 min-w-[100px]" value={fontValue} onChange={e => onFontChange(e.target.value)} style={{ height: '32px' }}>
           {FONT_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
         </select>
       )}
@@ -1241,7 +1242,6 @@ export default function TokenPreviewSinglePtFrame() {
                 <select className="control-input py-1 text-xs w-auto" value={previewZoom} onChange={e => setPreviewZoom(Number(e.target.value))}>
                   <option value="75">75% Zoom</option><option value="100">100% Zoom</option><option value="125">125% Zoom</option>
                 </select>
-                <button className="btn btn-primary text-xs py-1" onClick={exportPNG}>{t('common.export')}</button>
               </div>
             )}
           </div>
@@ -1319,9 +1319,6 @@ export default function TokenPreviewSinglePtFrame() {
                 ))}
               </div>
             </div>
-          </div>
-          <div style={{ position: 'absolute', bottom: 10, right: 20, fontSize: 11, color: 'var(--faint)' }}>
-            ✨ Canva Mode {t('common.success')}
           </div>
         </main>
       )}

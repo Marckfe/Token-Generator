@@ -320,20 +320,44 @@
 }
 
 .control-input {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
-  color: #fff;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #efefef;
   padding: 12px 16px;
   border-radius: 10px;
   font-size: 13px;
   outline: none;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+}
+
+.control-input:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.2);
 }
 
 .control-input:focus {
   border-color: #00bcd4;
   background: rgba(0, 188, 212, 0.05);
   box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.1);
+}
+
+/* Select & Dropdown Styling - Using specificity instead of !important */
+.editor-sidebar select.control-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+  padding-right: 28px;
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+}
+
+.editor-sidebar select.control-input option {
+  background-color: #1a1a1a;
+  color: #ffffff;
+  padding: 10px;
 }
 
 /* Color Picker Modern Styles */

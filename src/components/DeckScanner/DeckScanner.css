@@ -123,15 +123,15 @@
   box-shadow: 0 6px 20px rgba(0, 188, 212, 0.4);
 }
 
-.sc-btn-cloud {
+.sc-header-actions .sc-btn-cloud {
   background: var(--surface2);
   color: var(--accent);
-  border: 1px solid rgba(0, 188, 212, 0.2) !important;
+  border: 1px solid rgba(0, 188, 212, 0.2);
 }
 
-.sc-btn-cloud:hover:not(:disabled) {
+.sc-header-actions .sc-btn-cloud:hover:not(:disabled) {
   background: var(--accent-hl);
-  border-color: var(--accent) !important;
+  border-color: var(--accent);
   transform: translateY(-2px);
 }
 
