@@ -986,10 +986,38 @@ export default function TokenPreviewSinglePtFrame() {
 
           {/* TAB: FRAME */}
           {activeTab === 'frame' && (
-                    applyState({ ...state, frameSet: setName, frame: FRAME_MAP[setName][0] || null });
-                  }}>
-                    {Object.keys(FRAME_MAP).map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
+            <div className="sidebar-scroll-content">
+              <div className="sidebar-panel-title">🎴 {t('token.frame')}</div>
+              
+              <div className="p-5 flex flex-col gap-6">
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Seleziona Cornice</span>
+                  </div>
+                  <div className="editor-card-body">
+                    <div className="control-field mb-5">
+                      <span className="control-label">Set di Cornici</span>
+                      <select className="control-input py-1 text-xs w-full" value={state.frameSet} onChange={e => {
+                        const setName = e.target.value;
+                        applyState({ ...state, frameSet: setName, frame: FRAME_MAP[setName][0] || null });
+                      }}>
+                        {Object.keys(FRAME_MAP).map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {FRAME_MAP[state.frameSet]?.map(f => (
+                        <div key={f.name} className={`template-item ${state.frame?.url === f.url ? 'active' : ''}`} onClick={() => applyState({ ...state, frame: f })}>
+                          <img src={f.url} alt={f.name} className="w-full h-auto rounded-lg mb-2" />
+                          <span className="text-[10px] font-bold text-center block uppercase truncate">{f.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
                 </div>
                 
                 {/* Visual Asset Grid */}
