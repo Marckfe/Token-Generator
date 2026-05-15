@@ -21,7 +21,7 @@ import {
   Layers as LayersIcon
 } from "lucide-react";
 import html2canvas from "html2canvas";
-import "./editor.css";
+import "./StudioEditor.css";
 import { useAuth } from "./context/AuthContext";
 import { saveUserToken, getUserTokens, deleteUserToken } from "./services/dbService";
 import { useLanguage } from "./context/LanguageContext";
@@ -363,15 +363,15 @@ export default function StudioEditor() {
               ))}
 
               {activeLayer && (
-                <div className="bounding-box" style={{ left: activeLayer.x, top: activeLayer.y, width: activeLayer.width, height: activeLayer.height, transform: `rotate(${activeLayer.rotate}deg)` }}>
+                <div className="studio-bounding-box" style={{ left: activeLayer.x, top: activeLayer.y, width: activeLayer.width, height: activeLayer.height, transform: `rotate(${activeLayer.rotate}deg)` }}>
                   {['nw','n','ne','e','se','s','sw','w'].map(h => (
-                    <div key={h} className={`resize-handle handle-${h}`} onMouseDown={e => onHandleMouseDown(e, h, selectedId)} onTouchStart={e => onHandleMouseDown(e, h, selectedId)} />
+                    <div key={h} className={`studio-resize-handle handle-${h}`} onMouseDown={e => onHandleMouseDown(e, h, selectedId)} onTouchStart={e => onHandleMouseDown(e, h, selectedId)} />
                   ))}
                 </div>
               )}
 
-              {snaps.v && <div className="snap-guide snap-v" style={{ left: snaps.v }} />}
-              {snaps.h && <div className="snap-guide snap-h" style={{ top: snaps.h }} />}
+              {snaps.v && <div className="studio-snap-guide snap-v" style={{ left: snaps.v }} />}
+              {snaps.h && <div className="studio-snap-guide snap-h" style={{ top: snaps.h }} />}
             </div>
           </div>
         </main>

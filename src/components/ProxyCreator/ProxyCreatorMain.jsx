@@ -260,8 +260,8 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
               toast(t('proxy.toast_loaded', { 
                 count: cards.length,
                 suffix: cards.length === 1 
-                  ? (lang === 'it' ? 'immagine' : 'image') 
-                  : (lang === 'it' ? 'immagini' : 'images')
+                  ? (lang === 'it' ? 'copia' : 'copy') 
+                  : (lang === 'it' ? 'copie' : 'copies')
               })); 
             }} />
           )}
@@ -272,8 +272,8 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
                 toast(t('proxy.toast_loaded', { 
                   count: cards.length,
                   suffix: cards.length === 1 
-                    ? (lang === 'it' ? 'immagine' : 'image') 
-                    : (lang === 'it' ? 'immagini' : 'images')
+                    ? (lang === 'it' ? 'copia' : 'copy') 
+                    : (lang === 'it' ? 'copie' : 'copies')
                 })); 
               }} 
               toast={toast} 
