@@ -46,15 +46,13 @@ export default async function handler(req, res) {
       finalPrompt = improveData.candidates?.[0]?.content?.parts?.[0]?.text || prompt;
     }
 
-    // 2. GENERATION LOGIC
-    // Since Gemini standard API doesn't generate images directly (Imagen 3 is separate),
-    // and the user wants to avoid OpenRouter, we provide the improved prompt.
-    // In a real production environment, you'd call DALL-E 3 or Midjourney here.
+    // 2. GENERATION LOGIC - Use Pollinations.ai as a FREE fallback
+    const generatedUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
     
     return res.status(200).json({
-      imageUrl: null, // We return null to indicate we need an image gen provider
+      imageUrl: generatedUrl,
       improvedPrompt: finalPrompt,
-      error: "Prompt ottimizzato con successo! Collega un servizio di generazione (DALL-E 3 o Stability) per vedere l'immagine."
+      provider: 'Pollinations (Free)'
     });
 
   } catch (e) {

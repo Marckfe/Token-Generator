@@ -635,8 +635,8 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
         <div className="dc-panel dc-panel-flex">
           <label className="dc-label">{t('checker.maindeck_list')}</label>
           <textarea
-            className="dc-textarea"
-            rows={isSingleton ? 10 : 7}
+            className="property-textarea"
+            style={{ minHeight: isSingleton ? '250px' : '180px', fontFamily: 'monospace' }}
             placeholder={'4x Brainstorm\n1 Lightning Bolt'}
             value={maindeck}
             onChange={e => setMaindeck(e.target.value)}
@@ -648,8 +648,8 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
           <div className="dc-panel dc-panel-flex">
             <label className="dc-label">{t('checker.sideboard')}</label>
             <textarea
-              className="dc-textarea"
-              rows={4}
+              className="property-textarea"
+              style={{ minHeight: '120px', fontFamily: 'monospace' }}
               placeholder={'3x Duress\n1 Pyroblast'}
               value={sideboard}
               onChange={e => setSideboard(e.target.value)}
@@ -658,8 +658,8 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
         )}
 
         {/* Check button */}
-        <button className="dc-btn dc-btn-check" onClick={handleCheck} disabled={checking}>
-          {checking ? <Clock size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+        <button className="btn btn-primary btn-block py-3 mt-4" onClick={handleCheck} disabled={checking}>
+          {checking ? <Clock size={16} className="animate-spin" /> : <ShieldCheck size={18} />}
           {checking ? t('checker.checking') : t('checker.check_button')}
         </button>
       </div>
@@ -667,50 +667,50 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
       {/* ── Main results ────────────────────────────────────── */}
       <div className="dc-main">
         {results ? (
-          <div className="dc-result-hero">
+          <div className="dc-result-hero panel-container">
             <div className={`dc-result-icon ${results.status === 'legal' ? 'text-success' : 'text-error'}`}>
               {results.status === 'legal' ? <CheckCircle size={80} /> : <AlertTriangle size={80} />}
             </div>
-            <h2 className={`dc-result-title ${results.status}`}>
+            <h2 className={`dc-result-title ${results.status}`} style={{ fontWeight: '900', fontSize: '2rem', letterSpacing: '-0.04em' }}>
               {results.status === 'legal' ? t('checker.legal_title') : t('checker.not_legal_title')}
             </h2>
-            <p className="dc-result-format">
+            <p className="dc-result-format" style={{ opacity: 0.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               {t('checker.format_label', { format: FORMATS.find(f => f.id === selectedFormat)?.name })}
             </p>
 
             {results.status === 'legal' ? (
-              <div className="dc-legal-box">
-                <ShieldCheck size={32} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                <p>{t('checker.legal_desc')}</p>
+              <div className="mt-8 p-6 rounded-2xl bg-success/5 border border-success/10 flex flex-col items-center">
+                <ShieldCheck size={40} className="text-success mb-4 opacity-50" />
+                <p className="text-success font-bold">{t('checker.legal_desc')}</p>
               </div>
             ) : (
-              <div className="dc-banned-box">
-                <div className="dc-banned-title">
+              <div className="mt-8 w-full max-w-md p-6 rounded-2xl bg-error/5 border border-error/10">
+                <div className="flex items-center gap-3 text-error font-black uppercase text-xs mb-4">
                   <ShieldAlert size={16} />
                   {t('checker.issues_found', { count: results.reasons.length })}
                 </div>
-                <div className="dc-banned-list">
+                <div className="flex flex-col gap-3">
                   {results.reasons.map((r, i) => (
-                    <div key={i} className="dc-banned-item">
-                      <span className="dc-banned-name">{r.name}</span>
-                      <span className="dc-banned-reason">{r.reason}</span>
+                    <div key={i} className="flex justify-between items-center p-3 bg-black/20 rounded-lg border border-white/5">
+                      <span className="font-bold text-white/90 text-sm">{r.name}</span>
+                      <span className="text-xs text-error font-bold">{r.reason}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="dc-result-actions">
-              <button className="dc-btn dc-btn-ghost" onClick={() => setResults(null)}>
+            <div className="flex gap-4 mt-10">
+              <button className="btn btn-ghost px-8" onClick={() => setResults(null)}>
                 {t('checker.new_analysis')}
               </button>
               {onAddToQueue && (
-                <button className="dc-btn dc-btn-queue" onClick={handleAddToQueue}>
+                <button className="btn btn-accent px-8" onClick={handleAddToQueue}>
                   <Plus size={16} />
                   {t('checker.add_all_to_queue')}
                 </button>
               )}
-              <button className="dc-btn dc-btn-pdf" onClick={generatePDF}>
+              <button className="btn btn-primary px-10" onClick={generatePDF}>
                 <Download size={16} />
                 {t('checker.export_pdf')}
               </button>
@@ -718,9 +718,11 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
           </div>
         ) : (
           <div className="dc-empty">
-            <ShieldCheck size={80} style={{ opacity: 0.07, marginBottom: '20px' }} />
-            <h3 className="dc-empty-title">{t('checker.waiting_title')}</h3>
-            <p className="dc-empty-desc">{t('checker.waiting_desc')}</p>
+            <div className="p-10 rounded-full bg-white/5 mb-8">
+              <ShieldCheck size={80} style={{ opacity: 0.1 }} />
+            </div>
+            <h3 className="text-2xl font-black text-white mb-2">{t('checker.waiting_title')}</h3>
+            <p className="text-muted max-w-sm mx-auto">{t('checker.waiting_desc')}</p>
           </div>
         )}
       </div>

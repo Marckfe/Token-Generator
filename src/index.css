@@ -244,12 +244,104 @@ input, select, textarea { font: inherit; color: inherit; outline: none; }
   border-color: rgba(255, 82, 82, 0.6);
   transform: translateY(-1px);
 }
+
+/* COMPACT PROPERTY SYSTEM */
+.property-section {
+  border-bottom: 1px solid var(--divider);
+  background: transparent;
+  transition: var(--tr);
+}
+.property-section:last-child { border-bottom: none; }
+
+.property-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; cursor: pointer; user-select: none;
+  transition: background 0.2s;
+}
+.property-section-header:hover { background: rgba(255, 255, 255, 0.02); }
+
+.property-section-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; font-weight: 800; color: var(--text-light);
+  text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.9;
+}
+
+.property-content {
+  padding: 4px 0 16px 0;
+  animation: slide-down 0.2s ease-out;
+}
+
+.property-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 20px; min-height: 38px;
+}
+
+.property-label {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+}
+
+.property-control {
+  display: flex; align-items: center; gap: 10px;
+}
+
+.compact-input {
+  background: rgba(0, 0, 0, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 6px !important;
+  padding: 4px 10px !important;
+  font-size: 12px !important;
+  height: 28px !important;
+  transition: all 0.2s !important;
+}
+.compact-input:focus { border-color: var(--accent) !important; background: rgba(0, 0, 0, 0.4) !important; }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .search-box-wrapper { position: relative; margin-bottom: 12px; z-index: 100; }
 .search-input-group { display: flex; gap: 10px; }
 .search-input-container { position: relative; flex: 1; }
 .search-input { width: 100%; padding-right: 40px; }
 .textarea-list { width: 100%; resize: vertical; font-family: monospace; line-height: 1.6; margin-bottom: 12px; }
+
+/* PREMIUM TEXTAREA SYSTEM */
+.property-textarea {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 14px !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+  color: #fff !important;
+  border-radius: 12px !important;
+  resize: vertical;
+  outline: none;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  backdrop-filter: blur(4px);
+}
+
+.property-textarea:focus {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(0, 188, 212, 0.4) !important;
+  box-shadow: 0 0 0 4px rgba(0, 188, 212, 0.05), inset 0 0 10px rgba(0, 188, 212, 0.02);
+}
+
+.property-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.15);
+}
+
+.property-textarea::-webkit-scrollbar {
+  width: 6px;
+}
+.property-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+.property-textarea::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+.property-textarea::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
 .qty-input { width: 50px; text-align: center; font-weight: 700; color: var(--accent); padding: 4px 6px; border-radius: var(--r-sm); background: #000; }
 
 /* Dropdown */

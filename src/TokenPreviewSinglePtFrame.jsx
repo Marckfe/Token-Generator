@@ -479,7 +479,28 @@ export default function TokenPreviewSinglePtFrame() {
   // ARTWORK & AI STATES
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
   const [magicPrompt, setMagicPrompt] = useState("");
+  
+  const handleEnhancePrompt = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsEnhancing(true);
+    try {
+      const resp = await fetch('/api/improve-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt })
+      });
+      const data = await resp.json();
+      if (data.improvedPrompt) {
+        setAiPrompt(data.improvedPrompt);
+      }
+    } catch (err) {
+      console.error("Enhance error:", err);
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
   
   const canvasRef = useRef(null);
   const dragRef = useRef(null);
@@ -981,51 +1002,91 @@ export default function TokenPreviewSinglePtFrame() {
             <div className="sidebar-scroll-content">
               <div className="sidebar-panel-title">🖼️ {t('token.artwork_panel')}</div>
               
+              {/* SECTION: CARICAMENTO LOCALE */}
               <div className="property-section">
-                <div className="property-section-header" onClick={() => setActiveLayer('source')}>
+                <div className="property-section-header" onClick={() => setActiveLayer('upload')}>
                   <div className="property-section-title">
-                    <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /> Sorgente Immagine
+                    <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /> Caricamento
                   </div>
                 </div>
-                {activeLayer === 'source' && (
+                {activeLayer === 'upload' && (
                   <div className="property-content">
-                    <div className="px-4 mb-4">
-                      <button className="btn btn-primary w-full py-2.5 text-xs gap-2" onClick={() => document.getElementById('artwork-upload').click()}>
-                        📤 Carica Foto Locale
-                      </button>
-                    </div>
-                    <div className="px-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">Generatore IA</span>
-                        <div className="h-px flex-1 bg-white/5"></div>
-                      </div>
-                      <textarea 
-                        className="control-input compact-input w-full min-h-[60px] mb-2 text-[11px]" 
-                        placeholder="Descrivi la tua idea..."
-                        value={aiPrompt}
-                        onChange={e => setAiPrompt(e.target.value)}
-                      />
+                    <div className="px-4 py-3">
                       <button 
-                        onClick={handleAIGenerate}
-                        disabled={isGeneratingAI || !aiPrompt.trim()}
-                        className={`btn w-full py-2 text-[10px] font-black uppercase tracking-widest ${isGeneratingAI ? 'bg-white/10' : 'bg-cyan-600 hover:bg-cyan-500'} text-white`}
+                        className="btn btn-accent w-full py-2.5 text-[10px] font-black uppercase tracking-widest gap-2" 
+                        onClick={() => document.getElementById('artwork-upload').click()}
                       >
-                        {isGeneratingAI ? <Loader2 className="animate-spin mx-auto" size={14} /> : "Genera con IA"}
+                        <Icon d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M12 9v6M9 12h6" size={14} /> Sfoglia File
                       </button>
-                      {magicPrompt && (
-                        <div className="mt-2 p-2 rounded bg-black/40 border border-white/5">
-                          <p className="text-[8px] text-white/40 italic leading-tight">{magicPrompt}</p>
-                        </div>
-                      )}
                     </div>
-                    <input id="artwork-upload" type="file" style={{ display: 'none' }} accept="image/*" onChange={e => {
-                      const f = e.target.files?.[0]; if(!f) return;
-                      const r = new FileReader(); r.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
-                      r.readAsDataURL(f);
-                    }} />
                   </div>
                 )}
               </div>
+
+              {/* SECTION: GENERATORE IA */}
+              <div className="property-section">
+                <div className="property-section-header" onClick={() => setActiveLayer('ai')}>
+                  <div className="property-section-title">
+                    <Icon d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /> Generatore IA
+                  </div>
+                  {!isEnhancing && aiPrompt.trim().length > 0 && aiPrompt.trim().length < 50 && (
+                    <button 
+                      className="text-[9px] text-cyan-400 font-bold hover:brightness-125 flex items-center gap-1 bg-cyan-400/10 px-2 py-0.5 rounded-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEnhancePrompt();
+                      }}
+                    >
+                      ✨ OTTIMIZZA
+                    </button>
+                  )}
+                </div>
+                {activeLayer === 'ai' && (
+                  <div className="property-content">
+                    <div className="px-4 py-3 flex flex-col gap-3">
+                      <div className="relative">
+                        <textarea 
+                          className="property-textarea" 
+                          placeholder="Cosa vuoi creare? (es: Un cavaliere oscuro)..."
+                          value={aiPrompt}
+                          onChange={e => setAiPrompt(e.target.value)}
+                          style={{ minHeight: '100px' }}
+                        />
+                        {isEnhancing && (
+                          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                            <div className="flex flex-col items-center gap-2">
+                              <Loader2 className="animate-spin text-cyan-400" size={20} />
+                              <span className="text-[10px] text-cyan-400 font-black uppercase tracking-tighter">Magic in progress...</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <button 
+                        onClick={handleAIGenerate}
+                        disabled={isGeneratingAI || !aiPrompt.trim() || isEnhancing}
+                        className={`btn w-full py-2.5 text-[10px] font-black uppercase tracking-widest ${isGeneratingAI ? 'bg-white/10 opacity-50' : 'btn-primary'}`}
+                      >
+                        {isGeneratingAI ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <Loader2 className="animate-spin" size={14} /> Generando...
+                          </div>
+                        ) : "Avvia Generazione"}
+                      </button>
+                      
+                      <p className="text-[9px] text-white/20 text-center px-4 leading-tight">
+                        Puoi scrivere un'idea semplice e cliccare <span className="text-cyan-400/50">Ottimizza</span> per espanderla, oppure scrivere direttamente il tuo prompt.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <input id="artwork-upload" type="file" style={{ display: 'none' }} accept="image/*" onChange={e => {
+                const f = e.target.files?.[0]; if(!f) return;
+                const r = new FileReader(); r.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
+                r.readAsDataURL(f);
+              }} />
 
               {/* SECTION: TRASFORMAZIONE - FIGMA STYLE */}
               <div className="property-section">
