@@ -63,9 +63,11 @@ export default function BulkImportPanel({ onAddCards, toast, initialText = "", o
       }
       name = name.split(/\s*\/\/?\s*/)[0].trim();
 
-      // Skip section headers: name is ALL CAPS (e.g. "LANDS", "CREATURES", "INSTANTS and SORC.")
-      // A real card name always has at least one lowercase letter
-      if (name && name === name.toUpperCase() && /[A-Z]/.test(name)) return null;
+      // Skip section headers: name is a common MTG category or ALL CAPS
+      const headers = ['instants', 'sorceries', 'creatures', 'artifacts', 'enchantments', 'lands', 'sideboard', 'mainboard', 'maybeboard', 'commander', 'companion', 'planeswalkers', 'sorc.'];
+      const lowerName = name.toLowerCase();
+      if (headers.some(h => lowerName.startsWith(h)) || (name && name === name.toUpperCase() && /[A-Z]/.test(name))) return null;
+      if (lowerName.includes('and') && headers.some(h => lowerName.includes(h))) return null;
 
       return { qty, name, original: line };
     }).filter(Boolean).filter(e => e.name && e.name.length > 1);
@@ -148,7 +150,8 @@ export default function BulkImportPanel({ onAddCards, toast, initialText = "", o
       const chunk = toAdd.slice(i, i + 10);
       await Promise.all(chunk.map(async (entry) => {
         const card = entry.selectedPrint || entry.card;
-        const imgUrl = card.image_uris?.normal || card.image_uris?.large || card.card_faces?.[0]?.image_uris?.normal;
+        // Prioritize High-Resolution for Printing (Large or PNG)
+        const imgUrl = card.image_uris?.large || card.image_uris?.png || card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.large;
         if (!imgUrl) return;
         try {
           const blob = await fetch(imgUrl).then(r => r.blob());

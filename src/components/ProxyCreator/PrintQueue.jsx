@@ -5,9 +5,9 @@ export default function PrintQueue({
   images,
   dragIdx,
   setDragIdx,
-  reorder,
-  remove,
-  dup,
+  onReorder,
+  onRemove,
+  onDup,
   isMobile
 }) {
   const { t } = useLanguage();
@@ -35,7 +35,7 @@ export default function PrintQueue({
           key={img.id}
           draggable
           onDragStart={() => { setDragIdx(idx); setDropTargetIdx(null); }}
-          onDragOver={e => { e.preventDefault(); setDropTargetIdx(idx); reorder(idx); }}
+          onDragOver={e => { e.preventDefault(); setDropTargetIdx(idx); onReorder(idx); }}
           onDragEnd={() => { setDragIdx(null); setDropTargetIdx(null); }}
           className={`queue-card ${dragIdx === idx ? 'dragging' : ''} ${dropTargetIdx === idx && dragIdx !== idx ? 'drop-target' : ''}`}
         >
@@ -47,10 +47,10 @@ export default function PrintQueue({
           )}
 
           <div className="card-overlay">
-            <button title={t('common.duplicate')} onClick={e => { e.stopPropagation(); dup(idx); }} className="overlay-btn">
+            <button title={t('common.duplicate')} onClick={e => { e.stopPropagation(); onDup(idx); }} className="overlay-btn">
               ⧉ {t('common.duplicate')}
             </button>
-            <button title={t('common.remove')} onClick={e => { e.stopPropagation(); remove(idx); }} className="overlay-btn danger">
+            <button title={t('common.remove')} onClick={e => { e.stopPropagation(); onRemove(idx); }} className="overlay-btn danger">
               ✕ {t('common.remove')}
             </button>
           </div>

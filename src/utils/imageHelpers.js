@@ -10,30 +10,36 @@ export function imgToDataURL(url) {
   return new Promise((res, rej) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const c = document.createElement("canvas");
-      c.width = img.naturalWidth;
-      c.height = img.naturalHeight;
-      c.getContext("2d").drawImage(img, 0, 0);
-      res(c.toDataURL("image/png"));
-    };
-    img.onerror = () => {
-      const img2 = new Image();
-      img2.onload = () => {
-        const c = document.createElement("canvas");
-        c.width = img2.naturalWidth;
-        c.height = img2.naturalHeight;
-        c.getContext("2d").drawImage(img2, 0, 0);
+    
+    const tryLoad = (src, attempt = 1) => {
+      img.onload = () => {
         try {
+          const c = document.createElement("canvas");
+          c.width = img.naturalWidth;
+          c.height = img.naturalHeight;
+          const ctx = c.getContext("2d");
+          ctx.drawImage(img, 0, 0);
           res(c.toDataURL("image/png"));
-        } catch {
-          rej(new Error("CORS: " + url));
+        } catch (e) {
+          if (attempt < 2) tryLoad(src, attempt + 1);
+          else rej(new Error("Canvas export failed: " + e.message));
         }
       };
-      img2.onerror = rej;
-      img2.src = url;
+      
+      img.onerror = () => {
+        if (attempt < 2) {
+          // Retry once with a cache-busting query param if it's a URL
+          const retryUrl = src.includes('?') ? `${src}&retry=1` : `${src}?retry=1`;
+          tryLoad(retryUrl, attempt + 1);
+        } else {
+          rej(new Error("Image load failed: " + url));
+        }
+      };
+      
+      img.src = src;
     };
-    img.src = url;
+    
+    tryLoad(url);
   });
 }
 

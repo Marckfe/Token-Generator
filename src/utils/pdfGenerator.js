@@ -32,49 +32,52 @@ export async function generatePDF({ images, printCols, printRows, printGap, cutM
     
     for (let i = 0; i < batch.length; i++) {
       const item = batch[i];
-      try {
-        let dataUrl;
-        if (item.dataUrl) dataUrl = item.dataUrl;
-        else if (item.file) dataUrl = await fileToDataURL(item.file);
-        else if (item.url) dataUrl = await imgToDataURL(item.url);
-        else throw new Error("Nessuna sorgente immagine");
-        
-        const buf = dataURLtoBuffer(dataUrl);
-        let pimg;
-        
-        // Robust image embedding with type check
-        if (dataUrl.startsWith("data:image/jpeg")) {
-          pimg = await doc.embedJpg(buf);
-        } else if (dataUrl.startsWith("data:image/png")) {
-          pimg = await doc.embedPng(buf);
-        } else {
-          // Handle WebP or other formats by converting to JPEG via canvas
-          // This is essential as pdf-lib does not support WebP directly
-          try {
+      const col = i % printCols;
+      const row = Math.floor(i / printCols);
+      const x = sx + col * (cardW + gapPt);
+      const y = sy + (printRows - 1 - row) * (cardH + gapPt);
+
+      // RETRY LOGIC for Image Loading
+      let pimg = null;
+      let lastError = null;
+      
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          let dataUrl;
+          if (item.dataUrl) dataUrl = item.dataUrl;
+          else if (item.file) dataUrl = await fileToDataURL(item.file);
+          else if (item.url) dataUrl = await imgToDataURL(item.url);
+          else throw new Error("Nessuna sorgente immagine");
+          
+          const buf = dataURLtoBuffer(dataUrl);
+          
+          if (dataUrl.startsWith("data:image/jpeg")) {
+            pimg = await doc.embedJpg(buf);
+          } else if (dataUrl.startsWith("data:image/png")) {
+            pimg = await doc.embedPng(buf);
+          } else {
+            // Handle WebP or other formats via canvas
             const img = new Image();
             img.src = dataUrl;
             await new Promise((res, rej) => { 
               img.onload = res; 
-              img.onerror = () => rej(new Error("Errore caricamento immagine per conversione")); 
+              img.onerror = () => rej(new Error("Conversione fallita")); 
             });
             const canvas = document.createElement("canvas");
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0);
-            const convertedDataUrl = canvas.toDataURL("image/jpeg", 0.9);
-            const convertedBuf = dataURLtoBuffer(convertedDataUrl);
+            canvas.width = img.width; canvas.height = img.height;
+            canvas.getContext("2d").drawImage(img, 0, 0);
+            // Increased quality for print-ready conversion
+            const convertedBuf = dataURLtoBuffer(canvas.toDataURL("image/jpeg", 0.98));
             pimg = await doc.embedJpg(convertedBuf);
-          } catch (err) {
-            throw new Error(`Conversione immagine fallita: ${err.message}`);
           }
+          break; // Success!
+        } catch (e) {
+          lastError = e.message;
+          if (attempt === 1) await new Promise(r => setTimeout(r, 500)); // Short wait before retry
         }
-        
-        const col = i % printCols;
-        const row = Math.floor(i / printCols);
-        const x = sx + col * (cardW + gapPt);
-        const y = sy + (printRows - 1 - row) * (cardH + gapPt);
-        
+      }
+
+      if (pimg) {
         page.drawImage(pimg, { x, y, width: cardW, height: cardH });
         
         if (cutMarks) {
@@ -92,12 +95,10 @@ export async function generatePDF({ images, printCols, printRows, printGap, cutM
             page.drawLine({ start: { x: px, y: py + signY * g2 }, end: { x: px, y: py + signY * (g2 + mk) }, color: c, thickness: t });
           });
         }
-      } catch (e) {
-        console.warn(`Carta ${i} saltata:`, e.message);
-        const col = i % printCols, row = Math.floor(i / printCols);
-        const x = sx + col * (cardW + gapPt), y = sy + (printRows - 1 - row) * (cardH + gapPt);
-        page.drawRectangle({ x, y, width: cardW, height: cardH, color: rgb(0.9, 0.9, 0.9) });
-        page.drawText("Errore caricamento", { x: x + 10, y: y + cardH / 2, size: 8, color: rgb(0.5, 0.5, 0.5) });
+      } else {
+        console.warn(`Carta ${i} fallita dopo 2 tentativi:`, lastError);
+        page.drawRectangle({ x, y, width: cardW, height: cardH, color: rgb(0.95, 0.95, 0.95) });
+        page.drawText("Errore caricamento", { x: x + 12, y: y + cardH / 2, size: 7, color: rgb(0.6, 0.6, 0.6) });
       }
       if (onProgress) onProgress(start + i + 1, images.length);
     }

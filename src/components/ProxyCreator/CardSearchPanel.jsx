@@ -157,7 +157,8 @@ export default function CardSearchPanel({ onAddCards }) {
     if (!entries.length) return;
     const items = [];
     for (const { card, qty } of entries) {
-      const imgUrl = card.image_uris?.normal || card.image_uris?.large || card.card_faces?.[0]?.image_uris?.normal;
+      // Prioritize High-Resolution for Printing (Large or PNG)
+      const imgUrl = card.image_uris?.large || card.image_uris?.png || card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.large;
       if (!imgUrl) continue;
       try {
         const blob = await fetch(imgUrl).then(r => r.blob());
