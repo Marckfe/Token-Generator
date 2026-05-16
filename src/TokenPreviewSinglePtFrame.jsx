@@ -231,10 +231,9 @@ const ColorPickerField = ({ label, value, onChange, onTarget, fontValue, onFontC
     {/* Row 2: Font Selection (Full Width) */}
     {onFontChange && (
       <select 
-        className="control-input py-1 text-xs w-full" 
+        className="control-input font-selector-input w-full" 
         value={fontValue} 
         onChange={e => onFontChange(e.target.value)} 
-        style={{ height: '36px' }}
       >
         {FONT_OPTIONS.map(f => (
           <option key={f.id} value={f.id}>{f.name}</option>
@@ -477,6 +476,13 @@ export default function TokenPreviewSinglePtFrame() {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [snapGuides, setSnapGuides] = useState({ x: null, y: null });
   
+  // ART SEARCH STATES
+  const [showArtSearch, setShowArtSearch] = useState(false);
+  const [artSearchQuery, setArtSearchQuery] = useState("");
+  const [artSearchResults, setArtSearchResults] = useState([]);
+  const [isSearchingArt, setIsSearchingArt] = useState(false);
+  const [artSearchStatus, setArtSearchStatus] = useState(""); // "", "loading", "done", "error"
+  
   const canvasRef = useRef(null);
   const dragRef = useRef(null);
 
@@ -525,6 +531,27 @@ export default function TokenPreviewSinglePtFrame() {
     if (historyIdx < history.length - 1) {
       setHistoryIdx(i => i + 1);
       setState(history[historyIdx + 1]);
+    }
+  };
+
+  const handleArtSearch = async () => {
+    if (!artSearchQuery.trim()) return;
+    setIsSearchingArt(true);
+    setArtSearchStatus("loading");
+    try {
+      const resp = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(artSearchQuery)}&unique=art`);
+      const data = await resp.json();
+      if (data.data) {
+        setArtSearchResults(data.data.filter(c => c.image_uris || (c.card_faces && c.card_faces[0].image_uris)));
+        setArtSearchStatus("done");
+      } else {
+        setArtSearchResults([]);
+        setArtSearchStatus("error");
+      }
+    } catch (err) {
+      setArtSearchStatus("error");
+    } finally {
+      setIsSearchingArt(false);
     }
   };
 
@@ -846,7 +873,7 @@ export default function TokenPreviewSinglePtFrame() {
 
           {/* TAB: TEMPLATES */}
           {activeTab === 'templates' && (
-            <>
+            <div className="sidebar-scroll-content">
               <div className="sidebar-panel-title">🚀 {t('token.templates')}</div>
               <div className="control-group">
                 <p className="text-xs text-muted mb-4">{t('token.templates')}</p>
@@ -881,54 +908,56 @@ export default function TokenPreviewSinglePtFrame() {
                 </div>
               </div>
 
-              <div className="sidebar-panel-title mt-8">☁️ {t('studio.cloud_library')}</div>
-              <div className="flex gap-2 mb-4">
-                <button onClick={() => handleSaveCloud(true)} className="btn btn-ghost flex-1 py-3 text-xs gap-2" disabled={isSaving}>
-                  {isSaving && saveStatus === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Cloud size={14} />}
-                  {t('studio.save_draft')}
-                </button>
-                <button onClick={() => handleSaveCloud(false)} className="btn btn-primary flex-1 py-3 text-xs gap-2" disabled={isSaving}>
-                  {isSaving && saveStatus === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  {t('studio.save_final')}
-                </button>
-              </div>
-
-              {myTokens.length > 0 && (
-                <div className="asset-grid">
-                  {myTokens.map(item => (
-                    <div key={item.id} className="asset-item group relative">
-                      <div 
-                        className="template-icon" 
-                        style={{ cursor: 'pointer', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}
-                        onClick={() => {
-                          const { id, tool, isDraft, updatedAt, createdAt, previewUrl, ...loadedState } = item;
-                          applyState(loadedState); // Replace current state with loaded state
-                        }}
-                      >
-                        {item.previewUrl ? (
-                          <img src={item.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        ) : (
-                          item.isDraft ? "📝" : "⭐"
-                        )}
-                      </div>
-                      <div className="template-name">{item.name}</div>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
-                        className="absolute -top-1 -right-1 p-1 bg-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                      >
-                        <Trash2 size={10} color="white" />
-                      </button>
-                    </div>
-                  ))}
+              <div className="sidebar-panel-title mt-4">☁️ {t('studio.cloud_library')}</div>
+              <div className="p-5">
+                <div className="flex gap-2 mb-6">
+                  <button onClick={() => handleSaveCloud(true)} className="btn btn-ghost flex-1 py-3 text-xs gap-2" disabled={isSaving}>
+                    {isSaving && saveStatus === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Cloud size={14} />}
+                    {t('studio.save_draft')}
+                  </button>
+                  <button onClick={() => handleSaveCloud(false)} className="btn btn-primary flex-1 py-3 text-xs gap-2" disabled={isSaving}>
+                    {isSaving && saveStatus === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    {t('studio.save_final')}
+                  </button>
                 </div>
-              )}
-            </>
+
+                {myTokens.length > 0 && (
+                  <div className="asset-grid">
+                    {myTokens.map(item => (
+                      <div key={item.id} className="asset-item group relative">
+                        <div 
+                          className="template-icon" 
+                          style={{ cursor: 'pointer', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}
+                          onClick={() => {
+                            const { id, tool, isDraft, updatedAt, createdAt, previewUrl, ...loadedState } = item;
+                            applyState(loadedState);
+                          }}
+                        >
+                          {item.previewUrl ? (
+                            <img src={item.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            item.isDraft ? "📝" : "⭐"
+                          )}
+                        </div>
+                        <div className="template-name">{item.name}</div>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
+                          className="absolute -top-1 -right-1 p-1 bg-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        >
+                          <Trash2 size={10} color="white" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
           {/* TAB: ARTWORK */}
           {(activeTab === 'artwork' || activeTab === 'art') && (
             <div className="sidebar-scroll-content">
-              <div className="sidebar-panel-title">🖼️ {t('token.artwork')}</div>
+              <div className="sidebar-panel-title">🖼️ {t('token.artwork_panel')}</div>
               
               <div className="p-5 flex flex-col gap-6">
                 <div className="editor-card">
@@ -940,12 +969,14 @@ export default function TokenPreviewSinglePtFrame() {
                       <button className="btn btn-primary flex-1 py-3 text-xs" onClick={() => document.getElementById('artwork-upload').click()}>📤 Carica Foto</button>
                       <button className="btn btn-ghost flex-1 py-3 text-xs border border-white/10" onClick={() => setShowArtSearch(true)}>🔍 Cerca Art</button>
                     </div>
-                    <input id="artwork-upload" type="file" className="hidden" accept="image/*" onChange={e => {
+                    <input id="artwork-upload" type="file" style={{ display: 'none' }} accept="image/*" onChange={e => {
                       const f = e.target.files?.[0]; if(!f) return;
                       const r = new FileReader(); r.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
                       r.readAsDataURL(f);
                     }} />
-                    <p className="text-[10px] text-white/40 text-center italic">Trascina un'immagine direttamente sulla carta per caricarla.</p>
+                    <p className="text-[10px] text-white/30 text-center italic mt-2">
+                      💡 Trascina un'immagine direttamente sulla carta per caricarla.
+                    </p>
                   </div>
                 </div>
 
@@ -1004,11 +1035,11 @@ export default function TokenPreviewSinglePtFrame() {
                       </select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="frame-grid">
                       {FRAME_MAP[state.frameSet]?.map(f => (
-                        <div key={f.name} className={`template-item ${state.frame?.url === f.url ? 'active' : ''}`} onClick={() => applyState({ ...state, frame: f })}>
-                          <img src={f.url} alt={f.name} className="w-full h-auto rounded-lg mb-2" />
-                          <span className="text-[10px] font-bold text-center block uppercase truncate">{f.name}</span>
+                        <div key={f.name} className={`frame-item ${state.frame?.url === f.url ? 'active' : ''}`} onClick={() => applyState({ ...state, frame: f })}>
+                          <img src={f.url} alt={f.name} />
+                          <div className="frame-item-name">{f.name}</div>
                         </div>
                       ))}
                     </div>
@@ -1033,7 +1064,7 @@ export default function TokenPreviewSinglePtFrame() {
                     </label>
                   </div>
                   <div className="editor-card-body">
-                    <div className="grid grid-cols-2 gap-4 mb-5">
+                    <div className="control-row mb-5">
                       <div className="control-field">
                         <span className="control-label">{t('common.power')}</span>
                         <input type="text" className="control-input text-center font-bold" value={state.pt.power} onChange={e => applyState({ ...state, pt: { ...state.pt, power: e.target.value } })} />
@@ -1077,10 +1108,10 @@ export default function TokenPreviewSinglePtFrame() {
             </div>
           )}
 
-          {/* TAB: TEXT */}
+          {/* TAB: TEXT (LAYERS) */}
           {activeTab === 'text' && (
             <div className="sidebar-scroll-content">
-              <div className="sidebar-panel-title">🪄 {t('token.card_layers')}</div>
+              <div className="sidebar-panel-title">🪄 {t('token.layers_panel')}</div>
               
               <div className="p-5 flex flex-col gap-6">
                 {/* SECTION: CARD NAME */}
@@ -1111,16 +1142,20 @@ export default function TokenPreviewSinglePtFrame() {
                       onFontChange={v => update('nameStyle', { fontFamily: v })}
                     />
 
-                    <div className="grid grid-cols-2 gap-4 mt-5">
-                      <div className="control-field">
+                    <div className="control-row mt-5">
+                      <div className="control-field flex-[1.5]">
                         <span className="control-label">Taglia ({state.nameStyle.fontSize}px)</span>
                         <input type="range" min="12" max="60" value={state.nameStyle.fontSize} onChange={e => update('nameStyle', { fontSize: Number(e.target.value) })} className="control-input" />
                       </div>
-                      <div className="control-field">
+                      <div className="control-field flex-1">
                         <span className="control-label">Allineamento</span>
                         <div className="flex gap-1 p-1 bg-black/20 rounded-lg">
-                          <button className={`flex-1 py-2 rounded-md text-[10px] uppercase font-bold transition-all ${state.nameStyle.align === 'left' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('nameStyle', { align: 'left' })}>SX</button>
-                          <button className={`flex-1 py-2 rounded-md text-[10px] uppercase font-bold transition-all ${state.nameStyle.align === 'center' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('nameStyle', { align: 'center' })}>CX</button>
+                          <button className={`flex-1 py-2 rounded-md flex items-center justify-center transition-all ${state.nameStyle.align === 'left' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('nameStyle', { align: 'left' })}>
+                            <Icon d="M4 6h16M4 12h10M4 18h16" />
+                          </button>
+                          <button className={`flex-1 py-2 rounded-md flex items-center justify-center transition-all ${state.nameStyle.align === 'center' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('nameStyle', { align: 'center' })}>
+                            <Icon d="M4 6h16M7 12h10M4 18h16" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1155,16 +1190,20 @@ export default function TokenPreviewSinglePtFrame() {
                       onFontChange={v => update('typeStyle', { fontFamily: v })}
                     />
 
-                    <div className="grid grid-cols-2 gap-4 mt-5">
-                      <div className="control-field">
+                    <div className="control-row mt-5">
+                      <div className="control-field flex-[1.5]">
                         <span className="control-label">Taglia ({state.typeStyle.fontSize}px)</span>
                         <input type="range" min="10" max="40" value={state.typeStyle.fontSize} onChange={e => update('typeStyle', { fontSize: Number(e.target.value) })} className="control-input" />
                       </div>
-                      <div className="control-field">
+                      <div className="control-field flex-1">
                         <span className="control-label">Allineamento</span>
                         <div className="flex gap-1 p-1 bg-black/20 rounded-lg">
-                          <button className={`flex-1 py-2 rounded-md text-[10px] uppercase font-bold transition-all ${state.typeStyle.align === 'left' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('typeStyle', { align: 'left' })}>SX</button>
-                          <button className={`flex-1 py-2 rounded-md text-[10px] uppercase font-bold transition-all ${state.typeStyle.align === 'center' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('typeStyle', { align: 'center' })}>CX</button>
+                          <button className={`flex-1 py-2 rounded-md flex items-center justify-center transition-all ${state.typeStyle.align === 'left' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('typeStyle', { align: 'left' })}>
+                            <Icon d="M4 6h16M4 12h10M4 18h16" />
+                          </button>
+                          <button className={`flex-1 py-2 rounded-md flex items-center justify-center transition-all ${state.typeStyle.align === 'center' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`} onClick={() => update('typeStyle', { align: 'center' })}>
+                            <Icon d="M4 6h16M7 12h10M4 18h16" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1200,12 +1239,12 @@ export default function TokenPreviewSinglePtFrame() {
                       onFontChange={v => update('abilityStyle', { fontFamily: v })}
                     />
 
-                    <div className="grid grid-cols-2 gap-4 mt-5">
-                      <div className="control-field">
+                    <div className="control-row mt-5">
+                      <div className="control-field flex-[1.5]">
                         <span className="control-label">Taglia ({state.abilityStyle.fontSize}px)</span>
                         <input type="range" min="8" max="40" value={state.abilityStyle.fontSize} onChange={e => update('abilityStyle', { fontSize: Number(e.target.value) })} className="control-input" />
                       </div>
-                      <div className="control-field">
+                      <div className="control-field flex-1">
                         <span className="control-label">Interlinea ({state.abilityStyle.lineGap || 4}px)</span>
                         <input type="range" min="0" max="20" value={state.abilityStyle.lineGap || 4} onChange={e => update('abilityStyle', { lineGap: Number(e.target.value) })} className="control-input" />
                       </div>
@@ -1392,6 +1431,80 @@ export default function TokenPreviewSinglePtFrame() {
         </aside>
       )}
 
+      {/* ART SEARCH MODAL */}
+      {showArtSearch && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-2xl bg-[#0f0f0f] border border-white/10 rounded-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-6 border-bottom border-white/5 flex justify-between items-center bg-[#0a0a0a]">
+              <div>
+                <h3 className="text-lg font-black uppercase tracking-tighter text-white">🔍 Cerca Illustrazione</h3>
+                <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest mt-1">Cerca nel database Scryfall</p>
+              </div>
+              <button onClick={() => setShowArtSearch(false)} className="p-2 text-white/40 hover:text-white transition-colors">
+                <Icon d="M18 6L6 18M6 6l12 12" />
+              </button>
+            </div>
+            
+            <div className="p-6 flex-1 overflow-y-auto">
+              <div className="flex gap-2 mb-6">
+                <input 
+                  type="text" 
+                  className="control-input" 
+                  placeholder="Inserisci nome carta (es. Lightning Bolt)..."
+                  value={artSearchQuery}
+                  onChange={e => setArtSearchQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleArtSearch()}
+                />
+                <button 
+                  onClick={handleArtSearch} 
+                  className="btn btn-primary px-6"
+                  disabled={isSearchingArt}
+                >
+                  {isSearchingArt ? <Loader2 className="animate-spin" /> : "Cerca"}
+                </button>
+              </div>
+
+              {artSearchStatus === 'loading' && (
+                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                  <Loader2 size={40} className="animate-spin text-cyan-500" />
+                  <p className="text-xs text-white/40 uppercase font-black tracking-widest">Interrogando Scryfall...</p>
+                </div>
+              )}
+
+              {artSearchStatus === 'error' && (
+                <div className="text-center py-12">
+                  <p className="text-red-400 font-bold mb-2">Nessun risultato trovato.</p>
+                  <p className="text-[10px] text-white/40 uppercase">Riprova con un altro nome (inglese preferibile).</p>
+                </div>
+              )}
+
+              {artSearchResults.length > 0 && (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                  {artSearchResults.map(card => {
+                    const imgUrl = card.image_uris?.art_crop || card.card_faces?.[0]?.image_uris?.art_crop;
+                    return (
+                      <div 
+                        key={card.id} 
+                        className="group relative aspect-square rounded-xl overflow-hidden border border-white/5 cursor-pointer hover:border-cyan-500/50 transition-all hover:scale-[1.02]"
+                        onClick={() => {
+                          applyState({ ...state, artUrl: imgUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
+                          setShowArtSearch(false);
+                        }}
+                      >
+                        <img src={imgUrl} alt={card.name} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2">
+                          <span className="text-[8px] text-white font-black text-center uppercase leading-tight">{card.name}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MAIN WORKSPACE */}
       {(!isMobile || activeTab === 'preview') && (
         <main 
@@ -1459,8 +1572,6 @@ export default function TokenPreviewSinglePtFrame() {
                   padding: '0 40px',
                   color: '#000',
                   fontWeight: 'bold',
-                  opacity: 0.2,
-                  textTransform: 'uppercase',
                   letterSpacing: '0.2em',
                   pointerEvents: 'none',
                   fontSize: `${1.2 * pScale}rem`,

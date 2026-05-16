@@ -265,6 +265,9 @@ export default {
     type_size: "Dim. Tipo ({size}px)",
     artist_size: "Dim. Artista ({size}px)",
     pt_size: "Dim. P/T ({size}px)",
-    invalid_json: "File JSON non valido."
+    invalid_json: "File JSON non valido.",
+    artwork_panel: "Gestione Artwork",
+    frame: "Cornice",
+    layers_panel: "Gestione Livelli"
   }
 };
