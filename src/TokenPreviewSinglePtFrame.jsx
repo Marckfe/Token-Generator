@@ -481,10 +481,17 @@ export default function TokenPreviewSinglePtFrame() {
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [magicPrompt, setMagicPrompt] = useState("");
+  const [toastMsg, setToastMsg] = useState(null);
+
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
   
   const handleEnhancePrompt = async () => {
     if (!aiPrompt.trim()) return;
     setIsEnhancing(true);
+    showToast("Ottimizzazione magica in corso...");
     try {
       const resp = await fetch('/api/improve-prompt', {
         method: 'POST',
@@ -496,6 +503,7 @@ export default function TokenPreviewSinglePtFrame() {
         const data = await resp.json();
         if (data.improvedPrompt) {
           setAiPrompt(data.improvedPrompt);
+          showToast("Prompt ottimizzato con successo!");
           setIsEnhancing(false);
           return;
         }
@@ -504,12 +512,14 @@ export default function TokenPreviewSinglePtFrame() {
       // Local Fallback: simple enhancement if API fails
       const enhanced = `${aiPrompt}, epic fantasy oil painting, mtg style illustration, highly detailed, cinematic lighting, dramatic composition, professional digital art, hyperrealistic textures, masterpiece.`;
       setAiPrompt(enhanced);
+      showToast("Prompt arricchito (modalità locale)");
 
     } catch (err) {
       console.error("Enhance error:", err);
       // Local Fallback on catch
       const enhanced = `${aiPrompt}, epic fantasy, mtg style, hyper-detailed illustration.`;
       setAiPrompt(enhanced);
+      showToast("Prompt arricchito (fallback)");
     } finally {
       setIsEnhancing(false);
     }
@@ -595,7 +605,7 @@ export default function TokenPreviewSinglePtFrame() {
   const handleAIGenerate = async () => {
     if (!aiPrompt.trim()) return;
     setIsGeneratingAI(true);
-    setMagicPrompt("");
+    showToast("L'AI sta dipingendo la tua carta...");
     
     const seed = Math.floor(Math.random() * 1000000);
     const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(aiPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}`;
@@ -611,8 +621,8 @@ export default function TokenPreviewSinglePtFrame() {
       if (resp.ok) {
         const data = await resp.json();
         if (data.imageUrl) {
-          setMagicPrompt(data.improvedPrompt || "");
           applyState({ ...state, artUrl: data.imageUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
+          showToast("Artwork generato!");
           setIsGeneratingAI(false);
           return;
         }
@@ -623,11 +633,12 @@ export default function TokenPreviewSinglePtFrame() {
 
     // Direct set URL (Most reliable)
     applyState({ ...state, artUrl: fallbackUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
+    showToast("Artwork generato (fallback)");
     
     // Tiny delay to ensure UI reflects state before clearing loader
     setTimeout(() => {
       setIsGeneratingAI(false);
-    }, 500);
+    }, 800);
   };
 
   // DRAG LOGIC WITH SMART SNAPPING
@@ -1632,12 +1643,6 @@ export default function TokenPreviewSinglePtFrame() {
             <label className="checkbox-label" style={{ fontSize: '0.8rem' }}>
               <input type="checkbox" checked={showGuides} onChange={e => setShowGuides(e.target.checked)} className="custom-checkbox"/> {t('common.guides')}
             </label>
-            {!isMobile && (
-              <div className="ml-auto" style={{ display: 'flex', gap: '8px' }}>
-                <select className="control-input py-1 text-xs w-auto" value={previewZoom} onChange={e => setPreviewZoom(Number(e.target.value))}>
-                  <option value="75">75% Zoom</option><option value="100">100% Zoom</option><option value="125">125% Zoom</option>
-                </select>
-              </div>
             )}
           </div>
 
@@ -1713,6 +1718,16 @@ export default function TokenPreviewSinglePtFrame() {
               </div>
             </div>
           </div>
+          
+          {/* AI TOAST NOTIFICATION */}
+          {toastMsg && (
+            <div className="ai-toast-container">
+              <div className="ai-toast">
+                <span className="ai-toast-sparkle">✨</span>
+                {toastMsg}
+              </div>
+            </div>
+          )}
         </main>
       )}
 
