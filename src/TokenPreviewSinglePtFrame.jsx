@@ -805,7 +805,7 @@ export default function TokenPreviewSinglePtFrame() {
           <div className={`nav-item ${activeTab === 'info' ? 'active' : ''}`} onClick={() => setActiveTab('info')}>
             <Icon d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /> {t('token.artist')}
           </div>
-          <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')} style={{ marginTop: 'auto' }}>
+          <div className={`nav-item ${activeTab === 'export' ? 'active' : ''}`} onClick={() => setActiveTab('export')} style={{ marginTop: 'auto' }}>
             <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /> {t('common.export')}
           </div>
         </nav>
@@ -831,7 +831,7 @@ export default function TokenPreviewSinglePtFrame() {
                  { id: 'text', label: '📝 ' + t('token.title') },
                  { id: 'pt', label: '⚔️ P/T' },
                  { id: 'info', label: '📜 ' + t('token.artist') },
-                 { id: 'settings', label: '⚙️ ' + t('common.settings') }
+                 { id: 'export', label: '📤 ' + t('common.export') }
                ].map(item => (
                  <button 
                    key={item.id} 
@@ -984,7 +984,6 @@ export default function TokenPreviewSinglePtFrame() {
             </div>
           )}
 
-          {/* TAB: FRAME */}
           {activeTab === 'frame' && (
             <div className="sidebar-scroll-content">
               <div className="sidebar-panel-title">🎴 {t('token.frame')}</div>
@@ -1018,64 +1017,64 @@ export default function TokenPreviewSinglePtFrame() {
               </div>
             </div>
           )}
-                </div>
-                
-                {/* Visual Asset Grid */}
-                <div className="asset-grid">
-                  {(FRAME_MAP[state.frameSet] || []).map(f => (
-                    <div key={f.name} className={`asset-item ${state.frame?.name === f.name ? 'active' : ''}`} onClick={() => applyState({ ...state, frame: f })}>
-                      <img src={f.url} alt={f.name} loading="lazy" />
-                      <div className="asset-item-name">{f.name}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
 
           {/* TAB: P/T */}
           {activeTab === 'pt' && (
-            <>
+            <div className="sidebar-scroll-content">
               <div className="sidebar-panel-title">⚔️ {t('token.power_toughness')}</div>
-              <div className="control-group">
-                <div className="control-row">
-                  <div className="control-field">
-                    <span className="control-label">{t('common.power')}</span>
-                    <input type="text" className="control-input" value={state.pt.power} onChange={e => applyState({ ...state, pt: { ...state.pt, power: e.target.value } })} />
+              
+              <div className="p-5 flex flex-col gap-6">
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Parametri P/T</span>
+                    <label className="switch">
+                      <input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} />
+                      <span className="slider round"></span>
+                    </label>
                   </div>
-                  <div className="control-field">
-                    <span className="control-label">{t('common.toughness')}</span>
-                    <input type="text" className="control-input" value={state.pt.toughness} onChange={e => applyState({ ...state, pt: { ...state.pt, toughness: e.target.value } })} />
-                  </div>
-                </div>
-                
-                <ColorPickerField 
-                  label="Colore Testo P/T" 
-                  value={state.ptStyle.color} 
-                  onChange={v => update('ptStyle', { color: v })}
-                  fontValue={state.ptStyle.fontFamily}
-                  onFontChange={v => update('ptStyle', { fontFamily: v })}
-                />
-
-                <div className="control-row">
-                  <div className="control-field">
-                    <span className="control-label">Dimensione ({state.ptStyle.fontSize}px)</span>
-                    <input type="range" min="10" max="80" value={state.ptStyle.fontSize} onChange={e => update('ptStyle', { fontSize: Number(e.target.value) })} className="control-input" />
-                  </div>
-                </div>
-
-                <label className="checkbox-label mb-4" style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} className="custom-checkbox"/> {t('token.pt_frame')}</label>
-                
-                <span className="control-label mb-2">{t('token.pt_frame')}</span>
-                <div className="pt-badge-grid">
-                  {PT_FRAMES.map(f => (
-                    <div key={f.name} className={`pt-badge-item ${state.ptFrame?.name === f.name ? 'active' : ''}`} onClick={() => applyState({ ...state, ptFrame: f })}>
-                      <img src={f.url} alt={f.name} />
+                  <div className="editor-card-body">
+                    <div className="grid grid-cols-2 gap-4 mb-5">
+                      <div className="control-field">
+                        <span className="control-label">{t('common.power')}</span>
+                        <input type="text" className="control-input text-center font-bold" value={state.pt.power} onChange={e => applyState({ ...state, pt: { ...state.pt, power: e.target.value } })} />
+                      </div>
+                      <div className="control-field">
+                        <span className="control-label">{t('common.toughness')}</span>
+                        <input type="text" className="control-input text-center font-bold" value={state.pt.toughness} onChange={e => applyState({ ...state, pt: { ...state.pt, toughness: e.target.value } })} />
+                      </div>
                     </div>
-                  ))}
+
+                    <ColorPickerField 
+                      label="Stile Testo" 
+                      value={state.ptStyle.color} 
+                      onChange={v => update('ptStyle', { color: v })}
+                      fontValue={state.ptStyle.fontFamily}
+                      onFontChange={v => update('ptStyle', { fontFamily: v })}
+                    />
+
+                    <div className="control-field mt-5">
+                      <span className="control-label">Taglia ({state.ptStyle.fontSize}px)</span>
+                      <input type="range" min="10" max="80" value={state.ptStyle.fontSize} onChange={e => update('ptStyle', { fontSize: Number(e.target.value) })} className="control-input" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Cornice P/T</span>
+                  </div>
+                  <div className="editor-card-body">
+                    <div className="pt-badge-grid">
+                      {PT_FRAMES.map(f => (
+                        <div key={f.name} className={`pt-badge-item ${state.ptFrame?.name === f.name ? 'active' : ''}`} onClick={() => applyState({ ...state, ptFrame: f })}>
+                          <img src={f.url} alt={f.name} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
 
           {/* TAB: TEXT */}
@@ -1205,54 +1204,11 @@ export default function TokenPreviewSinglePtFrame() {
                       <div className="control-field">
                         <span className="control-label">Taglia ({state.abilityStyle.fontSize}px)</span>
                         <input type="range" min="8" max="40" value={state.abilityStyle.fontSize} onChange={e => update('abilityStyle', { fontSize: Number(e.target.value) })} className="control-input" />
-              
-              <div className="p-5 flex flex-col gap-6">
-                <div className="editor-card">
-                  <div className="editor-card-header">
-                    <span className="editor-card-title">Parametri P/T</span>
-                    <label className="switch">
-                      <input type="checkbox" checked={state.showPT} onChange={e => applyState({ ...state, showPT: e.target.checked })} />
-                      <span className="slider round"></span>
-                    </label>
-                  </div>
-                  <div className="editor-card-body">
-                    <div className="grid grid-cols-2 gap-4 mb-5">
-                      <div className="control-field">
-                        <span className="control-label">{t('common.power')}</span>
-                        <input type="text" className="control-input text-center font-bold" value={state.pt.power} onChange={e => applyState({ ...state, pt: { ...state.pt, power: e.target.value } })} />
                       </div>
                       <div className="control-field">
-                        <span className="control-label">{t('common.toughness')}</span>
-                        <input type="text" className="control-input text-center font-bold" value={state.pt.toughness} onChange={e => applyState({ ...state, pt: { ...state.pt, toughness: e.target.value } })} />
+                        <span className="control-label">Interlinea ({state.abilityStyle.lineGap || 4}px)</span>
+                        <input type="range" min="0" max="20" value={state.abilityStyle.lineGap || 4} onChange={e => update('abilityStyle', { lineGap: Number(e.target.value) })} className="control-input" />
                       </div>
-                    </div>
-
-                    <ColorPickerField 
-                      label="Stile Testo" 
-                      value={state.ptStyle.color} 
-                      onChange={v => update('ptStyle', { color: v })}
-                      fontValue={state.ptStyle.fontFamily}
-                      onFontChange={v => update('ptStyle', { fontFamily: v })}
-                    />
-
-                    <div className="control-field mt-5">
-                      <span className="control-label">Taglia ({state.ptStyle.fontSize}px)</span>
-                      <input type="range" min="10" max="80" value={state.ptStyle.fontSize} onChange={e => update('ptStyle', { fontSize: Number(e.target.value) })} className="control-input" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="editor-card">
-                  <div className="editor-card-header">
-                    <span className="editor-card-title">Cornice P/T</span>
-                  </div>
-                  <div className="editor-card-body">
-                    <div className="pt-badge-grid">
-                      {PT_FRAMES.map(f => (
-                        <div key={f.name} className={`pt-badge-item ${state.ptFrame?.name === f.name ? 'active' : ''}`} onClick={() => applyState({ ...state, ptFrame: f })}>
-                          <img src={f.url} alt={f.name} />
-                        </div>
-                      ))}
                     </div>
                   </div>
                 </div>
@@ -1341,10 +1297,10 @@ export default function TokenPreviewSinglePtFrame() {
             </div>
           )}
 
-          {/* TAB: EXPORT */}
+          {/* TAB: EXPORT & SETTINGS */}
           {activeTab === 'export' && (
             <div className="sidebar-scroll-content">
-              <div className="sidebar-panel-title">📤 {t('common.export')}</div>
+              <div className="sidebar-panel-title">📤 {t('common.export')} & ⚙️ {t('common.settings')}</div>
               
               <div className="p-5 flex flex-col gap-6">
                 {/* SECTION: IMAGE EXPORT */}
@@ -1355,7 +1311,7 @@ export default function TokenPreviewSinglePtFrame() {
                   <div className="editor-card-body">
                     <p className="text-[10px] text-white/40 mb-4 uppercase tracking-widest">Download Diretto</p>
                     <button className="btn btn-primary w-full py-4 font-bold flex items-center justify-center gap-2" onClick={exportPNG}>
-                      <Download size={18} />
+                      <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
                       {t('token.export_png')} (300DPI)
                     </button>
                   </div>
@@ -1386,37 +1342,7 @@ export default function TokenPreviewSinglePtFrame() {
                   </div>
                 </div>
 
-                {/* SECTION: PROJECT MANAGEMENT */}
-                <div className="editor-card">
-                  <div className="editor-card-header">
-                    <span className="editor-card-title">Gestione Progetto</span>
-                  </div>
-                  <div className="editor-card-body">
-                    <div className="grid grid-cols-2 gap-3">
-                      <button className="btn btn-ghost py-3 text-[10px] uppercase font-black border border-white/5" style={{ background: 'rgba(255,255,255,0.02)' }} onClick={saveProject}>
-                        💾 Salva JSON
-                      </button>
-                      <label className="btn btn-ghost py-3 text-[10px] uppercase font-black border border-white/5 text-center cursor-pointer" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                        📂 Apri JSON
-                        <input type="file" accept=".json" style={{ display: 'none' }} onChange={loadProject} />
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                <button className="btn btn-ghost w-full mt-4 text-xs text-error/60 hover:text-error transition-colors uppercase tracking-widest font-black" onClick={() => applyState(DEFAULT_STATE)}>
-                  🗑️ {t('token.reset')} Progetto
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* TAB: SETTINGS */}
-          {activeTab === 'settings' && (
-            <div className="sidebar-scroll-content">
-              <div className="sidebar-panel-title">⚙️ {t('common.settings')}</div>
-              
-              <div className="p-5 flex flex-col gap-6">
+                {/* SECTION: EDITOR SETTINGS */}
                 <div className="editor-card">
                   <div className="editor-card-header">
                     <span className="editor-card-title">Opzioni Editor</span>
@@ -1438,6 +1364,28 @@ export default function TokenPreviewSinglePtFrame() {
                     </div>
                   </div>
                 </div>
+
+                {/* SECTION: PROJECT MANAGEMENT */}
+                <div className="editor-card">
+                  <div className="editor-card-header">
+                    <span className="editor-card-title">Gestione Progetto</span>
+                  </div>
+                  <div className="editor-card-body">
+                    <div className="grid grid-cols-2 gap-3">
+                      <button className="btn btn-ghost py-3 text-[10px] uppercase font-black border border-white/5" style={{ background: 'rgba(255,255,255,0.02)' }} onClick={saveProject}>
+                        💾 Salva JSON
+                      </button>
+                      <label className="btn btn-ghost py-3 text-[10px] uppercase font-black border border-white/5 text-center cursor-pointer" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                        📂 Apri JSON
+                        <input type="file" accept=".json" style={{ display: 'none' }} onChange={loadProject} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <button className="btn btn-ghost w-full mt-4 text-xs text-error/60 hover:text-error transition-colors uppercase tracking-widest font-black" onClick={() => applyState(DEFAULT_STATE)}>
+                  🗑️ {t('token.reset')} Progetto
+                </button>
               </div>
             </div>
           )}
