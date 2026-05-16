@@ -489,53 +489,40 @@ export default function TokenPreviewSinglePtFrame() {
   };
   
   const handleEnhancePrompt = async () => {
+    const currentVal = aiPrompt.trim();
+    if (!currentVal) return;
+    
     setIsEnhancing(true);
     showToast("Analisi ed espansione magica...");
     
     try {
-      // Use functional update to ensure we always have the freshest state
-      setAiPrompt(prev => {
-        const currentVal = prev.trim();
-        if (!currentVal) {
-          setIsEnhancing(false);
-          return prev;
-        }
-
-        // We wrap the fetch in a IIFE or handle it outside, but let's do it cleaner:
-        (async () => {
-          try {
-            const resp = await fetch('/api/improve-prompt', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ prompt: currentVal })
-            });
-            
-            if (resp.ok) {
-              const data = await resp.json();
-              if (data.improvedPrompt) {
-                setAiPrompt(data.improvedPrompt);
-                showToast("Ottimizzazione completata!");
-                return;
-              }
-            }
-            
-            // Fallback inside the async block
-            const enhanced = `${currentVal}, epic fantasy oil painting, mtg style illustration, highly detailed, cinematic lighting, dramatic composition, professional digital art, hyperrealistic textures, masterpiece.`;
-            setAiPrompt(enhanced);
-            showToast("Prompt arricchito con stile MTG");
-          } catch (e) {
-            const enhanced = `${currentVal}, epic fantasy, mtg style, hyper-detailed.`;
-            setAiPrompt(enhanced);
-            showToast("Prompt arricchito (fallback)");
-          } finally {
-            setIsEnhancing(false);
-          }
-        })();
-
-        return prev; // Return original for now, the async will update it
+      const resp = await fetch('/api/improve-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: currentVal })
       });
+      
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.improvedPrompt) {
+          setAiPrompt(data.improvedPrompt);
+          showToast("Ottimizzazione completata!");
+          setIsEnhancing(false);
+          return;
+        }
+      }
+      
+      // Fallback
+      const enhanced = `${currentVal}, epic fantasy oil painting, mtg style illustration, highly detailed, cinematic lighting, dramatic composition, professional digital art, hyperrealistic textures, masterpiece.`;
+      setAiPrompt(enhanced);
+      showToast("Prompt arricchito con stile MTG");
 
-    } catch (err) {
+    } catch (e) {
+      console.error("Enhance error:", e);
+      const enhanced = `${currentVal}, epic fantasy, mtg style, hyper-detailed.`;
+      setAiPrompt(enhanced);
+      showToast("Prompt arricchito (fallback)");
+    } finally {
       setIsEnhancing(false);
     }
   };
@@ -624,14 +611,15 @@ export default function TokenPreviewSinglePtFrame() {
     
     const seed = Math.floor(Math.random() * 1000000);
     const targetPrompt = aiPrompt.trim();
+    // Added high-res keywords and Flux model for maximum quality
+    const ultraPrompt = `${targetPrompt}, high resolution, 8k, ultra-detailed, masterpiece`;
 
     const processNewArt = (url) => {
-      // Pre-load to avoid empty canvas
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
         applyState({ ...state, artUrl: url, artTransform: { zoom: 1, x: 0, y: 0 } });
-        showToast("Artwork pronto!");
+        showToast("Artwork HD pronto!");
         setIsGeneratingAI(false);
       };
       img.onerror = () => {
@@ -645,7 +633,7 @@ export default function TokenPreviewSinglePtFrame() {
       const resp = await fetch('/api/generate-art', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: targetPrompt })
+        body: JSON.stringify({ prompt: ultraPrompt })
       });
       
       if (resp.ok) {
@@ -657,27 +645,27 @@ export default function TokenPreviewSinglePtFrame() {
       }
     } catch (err) { }
 
-    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(targetPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}`;
+    // Using Flux model and 1280x960 (4:3) for professional card ratio
+    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(ultraPrompt)}?width=1280&height=960&nologo=true&seed=${seed}&model=flux`;
     processNewArt(fallbackUrl);
   };
 
   const handleDownloadArt = async () => {
     if (!state.artUrl) return;
-    showToast("Preparazione download artwork...");
+    showToast("Generazione PNG alta risoluzione...");
     try {
       const response = await fetch(state.artUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `mythic-art-${Date.now()}.jpg`;
+      link.download = `mythic-art-hd-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      showToast("Artwork scaricato!");
+      showToast("PNG scaricato con successo!");
     } catch (err) {
-      // Fallback: open in new tab if blob fails
       window.open(state.artUrl, '_blank');
       showToast("Aperto in nuova scheda");
     }
