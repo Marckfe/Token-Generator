@@ -476,12 +476,16 @@ export default function TokenPreviewSinglePtFrame() {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [snapGuides, setSnapGuides] = useState({ x: null, y: null });
   
-  // ART SEARCH STATES
+  // ART SEARCH & AI STATES
   const [showArtSearch, setShowArtSearch] = useState(false);
   const [artSearchQuery, setArtSearchQuery] = useState("");
   const [artSearchResults, setArtSearchResults] = useState([]);
   const [isSearchingArt, setIsSearchingArt] = useState(false);
   const [artSearchStatus, setArtSearchStatus] = useState(""); // "", "loading", "done", "error"
+  
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [magicPrompt, setMagicPrompt] = useState("");
   
   const canvasRef = useRef(null);
   const dragRef = useRef(null);
@@ -552,6 +556,30 @@ export default function TokenPreviewSinglePtFrame() {
       setArtSearchStatus("error");
     } finally {
       setIsSearchingArt(false);
+    }
+  };
+
+  const handleAIGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsGeneratingAI(true);
+    setMagicPrompt("");
+    try {
+      const resp = await fetch('/api/generate-art', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt })
+      });
+      const data = await resp.json();
+      if (data.imageUrl) {
+        setMagicPrompt(data.improvedPrompt);
+        applyState({ ...state, artUrl: data.imageUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
+      } else {
+        alert("Errore generazione: " + (data.error || "Riprova più tardi"));
+      }
+    } catch (err) {
+      alert("Errore di connessione al generatore IA");
+    } finally {
+      setIsGeneratingAI(false);
     }
   };
 
@@ -969,12 +997,39 @@ export default function TokenPreviewSinglePtFrame() {
                       <button className="btn btn-primary flex-1 py-3 text-xs" onClick={() => document.getElementById('artwork-upload').click()}>📤 Carica Foto</button>
                       <button className="btn btn-ghost flex-1 py-3 text-xs border border-white/10" onClick={() => setShowArtSearch(true)}>🔍 Cerca Art</button>
                     </div>
+
+                    {/* AI GENERATOR SECTION */}
+                    <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-white/5">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">✨ Generatore IA</span>
+                        <div className="h-px flex-1 bg-white/5"></div>
+                      </div>
+                      <textarea 
+                        className="control-input compact-input w-full min-h-[60px] mb-3 text-[11px]" 
+                        placeholder="Descrivi la tua idea (es. Drago di Cristallo)..."
+                        value={aiPrompt}
+                        onChange={e => setAiPrompt(e.target.value)}
+                      />
+                      <button 
+                        onClick={handleAIGenerate}
+                        disabled={isGeneratingAI || !aiPrompt.trim()}
+                        className="btn w-full py-2 bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                      >
+                        {isGeneratingAI ? <Loader2 className="animate-spin mx-auto" size={14} /> : "Genera Artwork Unica"}
+                      </button>
+                      {magicPrompt && (
+                        <div className="mt-3 p-2 rounded bg-black/40 border border-purple-500/20">
+                          <p className="text-[9px] text-purple-300 italic leading-tight">Magic Prompt: {magicPrompt}</p>
+                        </div>
+                      )}
+                    </div>
+
                     <input id="artwork-upload" type="file" style={{ display: 'none' }} accept="image/*" onChange={e => {
                       const f = e.target.files?.[0]; if(!f) return;
                       const r = new FileReader(); r.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
                       r.readAsDataURL(f);
                     }} />
-                    <p className="text-[10px] text-white/30 text-center italic mt-2">
+                    <p className="text-[10px] text-white/30 text-center italic mt-4">
                       💡 Trascina un'immagine direttamente sulla carta per caricarla.
                     </p>
                   </div>
