@@ -553,18 +553,17 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
             </div>
             <div className="dc-field-row">
               <input className="dc-input" placeholder={t('checker.location') || "Luogo"}
-                style={{ flex: '2 1 0' }}
+                style={{ flex: '1' }}
                 value={playerData.location}
                 onChange={e => setPlayerData({ ...playerData, location: e.target.value })} />
               <input className="dc-input" placeholder={t('checker.table')}
-                style={{ flex: '0 0 80px' }}
+                style={{ flex: '0 0 100px' }}
                 value={playerData.tableNumber}
                 onChange={e => setPlayerData({ ...playerData, tableNumber: e.target.value })} />
-              <input type="date" className="dc-input dc-date-input"
-                style={{ flex: '1.2 1 140px' }}
-                value={playerData.date}
-                onChange={e => setPlayerData({ ...playerData, date: e.target.value })} />
             </div>
+            <input type="date" className="dc-input dc-date-input"
+              value={playerData.date}
+              onChange={e => setPlayerData({ ...playerData, date: e.target.value })} />
             <input className="dc-input" placeholder={t('checker.event_name')}
               value={playerData.event}
               onChange={e => setPlayerData({ ...playerData, event: e.target.value })} />

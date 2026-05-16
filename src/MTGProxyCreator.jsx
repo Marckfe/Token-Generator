@@ -169,8 +169,24 @@ export default function MTGProxyCreator() {
       {!isMobile && (
         <div className="desktop-layout">
           <aside className="sidebar">
-            <div className="sidebar-header" style={{ padding: '24px 20px 0 20px', textAlign: 'center' }}>
-              <div className="sidebar-logo" style={{ padding: 0, justifyContent: 'center' }}>🃏 Mythic Studio</div>
+            <div className="sidebar-header" style={{ padding: '32px 20px 0 20px', textAlign: 'center' }}>
+              <div className="sidebar-logo" style={{ padding: 0, justifyContent: 'center', fontSize: '1.6rem', fontWeight: '900', letterSpacing: '-0.04em' }}>
+                <div style={{
+                  width: '32px', height: '32px', 
+                  background: 'linear-gradient(135deg, #00bcd4 0%, #3f51b5 100%)',
+                  borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginRight: '12px', boxShadow: '0 4px 12px rgba(0, 188, 212, 0.3)'
+                }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  </svg>
+                </div>
+                <span style={{
+                  background: 'linear-gradient(135deg, #fff 0%, #00bcd4 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}>Mythic Studio</span>
+              </div>
             </div>
 
             <nav className="nav-group">
@@ -232,7 +248,19 @@ export default function MTGProxyCreator() {
       {isMobile && (
         <div className="mobile-layout">
           <div className="mobile-header">
-            <div className="mobile-logo">🃏 Mythic Studio</div>
+            <div className="mobile-logo" style={{ fontSize: '1.2rem', fontWeight: '900', display: 'flex', alignItems: 'center' }}>
+              <div style={{
+                width: '24px', height: '24px', 
+                background: 'linear-gradient(135deg, #00bcd4 0%, #3f51b5 100%)',
+                borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginRight: '8px'
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+              </div>
+              <span style={{ color: 'white' }}>Mythic Studio</span>
+            </div>
             <div className="mobile-user-actions">
               <LanguageToggle lang={lang} setLang={setLang} />
               {user?.photoURL && <img src={user.photoURL} alt="avatar" className="user-avatar-sm" />}

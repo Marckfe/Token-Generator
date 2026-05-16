@@ -476,13 +476,7 @@ export default function TokenPreviewSinglePtFrame() {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [snapGuides, setSnapGuides] = useState({ x: null, y: null });
   
-  // ART SEARCH & AI STATES
-  const [showArtSearch, setShowArtSearch] = useState(false);
-  const [artSearchQuery, setArtSearchQuery] = useState("");
-  const [artSearchResults, setArtSearchResults] = useState([]);
-  const [isSearchingArt, setIsSearchingArt] = useState(false);
-  const [artSearchStatus, setArtSearchStatus] = useState(""); // "", "loading", "done", "error"
-  
+  // ARTWORK & AI STATES
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [magicPrompt, setMagicPrompt] = useState("");
@@ -982,58 +976,56 @@ export default function TokenPreviewSinglePtFrame() {
             </div>
           )}
 
-          {/* TAB: ARTWORK */}
+          {/* TAB: ARTWORK - FIGMA STYLE */}
           {(activeTab === 'artwork' || activeTab === 'art') && (
             <div className="sidebar-scroll-content">
               <div className="sidebar-panel-title">🖼️ {t('token.artwork_panel')}</div>
               
-              <div className="p-5 flex flex-col gap-6">
-                <div className="editor-card">
-                  <div className="editor-card-header">
-                    <span className="editor-card-title">Sorgente Immagine</span>
+              <div className="property-section">
+                <div className="property-section-header" onClick={() => setActiveLayer('source')}>
+                  <div className="property-section-title">
+                    <Icon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /> Sorgente Immagine
                   </div>
-                  <div className="editor-card-body">
-                    <div className="flex gap-2 mb-4">
-                      <button className="btn btn-primary flex-1 py-3 text-xs" onClick={() => document.getElementById('artwork-upload').click()}>📤 Carica Foto</button>
-                      <button className="btn btn-ghost flex-1 py-3 text-xs border border-white/10" onClick={() => setShowArtSearch(true)}>🔍 Cerca Art</button>
+                </div>
+                {activeLayer === 'source' && (
+                  <div className="property-content">
+                    <div className="px-4 mb-4">
+                      <button className="btn btn-primary w-full py-2.5 text-xs gap-2" onClick={() => document.getElementById('artwork-upload').click()}>
+                        📤 Carica Foto Locale
+                      </button>
                     </div>
-
-                    {/* AI GENERATOR SECTION */}
-                    <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-white/5">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">✨ Generatore IA</span>
+                    <div className="px-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">Generatore IA</span>
                         <div className="h-px flex-1 bg-white/5"></div>
                       </div>
                       <textarea 
-                        className="control-input compact-input w-full min-h-[60px] mb-3 text-[11px]" 
-                        placeholder="Descrivi la tua idea (es. Drago di Cristallo)..."
+                        className="control-input compact-input w-full min-h-[60px] mb-2 text-[11px]" 
+                        placeholder="Descrivi la tua idea..."
                         value={aiPrompt}
                         onChange={e => setAiPrompt(e.target.value)}
                       />
                       <button 
                         onClick={handleAIGenerate}
                         disabled={isGeneratingAI || !aiPrompt.trim()}
-                        className="btn w-full py-2 bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                        className={`btn w-full py-2 text-[10px] font-black uppercase tracking-widest ${isGeneratingAI ? 'bg-white/10' : 'bg-cyan-600 hover:bg-cyan-500'} text-white`}
                       >
-                        {isGeneratingAI ? <Loader2 className="animate-spin mx-auto" size={14} /> : "Genera Artwork Unica"}
+                        {isGeneratingAI ? <Loader2 className="animate-spin mx-auto" size={14} /> : "Genera con IA"}
                       </button>
                       {magicPrompt && (
-                        <div className="mt-3 p-2 rounded bg-black/40 border border-purple-500/20">
-                          <p className="text-[9px] text-purple-300 italic leading-tight">Magic Prompt: {magicPrompt}</p>
+                        <div className="mt-2 p-2 rounded bg-black/40 border border-white/5">
+                          <p className="text-[8px] text-white/40 italic leading-tight">{magicPrompt}</p>
                         </div>
                       )}
                     </div>
-
                     <input id="artwork-upload" type="file" style={{ display: 'none' }} accept="image/*" onChange={e => {
                       const f = e.target.files?.[0]; if(!f) return;
                       const r = new FileReader(); r.onload = ev => applyState({ ...state, artUrl: ev.target.result, artTransform: { zoom: 1, x: 0, y: 0 } });
                       r.readAsDataURL(f);
                     }} />
-                    <p className="text-[10px] text-white/30 text-center italic mt-4">
-                      💡 Trascina un'immagine direttamente sulla carta per caricarla.
-                    </p>
                   </div>
-                </div>
+                )}
+              </div>
 
                 <div className="editor-card">
                   <div className="editor-card-header">
@@ -1275,9 +1267,10 @@ export default function TokenPreviewSinglePtFrame() {
                 
                 {activeLayer === 'ability' && (
                   <div className="property-content">
-                    <div className="px-4 mb-3">
+                    <div className="px-4 py-2">
                       <textarea 
-                        className="control-input compact-input w-full min-h-[80px] py-2" 
+                        className="property-textarea w-full" 
+                        placeholder="Inserisci le regole della carta..."
                         value={state.ability} 
                         onChange={e => applyState({ ...state, ability: e.target.value })}
                       />
@@ -1487,80 +1480,6 @@ export default function TokenPreviewSinglePtFrame() {
             </div>
           )}
         </aside>
-      )}
-
-      {/* ART SEARCH MODAL */}
-      {showArtSearch && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-2xl bg-[#0f0f0f] border border-white/10 rounded-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="p-6 border-bottom border-white/5 flex justify-between items-center bg-[#0a0a0a]">
-              <div>
-                <h3 className="text-lg font-black uppercase tracking-tighter text-white">🔍 Cerca Illustrazione</h3>
-                <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest mt-1">Cerca nel database Scryfall</p>
-              </div>
-              <button onClick={() => setShowArtSearch(false)} className="p-2 text-white/40 hover:text-white transition-colors">
-                <Icon d="M18 6L6 18M6 6l12 12" />
-              </button>
-            </div>
-            
-            <div className="p-6 flex-1 overflow-y-auto">
-              <div className="flex gap-2 mb-6">
-                <input 
-                  type="text" 
-                  className="control-input" 
-                  placeholder="Inserisci nome carta (es. Lightning Bolt)..."
-                  value={artSearchQuery}
-                  onChange={e => setArtSearchQuery(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleArtSearch()}
-                />
-                <button 
-                  onClick={handleArtSearch} 
-                  className="btn btn-primary px-6"
-                  disabled={isSearchingArt}
-                >
-                  {isSearchingArt ? <Loader2 className="animate-spin" /> : "Cerca"}
-                </button>
-              </div>
-
-              {artSearchStatus === 'loading' && (
-                <div className="flex flex-col items-center justify-center py-12 gap-4">
-                  <Loader2 size={40} className="animate-spin text-cyan-500" />
-                  <p className="text-xs text-white/40 uppercase font-black tracking-widest">Interrogando Scryfall...</p>
-                </div>
-              )}
-
-              {artSearchStatus === 'error' && (
-                <div className="text-center py-12">
-                  <p className="text-red-400 font-bold mb-2">Nessun risultato trovato.</p>
-                  <p className="text-[10px] text-white/40 uppercase">Riprova con un altro nome (inglese preferibile).</p>
-                </div>
-              )}
-
-              {artSearchResults.length > 0 && (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                  {artSearchResults.map(card => {
-                    const imgUrl = card.image_uris?.art_crop || card.card_faces?.[0]?.image_uris?.art_crop;
-                    return (
-                      <div 
-                        key={card.id} 
-                        className="group relative aspect-square rounded-xl overflow-hidden border border-white/5 cursor-pointer hover:border-cyan-500/50 transition-all hover:scale-[1.02]"
-                        onClick={() => {
-                          applyState({ ...state, artUrl: imgUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
-                          setShowArtSearch(false);
-                        }}
-                      >
-                        <img src={imgUrl} alt={card.name} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2">
-                          <span className="text-[8px] text-white font-black text-center uppercase leading-tight">{card.name}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       )}
 
       {/* MAIN WORKSPACE */}
