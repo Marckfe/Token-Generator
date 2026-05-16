@@ -477,7 +477,6 @@ export default function TokenPreviewSinglePtFrame() {
   const [snapGuides, setSnapGuides] = useState({ x: null, y: null });
   
   // ARTWORK & AI STATES
-  const [aiPrompt, setAiPrompt] = useState("");
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [magicPrompt, setMagicPrompt] = useState("");
@@ -490,8 +489,7 @@ export default function TokenPreviewSinglePtFrame() {
   };
   
   const handleEnhancePrompt = async () => {
-    // Get latest from state OR ref if state is lagging
-    const currentVal = (aiPromptRef.current ? aiPromptRef.current.value : aiPrompt).trim();
+    const currentVal = (state.aiPrompt || "").trim();
     if (!currentVal) return;
     
     setIsEnhancing(true);
@@ -518,17 +516,12 @@ export default function TokenPreviewSinglePtFrame() {
         showToast("Prompt arricchito con stile MTG");
       }
 
-      // FORCE DOM + STATE
-      setAiPrompt(finalPrompt);
-      if (aiPromptRef.current) {
-        aiPromptRef.current.value = finalPrompt;
-      }
+      applyState({ ...state, aiPrompt: finalPrompt });
 
     } catch (e) {
       console.error("Enhance error:", e);
       const fallback = `${currentVal}, epic fantasy, mtg style, hyper-detailed.`;
-      setAiPrompt(fallback);
-      if (aiPromptRef.current) aiPromptRef.current.value = fallback;
+      applyState({ ...state, aiPrompt: fallback });
       showToast("Prompt arricchito (fallback)");
     } finally {
       setIsEnhancing(false);
@@ -613,7 +606,7 @@ export default function TokenPreviewSinglePtFrame() {
   };
 
   const handleAIGenerate = async () => {
-    const targetPrompt = (aiPromptRef.current ? aiPromptRef.current.value : aiPrompt).trim();
+    const targetPrompt = (state.aiPrompt || "").trim();
     if (!targetPrompt) return;
     setIsGeneratingAI(true);
     showToast("L'AI sta dipingendo la tua carta...");
@@ -1128,11 +1121,10 @@ export default function TokenPreviewSinglePtFrame() {
                     <div className="px-4 py-3 flex flex-col gap-3">
                       <div className="relative">
                         <textarea 
-                          ref={aiPromptRef}
                           className="property-textarea" 
                           placeholder="Cosa vuoi creare? (es: Un cavaliere oscuro)..."
-                          defaultValue={aiPrompt}
-                          onChange={e => setAiPrompt(e.target.value)}
+                          value={state.aiPrompt || ""}
+                          onChange={e => applyState({ ...state, aiPrompt: e.target.value })}
                           style={{ minHeight: '100px' }}
                         />
                         {isEnhancing && (
