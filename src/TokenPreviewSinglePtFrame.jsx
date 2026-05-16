@@ -482,6 +482,7 @@ export default function TokenPreviewSinglePtFrame() {
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [magicPrompt, setMagicPrompt] = useState("");
   const [toastMsg, setToastMsg] = useState(null);
+  const aiPromptRef = useRef(null);
 
   const showToast = (msg) => {
     setToastMsg(msg);
@@ -489,7 +490,8 @@ export default function TokenPreviewSinglePtFrame() {
   };
   
   const handleEnhancePrompt = async () => {
-    const currentVal = aiPrompt.trim();
+    // Get latest from state OR ref if state is lagging
+    const currentVal = (aiPromptRef.current ? aiPromptRef.current.value : aiPrompt).trim();
     if (!currentVal) return;
     
     setIsEnhancing(true);
@@ -516,17 +518,17 @@ export default function TokenPreviewSinglePtFrame() {
         showToast("Prompt arricchito con stile MTG");
       }
 
-      // ULTIMATE FAIL-SAFE: Direct DOM manipulation + State
+      // FORCE DOM + STATE
       setAiPrompt(finalPrompt);
-      const el = document.getElementById('ai-prompt-input');
-      if (el) el.value = finalPrompt;
+      if (aiPromptRef.current) {
+        aiPromptRef.current.value = finalPrompt;
+      }
 
     } catch (e) {
       console.error("Enhance error:", e);
       const fallback = `${currentVal}, epic fantasy, mtg style, hyper-detailed.`;
       setAiPrompt(fallback);
-      const el = document.getElementById('ai-prompt-input');
-      if (el) el.value = fallback;
+      if (aiPromptRef.current) aiPromptRef.current.value = fallback;
       showToast("Prompt arricchito (fallback)");
     } finally {
       setIsEnhancing(false);
@@ -611,12 +613,12 @@ export default function TokenPreviewSinglePtFrame() {
   };
 
   const handleAIGenerate = async () => {
-    if (!aiPrompt.trim()) return;
+    const targetPrompt = (aiPromptRef.current ? aiPromptRef.current.value : aiPrompt).trim();
+    if (!targetPrompt) return;
     setIsGeneratingAI(true);
     showToast("L'AI sta dipingendo la tua carta...");
     
     const seed = Math.floor(Math.random() * 1000000);
-    const targetPrompt = aiPrompt.trim();
     // Added high-res keywords and Flux model for maximum quality
     const ultraPrompt = `${targetPrompt}, high resolution, 8k, ultra-detailed, masterpiece`;
 
@@ -651,8 +653,8 @@ export default function TokenPreviewSinglePtFrame() {
       }
     } catch (err) { }
 
-    // Using 1600x2240 (5:7 ratio) to match EXACT Magic Card proportions (63mm x 88mm)
-    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(ultraPrompt)}?width=1600&height=2240&nologo=true&seed=${seed}&model=flux&cache=${Date.now()}`;
+    // Using Ultra-HD 2048x2867 (Closer to 5:7) with flux & enhance for massive quality
+    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(ultraPrompt)}?width=2048&height=2867&nologo=true&seed=${seed}&model=flux&enhance=true&cache=${Date.now()}`;
     processNewArt(fallbackUrl);
   };
 
@@ -1126,10 +1128,10 @@ export default function TokenPreviewSinglePtFrame() {
                     <div className="px-4 py-3 flex flex-col gap-3">
                       <div className="relative">
                         <textarea 
-                          id="ai-prompt-input"
+                          ref={aiPromptRef}
                           className="property-textarea" 
                           placeholder="Cosa vuoi creare? (es: Un cavaliere oscuro)..."
-                          value={aiPrompt}
+                          defaultValue={aiPrompt}
                           onChange={e => setAiPrompt(e.target.value)}
                           style={{ minHeight: '100px' }}
                         />
