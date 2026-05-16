@@ -912,3 +912,34 @@ input:checked + .slider:before {
   0%, 100% { opacity: 0.3; transform: scale(1); }
   50% { opacity: 0.6; transform: scale(1.1); }
 }
+
+/* Secondary Studio Buttons */
+.btn-studio-secondary {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 8px 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+}
+
+.btn-studio-secondary:hover {
+  background: rgba(0, 188, 212, 0.05);
+  border-color: rgba(0, 188, 212, 0.4);
+  color: #00bcd4;
+  transform: translateY(-1px);
+}
+
+.btn-studio-secondary:active {
+  transform: translateY(0);
+}

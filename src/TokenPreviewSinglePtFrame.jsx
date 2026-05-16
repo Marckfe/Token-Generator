@@ -650,6 +650,28 @@ export default function TokenPreviewSinglePtFrame() {
     processNewArt(fallbackUrl);
   };
 
+  const handleDownloadArt = async () => {
+    if (!state.artUrl) return;
+    showToast("Preparazione download artwork...");
+    try {
+      const response = await fetch(state.artUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `mythic-art-${Date.now()}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showToast("Artwork scaricato!");
+    } catch (err) {
+      // Fallback: open in new tab if blob fails
+      window.open(state.artUrl, '_blank');
+      showToast("Aperto in nuova scheda");
+    }
+  };
+
   // DRAG LOGIC WITH SMART SNAPPING
   const beginDrag = (kind, e) => {
     e.preventDefault(); e.stopPropagation();
@@ -1115,17 +1137,28 @@ export default function TokenPreviewSinglePtFrame() {
                         )}
                       </div>
 
-                      <button 
-                        onClick={handleAIGenerate}
-                        disabled={isGeneratingAI || !aiPrompt.trim() || isEnhancing}
-                        className={`btn w-full py-2.5 text-[10px] font-black uppercase tracking-widest ${isGeneratingAI ? 'bg-white/10 opacity-50' : 'btn-primary'}`}
-                      >
-                        {isGeneratingAI ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <Loader2 className="animate-spin" size={14} /> Generando...
-                          </div>
-                        ) : "Avvia Generazione"}
-                      </button>
+                      <div className="flex flex-col gap-3">
+                        <button 
+                          onClick={handleAIGenerate}
+                          disabled={isGeneratingAI || !aiPrompt.trim() || isEnhancing}
+                          className={`btn w-full py-2.5 text-[10px] font-black uppercase tracking-widest ${isGeneratingAI ? 'bg-white/10 opacity-50' : 'btn-primary'}`}
+                        >
+                          {isGeneratingAI ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className="animate-spin" size={14} /> Generando...
+                            </div>
+                          ) : "Avvia Generazione"}
+                        </button>
+
+                        {state.artUrl && !isGeneratingAI && (
+                          <button 
+                            onClick={handleDownloadArt}
+                            className="btn-studio-secondary"
+                          >
+                            <Icon d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /> Scarica solo Artwork
+                          </button>
+                        )}
+                      </div>
                       
                       <p className="text-[9px] text-white/20 text-center px-4 leading-tight">
                         Puoi scrivere un'idea semplice e cliccare <span className="text-cyan-400/50">Ottimizza</span> per espanderla, oppure scrivere direttamente il tuo prompt.
