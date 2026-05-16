@@ -1027,37 +1027,48 @@ export default function TokenPreviewSinglePtFrame() {
                 )}
               </div>
 
-                <div className="editor-card">
-                  <div className="editor-card-header">
-                    <span className="editor-card-title">Trasformazione</span>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 pr-3 border-r border-white/10">
-                        <span className="text-[9px] text-white/30 uppercase font-bold">Smart Fill</span>
-                        <label className="switch">
-                          <input type="checkbox" checked={state.smartFill} onChange={e => applyState({ ...state, smartFill: e.target.checked })} />
-                          <span className="slider round"></span>
-                        </label>
-                      </div>
-                      <button className="text-[10px] text-cyan-400 font-bold hover:underline" onClick={() => update('artTransform', { zoom: 1, x: 0, y: 0 })}>RESET</button>
-                    </div>
+              {/* SECTION: TRASFORMAZIONE - FIGMA STYLE */}
+              <div className="property-section">
+                <div className="property-section-header" onClick={() => setActiveLayer('transform')}>
+                  <div className="property-section-title">
+                    <Icon d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /> Trasformazione
                   </div>
-                  <div className="editor-card-body">
-                    <div className="control-field mb-4">
-                      <span className="control-label">Zoom ({state.artTransform?.zoom || 1}x)</span>
-                      <input type="range" min="0.1" max="3" step="0.01" value={state.artTransform?.zoom || 1} onChange={e => update('artTransform', { zoom: Number(e.target.value) })} className="control-input" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="control-field">
-                        <span className="control-label">Orizzontale</span>
-                        <input type="range" min="-500" max="500" value={state.artTransform?.x || 0} onChange={e => update('artTransform', { x: Number(e.target.value) })} className="control-input" />
-                      </div>
-                      <div className="control-field">
-                        <span className="control-label">Verticale</span>
-                        <input type="range" min="-500" max="500" value={state.artTransform?.y || 0} onChange={e => update('artTransform', { y: Number(e.target.value) })} className="control-input" />
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-white/30 uppercase font-bold">Smart Fill</span>
+                    <label className="switch scale-75">
+                      <input type="checkbox" checked={state.smartFill} onChange={e => applyState({ ...state, smartFill: e.target.checked })} />
+                      <span className="slider round"></span>
+                    </label>
                   </div>
                 </div>
+                {activeLayer === 'transform' && (
+                  <div className="property-content">
+                    <div className="property-row">
+                      <span className="property-label">Zoom</span>
+                      <div className="property-control">
+                        <input type="range" min="0.1" max="3" step="0.01" value={state.artTransform?.zoom || 1} onChange={e => update('artTransform', { zoom: Number(e.target.value) })} className="control-input h-2" />
+                        <span className="text-[10px] text-white/30 w-8">{state.artTransform?.zoom?.toFixed(2)}x</span>
+                      </div>
+                    </div>
+                    <div className="property-row">
+                      <span className="property-label">Orizzontale</span>
+                      <div className="property-control">
+                        <input type="range" min="-500" max="500" value={state.artTransform?.x || 0} onChange={e => update('artTransform', { x: Number(e.target.value) })} className="control-input h-2" />
+                      </div>
+                    </div>
+                    <div className="property-row">
+                      <span className="property-label">Verticale</span>
+                      <div className="property-control">
+                        <input type="range" min="-500" max="500" value={state.artTransform?.y || 0} onChange={e => update('artTransform', { y: Number(e.target.value) })} className="control-input h-2" />
+                      </div>
+                    </div>
+                    <div className="px-4 mt-2">
+                      <button className="btn btn-ghost w-full py-1.5 text-[10px] uppercase tracking-widest font-bold" onClick={() => update('artTransform', { zoom: 1, x: 0, y: 0 })}>
+                        Reset Trasformazione
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
