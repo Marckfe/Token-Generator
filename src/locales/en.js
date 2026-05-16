@@ -104,7 +104,8 @@ export default {
     rows: "Rows",
     gap: "Gap (mm)",
     cut_marks: "Cut Marks",
-    bleed: "3mm Bleed",
+    bleed: "Bleed 3mm",
+    toner_save: "Toner Save (B&W)",
     summary: "{cols}×{rows} = {perPage} cards/page · {pages} pages"
   },
   checker: {

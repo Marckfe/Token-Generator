@@ -23,18 +23,42 @@
   color: var(--text-light);
 }
 
+.edit-deck-name-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-light);
+  padding: 6px 12px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  outline: none;
+  width: 240px;
+  transition: all 0.2s;
+}
+
+.edit-deck-name-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-hl);
+}
+
 .edit-deck-area {
   width: 100%;
-  height: 200px;
+  height: 250px;
   margin-bottom: 1rem;
   font-family: monospace;
   font-size: 0.75rem;
-  padding: 1rem;
+  padding: 1.25rem;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   color: var(--text-light);
   resize: vertical;
+  line-height: 1.6;
+}
+
+.edit-deck-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .decks-list-grid {

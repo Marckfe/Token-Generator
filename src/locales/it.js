@@ -105,8 +105,9 @@ export default {
     rows: "Righe",
     gap: "Gap (mm)",
     cut_marks: "Segni di taglio",
-    bleed: "Bleed 3mm",
-    summary: "{cols}×{rows} = {perPage} carte/pag · {pages} pag"
+    bleed: "Margine di abbondanza (3mm)",
+    toner_save: "Risparmio Toner (B&W)",
+    summary: "Layout {cols}x{rows} — {perPage} carte per pagina ({pages} totali)"
   },
   checker: {
     title: "Deck Checker",

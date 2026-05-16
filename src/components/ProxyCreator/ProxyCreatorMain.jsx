@@ -35,6 +35,7 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
   const [printGap, setPrintGap] = useState(2);
   const [cutMarks, setCutMarks] = useState(true);
   const [bleedPDF, setBleedPDF] = useState(false);
+  const [tonerSave, setTonerSave] = useState(false);
   const [showDatabase, setShowDatabase] = useState(false);
   const [dbType, setDbType] = useState('single'); // 'single', 'bulk', or 'cloud'
   const [bulkInitialText, setBulkInitialText] = useState("");
@@ -168,7 +169,7 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
     setIsGen(true);
     try {
       const bytes = await generatePDF({
-        images, printCols, printRows, printGap, cutMarks, bleedPDF,
+        images, printCols, printRows, printGap, cutMarks, bleedPDF, tonerSave,
         onProgress: (done, total) => {
            // could show progress
         }
@@ -345,6 +346,7 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
                 printGap={printGap} setPrintGap={setPrintGap}
                 cutMarks={cutMarks} setCutMarks={setCutMarks}
                 bleedPDF={bleedPDF} setBleedPDF={setBleedPDF}
+                tonerSave={tonerSave} setTonerSave={setTonerSave}
                 perPage={perPage} pages={pages} isMobile={isMobile}
               />
             )}

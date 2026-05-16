@@ -12,6 +12,8 @@ export default function CloudDeckPanel({ onImport, toast }) {
   const [loading, setLoading] = useState(false);
   const [editingDeck, setEditingDeck] = useState(null);
   const [editedText, setEditedText] = useState("");
+  const [editedName, setEditedName] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const refresh = async () => {
     if (!user) return;
@@ -44,8 +46,29 @@ export default function CloudDeckPanel({ onImport, toast }) {
 
   const startEdit = (deck) => {
     setEditingDeck(deck);
+    setEditedName(deck.name || "");
     const fullText = [deck.maindeck, deck.sideboard].filter(Boolean).join("\n");
     setEditedText(fullText);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!user || !editingDeck) return;
+    setSaving(true);
+    try {
+      await saveUserDeck(user.uid, {
+        ...editingDeck,
+        name: editedName,
+        maindeck: editedText,
+        updatedAt: new Date()
+      });
+      toast(t('proxy.cloud_sync_success'), "s");
+      refresh();
+      setEditingDeck(null);
+    } catch (err) {
+      toast(t('common.error'), "e");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const confirmImport = () => {
@@ -60,7 +83,13 @@ export default function CloudDeckPanel({ onImport, toast }) {
       {editingDeck ? (
         <div className="edit-deck-view">
           <div className="edit-deck-header">
-            <h3 className="edit-deck-title">{editingDeck.name}</h3>
+            <input 
+              type="text"
+              className="edit-deck-name-input"
+              value={editedName}
+              onChange={e => setEditedName(e.target.value)}
+              placeholder="Nome del mazzo..."
+            />
             <button className="btn btn-ghost py-1 px-2 text-xs" onClick={() => setEditingDeck(null)}>{t('common.cancel')}</button>
           </div>
           <textarea 
@@ -68,10 +97,16 @@ export default function CloudDeckPanel({ onImport, toast }) {
             value={editedText}
             onChange={e => setEditedText(e.target.value)}
           />
-          <button className="btn btn-primary btn-block" onClick={confirmImport}>
-            <Plus size={16} />
-            {t('proxy.add_cards_btn', { count: '' }).replace('  ', ' ')}
-          </button>
+          <div className="edit-deck-actions">
+            <button className="btn btn-accent flex-1" onClick={handleSaveEdit} disabled={saving}>
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Cloud size={16} />}
+              {t('common.save')}
+            </button>
+            <button className="btn btn-primary flex-1" onClick={confirmImport}>
+              <Plus size={16} />
+              {t('proxy.add_cards_btn', { count: '' }).replace('  ', ' ')}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="decks-list-view">

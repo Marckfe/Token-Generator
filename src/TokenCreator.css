@@ -769,3 +769,46 @@ input:checked + .slider:before {
   border-color: #00bcd4 !important;
   background: rgba(255, 255, 255, 0.05) !important;
 }
+
+/* AI Optimize Button Styling */
+.enhance-btn-pulse {
+  background: linear-gradient(135deg, rgba(0, 188, 212, 0.2) 0%, rgba(0, 188, 212, 0.1) 100%);
+  border: 1px solid rgba(0, 188, 212, 0.4);
+  border-radius: 50px;
+  color: #00bcd4;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 4px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  box-shadow: 0 0 15px rgba(0, 188, 212, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.enhance-btn-pulse:hover {
+  background: rgba(0, 188, 212, 0.3);
+  border-color: #00bcd4;
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 0 20px rgba(0, 188, 212, 0.3);
+}
+
+.enhance-btn-pulse:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.sparkle-icon {
+  font-size: 11px;
+  animation: sparkle-pulse 2s infinite;
+}
+
+@keyframes sparkle-pulse {
+  0% { transform: scale(1); opacity: 0.8; filter: brightness(1); }
+  50% { transform: scale(1.2) rotate(15deg); opacity: 1; filter: brightness(1.5); }
+  100% { transform: scale(1); opacity: 0.8; filter: brightness(1); }
+}

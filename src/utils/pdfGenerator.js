@@ -11,7 +11,7 @@ export const CARD_H = mmToPt(CARD_HEIGHT_MM);
 export const PAGE_W = 595.28;
 export const PAGE_H = 841.89;
 
-export async function generatePDF({ images, printCols, printRows, printGap, cutMarks, bleedPDF, onProgress }) {
+export async function generatePDF({ images, printCols, printRows, printGap, cutMarks, bleedPDF, tonerSave, onProgress }) {
   const perPage = printCols * printRows;
   const gapPt = mmToPt(printGap);
   const bleedPt = bleedPDF ? mmToPt(BLEED_MM) : 0;
@@ -51,12 +51,12 @@ export async function generatePDF({ images, printCols, printRows, printGap, cutM
           
           const buf = dataURLtoBuffer(dataUrl);
           
-          if (dataUrl.startsWith("data:image/jpeg")) {
+          if (dataUrl.startsWith("data:image/jpeg") && !tonerSave) {
             pimg = await doc.embedJpg(buf);
-          } else if (dataUrl.startsWith("data:image/png")) {
+          } else if (dataUrl.startsWith("data:image/png") && !tonerSave) {
             pimg = await doc.embedPng(buf);
           } else {
-            // Handle WebP or other formats via canvas
+            // Handle WebP, other formats, or Grayscale (B&W) via canvas
             const img = new Image();
             img.src = dataUrl;
             await new Promise((res, rej) => { 
@@ -65,7 +65,14 @@ export async function generatePDF({ images, printCols, printRows, printGap, cutM
             });
             const canvas = document.createElement("canvas");
             canvas.width = img.width; canvas.height = img.height;
-            canvas.getContext("2d").drawImage(img, 0, 0);
+            const ctx = canvas.getContext("2d");
+            
+            // Apply Grayscale filter if Toner Save is ON
+            if (tonerSave) {
+              ctx.filter = 'grayscale(100%)';
+            }
+            
+            ctx.drawImage(img, 0, 0);
             // Increased quality for print-ready conversion
             const convertedBuf = dataURLtoBuffer(canvas.toDataURL("image/jpeg", 0.98));
             pimg = await doc.embedJpg(convertedBuf);

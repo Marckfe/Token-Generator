@@ -578,22 +578,48 @@ export default function TokenPreviewSinglePtFrame() {
     if (!aiPrompt.trim()) return;
     setIsGeneratingAI(true);
     setMagicPrompt("");
+    
+    const seed = Math.floor(Math.random() * 1000000);
+    
     try {
+      // 1. Try server-side API first
       const resp = await fetch('/api/generate-art', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: aiPrompt })
       });
-      const data = await resp.json();
-      if (data.imageUrl) {
-        setMagicPrompt(data.improvedPrompt);
-        applyState({ ...state, artUrl: data.imageUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
-      } else {
-        alert("Errore generazione: " + (data.error || "Riprova più tardi"));
+      
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.imageUrl) {
+          setMagicPrompt(data.improvedPrompt || "");
+          applyState({ ...state, artUrl: data.imageUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
+          setIsGeneratingAI(false);
+          return;
+        }
       }
+      
+      // 2. Fallback to direct client-side Pollinations call if API fails
+      console.warn("API Fallita, uso fallback diretto...");
+      const directUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(aiPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}`;
+      
+      // Pre-load image to ensure it works
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        applyState({ ...state, artUrl: directUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
+        setIsGeneratingAI(false);
+      };
+      img.onerror = () => {
+        throw new Error("Errore nel caricamento dell'immagine generata.");
+      };
+      img.src = directUrl;
+
     } catch (err) {
-      alert("Errore di connessione al generatore IA");
-    } finally {
+      console.error("AI Generation Error:", err);
+      // Last ditch effort: just set the URL and let the renderer handle it
+      const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(aiPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}`;
+      applyState({ ...state, artUrl: fallbackUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
       setIsGeneratingAI(false);
     }
   };
@@ -1029,15 +1055,16 @@ export default function TokenPreviewSinglePtFrame() {
                   <div className="property-section-title">
                     <Icon d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /> Generatore IA
                   </div>
-                  {!isEnhancing && aiPrompt.trim().length > 0 && aiPrompt.trim().length < 50 && (
+                  {!isEnhancing && aiPrompt.trim().length > 0 && (
                     <button 
-                      className="text-[9px] text-cyan-400 font-bold hover:brightness-125 flex items-center gap-1 bg-cyan-400/10 px-2 py-0.5 rounded-full"
+                      className="enhance-btn-pulse"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleEnhancePrompt();
                       }}
                     >
-                      ✨ OTTIMIZZA
+                      <span className="sparkle-icon">✨</span>
+                      OTTIMIZZA
                     </button>
                   )}
                 </div>

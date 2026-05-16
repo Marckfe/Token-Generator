@@ -12,6 +12,8 @@ export default function PdfSettings({
   setCutMarks,
   bleedPDF,
   setBleedPDF,
+  tonerSave,
+  setTonerSave,
   perPage,
   pages,
   isMobile
@@ -47,6 +49,13 @@ export default function PdfSettings({
           className="custom-checkbox"
         />
         {t('pdf_settings.bleed')}
+      </label>
+      <label className="checkbox-label text-accent">
+        <input
+          type="checkbox" checked={tonerSave} onChange={e => setTonerSave(e.target.checked)}
+          className="custom-checkbox"
+        />
+        {t('pdf_settings.toner_save')}
       </label>
       <div className="settings-summary">
         {t('pdf_settings.summary', { 
