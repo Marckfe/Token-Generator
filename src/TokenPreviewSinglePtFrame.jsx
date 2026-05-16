@@ -489,19 +489,23 @@ export default function TokenPreviewSinglePtFrame() {
   };
   
   const handleEnhancePrompt = async () => {
-    if (!aiPrompt.trim()) return;
+    const currentPrompt = aiPrompt.trim();
+    if (!currentPrompt) return;
+    
     setIsEnhancing(true);
     showToast("Ottimizzazione magica in corso...");
+    
     try {
       const resp = await fetch('/api/improve-prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiPrompt })
+        body: JSON.stringify({ prompt: currentPrompt })
       });
       
       if (resp.ok) {
         const data = await resp.json();
         if (data.improvedPrompt) {
+          console.log("Improved prompt received:", data.improvedPrompt);
           setAiPrompt(data.improvedPrompt);
           showToast("Prompt ottimizzato con successo!");
           setIsEnhancing(false);
@@ -510,14 +514,14 @@ export default function TokenPreviewSinglePtFrame() {
       }
       
       // Local Fallback: simple enhancement if API fails
-      const enhanced = `${aiPrompt}, epic fantasy oil painting, mtg style illustration, highly detailed, cinematic lighting, dramatic composition, professional digital art, hyperrealistic textures, masterpiece.`;
+      const enhanced = `${currentPrompt}, epic fantasy oil painting, mtg style illustration, highly detailed, cinematic lighting, dramatic composition, professional digital art, hyperrealistic textures, masterpiece.`;
+      console.log("Applying local fallback enhancement");
       setAiPrompt(enhanced);
       showToast("Prompt arricchito (modalità locale)");
 
     } catch (err) {
       console.error("Enhance error:", err);
-      // Local Fallback on catch
-      const enhanced = `${aiPrompt}, epic fantasy, mtg style, hyper-detailed illustration.`;
+      const enhanced = `${currentPrompt}, epic fantasy, mtg style, hyper-detailed illustration.`;
       setAiPrompt(enhanced);
       showToast("Prompt arricchito (fallback)");
     } finally {
@@ -608,37 +612,42 @@ export default function TokenPreviewSinglePtFrame() {
     showToast("L'AI sta dipingendo la tua carta...");
     
     const seed = Math.floor(Math.random() * 1000000);
-    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(aiPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}`;
+    const targetPrompt = aiPrompt.trim();
+
+    const processNewArt = (url) => {
+      // Pre-load to avoid empty canvas
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        applyState({ ...state, artUrl: url, artTransform: { zoom: 1, x: 0, y: 0 } });
+        showToast("Artwork pronto!");
+        setIsGeneratingAI(false);
+      };
+      img.onerror = () => {
+        applyState({ ...state, artUrl: url, artTransform: { zoom: 1, x: 0, y: 0 } });
+        setIsGeneratingAI(false);
+      };
+      img.src = url;
+    };
 
     try {
-      // 1. Try server-side API first
       const resp = await fetch('/api/generate-art', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiPrompt })
+        body: JSON.stringify({ prompt: targetPrompt })
       });
       
       if (resp.ok) {
         const data = await resp.json();
         if (data.imageUrl) {
-          applyState({ ...state, artUrl: data.imageUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
-          showToast("Artwork generato!");
-          setIsGeneratingAI(false);
+          processNewArt(data.imageUrl);
           return;
         }
       }
-    } catch (err) {
-      console.warn("API Error, using fallback...");
-    }
+    } catch (err) { }
 
-    // Direct set URL (Most reliable)
-    applyState({ ...state, artUrl: fallbackUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
-    showToast("Artwork generato (fallback)");
-    
-    // Tiny delay to ensure UI reflects state before clearing loader
-    setTimeout(() => {
-      setIsGeneratingAI(false);
-    }, 800);
+    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(targetPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}`;
+    processNewArt(fallbackUrl);
   };
 
   // DRAG LOGIC WITH SMART SNAPPING
@@ -1716,6 +1725,17 @@ export default function TokenPreviewSinglePtFrame() {
                   />
                 ))}
               </div>
+
+              {/* AI GENERATING ANIMATION OVERLAY */}
+              {isGeneratingAI && (
+                <div className="ai-generating-overlay">
+                  <div className="ai-scanner-line" />
+                  <div className="ai-glow-pulse" />
+                  <div className="ai-status-text">
+                    <span className="sparkle-icon">✨</span> CREAZIONE ARTWORK...
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           
