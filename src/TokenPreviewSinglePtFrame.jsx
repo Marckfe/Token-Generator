@@ -489,42 +489,53 @@ export default function TokenPreviewSinglePtFrame() {
   };
   
   const handleEnhancePrompt = async () => {
-    const currentPrompt = aiPrompt.trim();
-    if (!currentPrompt) return;
-    
     setIsEnhancing(true);
-    showToast("Ottimizzazione magica in corso...");
+    showToast("Analisi ed espansione magica...");
     
     try {
-      const resp = await fetch('/api/improve-prompt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: currentPrompt })
-      });
-      
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.improvedPrompt) {
-          console.log("Improved prompt received:", data.improvedPrompt);
-          setAiPrompt(data.improvedPrompt);
-          showToast("Prompt ottimizzato con successo!");
+      // Use functional update to ensure we always have the freshest state
+      setAiPrompt(prev => {
+        const currentVal = prev.trim();
+        if (!currentVal) {
           setIsEnhancing(false);
-          return;
+          return prev;
         }
-      }
-      
-      // Local Fallback: simple enhancement if API fails
-      const enhanced = `${currentPrompt}, epic fantasy oil painting, mtg style illustration, highly detailed, cinematic lighting, dramatic composition, professional digital art, hyperrealistic textures, masterpiece.`;
-      console.log("Applying local fallback enhancement");
-      setAiPrompt(enhanced);
-      showToast("Prompt arricchito (modalità locale)");
+
+        // We wrap the fetch in a IIFE or handle it outside, but let's do it cleaner:
+        (async () => {
+          try {
+            const resp = await fetch('/api/improve-prompt', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prompt: currentVal })
+            });
+            
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data.improvedPrompt) {
+                setAiPrompt(data.improvedPrompt);
+                showToast("Ottimizzazione completata!");
+                return;
+              }
+            }
+            
+            // Fallback inside the async block
+            const enhanced = `${currentVal}, epic fantasy oil painting, mtg style illustration, highly detailed, cinematic lighting, dramatic composition, professional digital art, hyperrealistic textures, masterpiece.`;
+            setAiPrompt(enhanced);
+            showToast("Prompt arricchito con stile MTG");
+          } catch (e) {
+            const enhanced = `${currentVal}, epic fantasy, mtg style, hyper-detailed.`;
+            setAiPrompt(enhanced);
+            showToast("Prompt arricchito (fallback)");
+          } finally {
+            setIsEnhancing(false);
+          }
+        })();
+
+        return prev; // Return original for now, the async will update it
+      });
 
     } catch (err) {
-      console.error("Enhance error:", err);
-      const enhanced = `${currentPrompt}, epic fantasy, mtg style, hyper-detailed illustration.`;
-      setAiPrompt(enhanced);
-      showToast("Prompt arricchito (fallback)");
-    } finally {
       setIsEnhancing(false);
     }
   };
