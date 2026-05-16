@@ -491,17 +491,30 @@ export default function TokenPreviewSinglePtFrame() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: aiPrompt })
       });
-      const data = await resp.json();
-      if (data.improvedPrompt) {
-        setAiPrompt(data.improvedPrompt);
+      
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.improvedPrompt) {
+          setAiPrompt(data.improvedPrompt);
+          setIsEnhancing(false);
+          return;
+        }
       }
+      
+      // Local Fallback: simple enhancement if API fails
+      const enhanced = `${aiPrompt}, epic fantasy oil painting, mtg style illustration, highly detailed, cinematic lighting, dramatic composition, professional digital art, hyperrealistic textures, masterpiece.`;
+      setAiPrompt(enhanced);
+
     } catch (err) {
       console.error("Enhance error:", err);
+      // Local Fallback on catch
+      const enhanced = `${aiPrompt}, epic fantasy, mtg style, hyper-detailed illustration.`;
+      setAiPrompt(enhanced);
     } finally {
       setIsEnhancing(false);
     }
   };
-  
+
   const canvasRef = useRef(null);
   const dragRef = useRef(null);
 
@@ -553,6 +566,11 @@ export default function TokenPreviewSinglePtFrame() {
     }
   };
 
+  const [artSearchQuery, setArtSearchQuery] = useState("");
+  const [isSearchingArt, setIsSearchingArt] = useState(false);
+  const [artSearchResults, setArtSearchResults] = useState([]);
+  const [artSearchStatus, setArtSearchStatus] = useState("idle");
+
   const handleArtSearch = async () => {
     if (!artSearchQuery.trim()) return;
     setIsSearchingArt(true);
@@ -580,7 +598,8 @@ export default function TokenPreviewSinglePtFrame() {
     setMagicPrompt("");
     
     const seed = Math.floor(Math.random() * 1000000);
-    
+    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(aiPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}`;
+
     try {
       // 1. Try server-side API first
       const resp = await fetch('/api/generate-art', {
@@ -598,30 +617,17 @@ export default function TokenPreviewSinglePtFrame() {
           return;
         }
       }
-      
-      // 2. Fallback to direct client-side Pollinations call if API fails
-      console.warn("API Fallita, uso fallback diretto...");
-      const directUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(aiPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}`;
-      
-      // Pre-load image to ensure it works
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        applyState({ ...state, artUrl: directUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
-        setIsGeneratingAI(false);
-      };
-      img.onerror = () => {
-        throw new Error("Errore nel caricamento dell'immagine generata.");
-      };
-      img.src = directUrl;
-
     } catch (err) {
-      console.error("AI Generation Error:", err);
-      // Last ditch effort: just set the URL and let the renderer handle it
-      const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(aiPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}`;
-      applyState({ ...state, artUrl: fallbackUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
-      setIsGeneratingAI(false);
+      console.warn("API Error, using fallback...");
     }
+
+    // Direct set URL (Most reliable)
+    applyState({ ...state, artUrl: fallbackUrl, artTransform: { zoom: 1, x: 0, y: 0 } });
+    
+    // Tiny delay to ensure UI reflects state before clearing loader
+    setTimeout(() => {
+      setIsGeneratingAI(false);
+    }, 500);
   };
 
   // DRAG LOGIC WITH SMART SNAPPING
