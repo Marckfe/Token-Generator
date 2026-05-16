@@ -46,7 +46,7 @@ export async function generatePDF({ images, printCols, printRows, printGap, cutM
           let dataUrl;
           if (item.dataUrl) dataUrl = item.dataUrl;
           else if (item.file) dataUrl = await fileToDataURL(item.file);
-          else if (item.url) dataUrl = await imgToDataURL(item.url);
+          else if (item.printUrl || item.url) dataUrl = await imgToDataURL(item.printUrl || item.url);
           else throw new Error("Nessuna sorgente immagine");
           
           const buf = dataURLtoBuffer(dataUrl);

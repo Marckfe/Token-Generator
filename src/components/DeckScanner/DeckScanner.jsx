@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { 
   Loader2, Trash2, HelpCircle, 
   ShieldCheck, Printer, CheckCircle2, XCircle, Cloud, Save,
@@ -8,18 +8,21 @@ import './DeckScanner.css';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { saveUserDeck } from '../../services/dbService';
+import { getScryfallPreviewUri, getScryfallPrintUri } from '../../utils/scryfallImages';
 
 const basicLands = ['island', 'swamp', 'mountain', 'forest', 'plains', 'wastes'];
 
 // ── Sub-component: single card result ──────────────────────────────────
-const ResultCard = ({ card, onUpdateQty, onRemove }) => (
+const ResultCard = memo(function ResultCard({ card, onUpdateQty, onRemove }) {
+  return (
   <div className={`sc-card ${card.status}`}>
     <div className="sc-card-thumb">
       {card.status === 'found' ? (
         <img
-          src={card.data?.image_uris?.normal || card.data?.card_faces?.[0]?.image_uris?.normal}
+          src={getScryfallPreviewUri(card.data)}
           alt={card.name}
           loading="lazy"
+          decoding="async"
         />
       ) : (
         <div className="sc-card-placeholder">
@@ -45,7 +48,8 @@ const ResultCard = ({ card, onUpdateQty, onRemove }) => (
       </div>
     </div>
   </div>
-);
+  );
+});
 
 // ── Sub-component: section header ──────────────────────────────────────
 const SectionHeader = ({ icon, label, count }) => (
@@ -232,15 +236,21 @@ const DeckScanner = ({ onAddToQueue, onValidateDeck }) => {
   // ── Queue actions ──────────────────────────────────────────────────
   const handleAddToQueue = () => {
     const valid = results.filter(c => c.status === 'found');
-    onAddToQueue(valid.map(c => ({
-      id: c.data.id + '_' + Math.random(),
-      name: c.data.name,
-      qty: c.qty,
-      url: c.data.image_uris?.normal || c.data.card_faces?.[0]?.image_uris?.normal,
-      thumb: c.data.image_uris?.small || c.data.card_faces?.[0]?.image_uris?.small,
-      srcType: 'scryfall',
-      set: c.data.set_name
-    })));
+    onAddToQueue(valid.map(c => {
+      const previewUrl = getScryfallPreviewUri(c.data);
+      const printUrl = getScryfallPrintUri(c.data);
+      return {
+        id: c.data.id + '_' + Math.random(),
+        name: c.data.name,
+        qty: c.qty,
+        url: previewUrl || printUrl,
+        previewUrl: previewUrl || printUrl,
+        printUrl: printUrl || previewUrl,
+        thumb: previewUrl || printUrl,
+        srcType: 'scryfall',
+        set: c.data.set_name,
+      };
+    }));
   };
 
   // ── Validate & send to DeckChecker ────────────────────────────────
@@ -253,9 +263,9 @@ const DeckScanner = ({ onAddToQueue, onValidateDeck }) => {
   };
 
   // ── Derived state ──────────────────────────────────────────────────
-  const updateCardQty = (id, qty) =>
-    setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, qty) } : c));
-  const removeCard = (id) => setResults(prev => prev.filter(c => c.id !== id));
+  const updateCardQty = useCallback((id, qty) =>
+    setResults(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, qty) } : c)), []);
+  const removeCard = useCallback((id) => setResults(prev => prev.filter(c => c.id !== id)), []);
 
   const mainCards = results.filter(r => !r.isSide);
   const sideCards = results.filter(r => r.isSide);

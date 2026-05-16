@@ -78,12 +78,12 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
     toast(t('proxy.toast_loaded', { count: arr.length }));
   }, [toast, t]);
 
-  const onDrop = e => {
+  const onDrop = useCallback((e) => {
     e.preventDefault(); setIsDrop(false);
     if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files);
-  };
+  }, [handleFiles]);
 
-  const reorder = toIdx => {
+  const reorder = useCallback((toIdx) => {
     if (dragIdx === null || dragIdx === toIdx) return;
     setImages(prev => {
       const a = [...prev];
@@ -92,17 +92,17 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
       return a;
     });
     setDragIdx(toIdx);
-  };
+  }, [dragIdx]);
 
-  const remove = idx => {
+  const remove = useCallback((idx) => {
     setImages(prev => {
       if (prev[idx].file) URL.revokeObjectURL(prev[idx].url);
       return prev.filter((_, i) => i !== idx);
     });
     toast(t('proxy.toast_removed'), "w");
-  };
+  }, [toast, t]);
 
-  const dup = idx => {
+  const dup = useCallback((idx) => {
     setImages(prev => {
       const d = { ...prev[idx], id: Date.now() + Math.random() };
       const a = [...prev];
@@ -110,23 +110,23 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
       return a;
     });
     toast(t('proxy.toast_duplicated'));
-  };
+  }, [toast, t]);
 
-  const clearAll = () => {
+  const clearAll = useCallback(() => {
     images.forEach(img => { if (img.file) URL.revokeObjectURL(img.url); });
     setImages([]); setConfirmOpen(false); toast(t('proxy.toast_all_removed'), "w");
-  };
+  }, [images, toast, t]);
 
-  const batchDuplicate = () => {
+  const batchDuplicate = useCallback(() => {
     if (!images.length) return;
     setImages(prev => {
       const cloned = prev.map(img => ({ ...img, id: Date.now() + Math.random() + "_" + img.id }));
       return [...prev, ...cloned];
     });
     toast(t('proxy.toast_doubled'));
-  };
+  }, [images.length, toast, t]);
 
-  const batchResetToOne = () => {
+  const batchResetToOne = useCallback(() => {
     if (!images.length) return;
     setImages(prev => {
       const seen = new Set();
@@ -138,7 +138,24 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
       });
     });
     toast(t('proxy.toast_reduced'));
-  };
+  }, [images.length, toast, t]);
+
+  const handleAddCards = useCallback((cards) => {
+    setImages(prev => [...prev, ...cards]);
+    toast(t('proxy.toast_loaded', {
+      count: cards.length,
+      suffix: cards.length === 1
+        ? (lang === 'it' ? 'copia' : 'copy')
+        : (lang === 'it' ? 'copie' : 'copies'),
+    }));
+  }, [toast, t, lang]);
+
+  const handleCloudImport = useCallback((text) => {
+    setBulkInitialText(text);
+    setDbType('bulk');
+  }, []);
+
+  const handleClearBulkInitial = useCallback(() => setBulkInitialText(""), []);
 
   const perPage = printCols * printRows;
   const pages = Math.max(1, Math.ceil(images.length / perPage));
@@ -180,7 +197,8 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
       a.click();
       toast(t('proxy.toast_pdf_success'));
     } catch (e) {
-      console.error(e); toast(t('proxy.toast_pdf_error', { error: e.message }), "e");
+      if (import.meta.env.DEV) console.error(e);
+      toast(t('proxy.toast_pdf_error', { error: e.message }), "e");
     } finally { setIsGen(false); }
   };
 
@@ -256,39 +274,18 @@ export default function ProxyCreatorMain({ isMobile, externalQueue, setExternalQ
           <input type="file" ref={inputRef} style={{ display: "none" }} multiple onChange={e => handleFiles(e.target.files)} accept="image/*" />
           
           {dbType === 'single' && (
-            <CardSearchPanel onAddCards={cards => { 
-              setImages(prev => [...prev, ...cards]); 
-              toast(t('proxy.toast_loaded', { 
-                count: cards.length,
-                suffix: cards.length === 1 
-                  ? (lang === 'it' ? 'copia' : 'copy') 
-                  : (lang === 'it' ? 'copie' : 'copies')
-              })); 
-            }} />
+            <CardSearchPanel onAddCards={handleAddCards} />
           )}
           {dbType === 'bulk' && (
-            <BulkImportPanel 
-              onAddCards={cards => { 
-                setImages(prev => [...prev, ...cards]); 
-                toast(t('proxy.toast_loaded', { 
-                  count: cards.length,
-                  suffix: cards.length === 1 
-                    ? (lang === 'it' ? 'copia' : 'copy') 
-                    : (lang === 'it' ? 'copie' : 'copies')
-                })); 
-              }} 
-              toast={toast} 
+            <BulkImportPanel
+              onAddCards={handleAddCards}
+              toast={toast}
               initialText={bulkInitialText}
-              onClearInitial={() => setBulkInitialText("")}
+              onClearInitial={handleClearBulkInitial}
             />
           )}
           {dbType === 'cloud' && (
-            <CloudDeckPanel onImport={(text) => { setDbType('bulk'); /* Indirectly use BulkImportPanel's logic? No, better use a direct method if possible */ 
-              // We'll set the bulk tab active with the text. But BulkImportPanel needs to handle it.
-              // Let's pass the text to BulkImportPanel.
-              setBulkInitialText(text);
-              setDbType('bulk');
-            }} toast={toast} />
+            <CloudDeckPanel onImport={handleCloudImport} toast={toast} />
           )}
         </div>
       </div>

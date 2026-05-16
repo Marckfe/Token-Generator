@@ -27,8 +27,8 @@ setLogLevel('debug');
 
 // Test di connettività iniziale
 enableNetwork(db)
-  .then(() => console.log(">>> [Firestore] Rete abilitata correttamente"))
-  .catch(err => console.error(">>> [Firestore] Errore abilitazione rete:", err));
+  .then(() => { if (import.meta.env.DEV) console.log(">>> [Firestore] Rete abilitata correttamente"); })
+  .catch(err => { if (import.meta.env.DEV) console.error(">>> [Firestore] Errore abilitazione rete:", err); });
 
 export const googleProvider = new GoogleAuthProvider();
 

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useLanguage } from "../../context/LanguageContext";
+import LazyInView from "../common/LazyInView";
 
 export default function PrintQueue({
   images,
@@ -25,40 +26,53 @@ export default function PrintQueue({
     );
   }
 
+  const gridStyle = {
+    gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 80 : 100}px, 1fr))`,
+    maxHeight: images.length > 30 ? "min(70vh, 900px)" : undefined,
+    overflowY: images.length > 30 ? "auto" : undefined,
+  };
+
   return (
-    <div
-      className="print-queue-grid"
-      style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 80 : 100}px, 1fr))` }}
-    >
+    <div className="print-queue-grid" style={gridStyle}>
       {images.map((img, idx) => (
-        <div
+        <LazyInView
           key={img.id}
-          draggable
-          onDragStart={() => { setDragIdx(idx); setDropTargetIdx(null); }}
-          onDragOver={e => { e.preventDefault(); setDropTargetIdx(idx); onReorder(idx); }}
-          onDragEnd={() => { setDragIdx(null); setDropTargetIdx(null); }}
-          className={`queue-card ${dragIdx === idx ? 'dragging' : ''} ${dropTargetIdx === idx && dragIdx !== idx ? 'drop-target' : ''}`}
+          listLength={images.length}
+          minHeight={isMobile ? 112 : 140}
         >
-          <img src={img.url} alt={img.name || t('common.name')} className="queue-card-img" />
+          <div
+            draggable
+            onDragStart={() => { setDragIdx(idx); setDropTargetIdx(null); }}
+            onDragOver={e => { e.preventDefault(); setDropTargetIdx(idx); onReorder(idx); }}
+            onDragEnd={() => { setDragIdx(null); setDropTargetIdx(null); }}
+            className={`queue-card ${dragIdx === idx ? 'dragging' : ''} ${dropTargetIdx === idx && dragIdx !== idx ? 'drop-target' : ''}`}
+          >
+            <img
+              src={img.thumb || img.previewUrl || img.url}
+              alt={img.name || t('common.name')}
+              className="queue-card-img"
+              loading="lazy"
+              decoding="async"
+            />
 
-          {/* Drop placeholder line indicator */}
-          {dropTargetIdx === idx && dragIdx !== null && dragIdx !== idx && (
-            <div className="drop-placeholder-line" />
-          )}
+            {dropTargetIdx === idx && dragIdx !== null && dragIdx !== idx && (
+              <div className="drop-placeholder-line" />
+            )}
 
-          <div className="card-overlay">
-            <button title={t('common.duplicate')} onClick={e => { e.stopPropagation(); onDup(idx); }} className="overlay-btn">
-              ⧉ {t('common.duplicate')}
-            </button>
-            <button title={t('common.remove')} onClick={e => { e.stopPropagation(); onRemove(idx); }} className="overlay-btn danger">
-              ✕ {t('common.remove')}
-            </button>
+            <div className="card-overlay">
+              <button type="button" title={t('common.duplicate')} onClick={e => { e.stopPropagation(); onDup(idx); }} className="overlay-btn">
+                ⧉ {t('common.duplicate')}
+              </button>
+              <button type="button" title={t('common.remove')} onClick={e => { e.stopPropagation(); onRemove(idx); }} className="overlay-btn danger">
+                ✕ {t('common.remove')}
+              </button>
+            </div>
+
+            {img.srcType === "scryfall" && img.name && (
+              <div className="card-name-label">{img.name}</div>
+            )}
           </div>
-
-          {img.srcType === "scryfall" && img.name && (
-            <div className="card-name-label">{img.name}</div>
-          )}
-        </div>
+        </LazyInView>
       ))}
     </div>
   );

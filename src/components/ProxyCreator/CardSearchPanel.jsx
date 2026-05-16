@@ -1,20 +1,23 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { fetchSuggestions } from "../../utils/scryfallApi";
+import { getScryfallPreviewUri, getScryfallPrintUri } from "../../utils/scryfallImages";
 import { useLanguage } from "../../context/LanguageContext";
+
+const SUGG_DEBOUNCE_MS = 400;
 
 function PrintGrid({ prints, selected, onToggle, onQty }) {
   if (!prints.length) return null;
   return (
     <div className="print-grid">
       {prints.map(card => {
-        const thumb = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small;
+        const thumb = getScryfallPreviewUri(card);
         const isOn = !!selected[card.id];
         const artist = card.artist || "";
         const yr = card.released_at?.slice(0, 4) || "";
         const border = card.border_color === "borderless" ? "🔲" : card.frame_effects?.includes("extendedart") ? "🖼" : "";
         return (
           <div key={card.id} onClick={() => onToggle(card)} className={`print-card ${isOn ? "selected" : ""}`}>
-            <img src={thumb} alt={card.name} />
+            <img src={thumb} alt={card.name} loading="lazy" decoding="async" />
             <div className="print-info">
               <div className="print-set">{border}{card.set_name} {yr && `'${yr.slice(2)}`}</div>
               <div className="print-artist">{artist}</div>
@@ -46,30 +49,39 @@ export default function CardSearchPanel({ onAddCards }) {
   const [error, setError] = useState("");
   const [selected, setSelected] = useState({});
   const [expandedName, setExpandedName] = useState(null);
-  const suggTimer = useRef(null);
+  const suggTimerRef = useRef(null);
 
-  const fetchSuggs = (val) => {
-    clearTimeout(suggTimer.current);
-    if (val.length < 2) { setSuggs([]); return; }
-    setLdSugg(true);
-    suggTimer.current = setTimeout(async () => {
-      const s = await fetchSuggestions(val);
-      setSuggs(s);
+  useEffect(() => () => clearTimeout(suggTimerRef.current), []);
+
+  const scheduleSuggestions = useCallback((val) => {
+    clearTimeout(suggTimerRef.current);
+    if (val.length < 2) {
+      setSuggs([]);
       setLdSugg(false);
-    }, 220);
-  };
+      return;
+    }
+    setLdSugg(true);
+    suggTimerRef.current = setTimeout(async () => {
+      try {
+        const s = await fetchSuggestions(val);
+        setSuggs(s);
+      } finally {
+        setLdSugg(false);
+      }
+    }, SUGG_DEBOUNCE_MS);
+  }, []);
 
-  const handleInput = (val) => {
+  const handleInput = useCallback((val) => {
     setQuery(val);
     setShowSugg(true);
     setPrints([]);
     setError("");
     setSelected({});
     setExpandedName(null);
-    fetchSuggs(val);
-  };
+    scheduleSuggestions(val);
+  }, [scheduleSuggestions]);
 
-  const searchCard = async (name) => {
+  const searchCard = useCallback(async (name) => {
     setQuery(name); setShowSugg(false); setSuggs([]);
     setLoading(true); setLoadMsg("Cerco carte…"); setPrints([]);
     setError(""); setSelected({}); setExpandedName(null);
@@ -126,12 +138,12 @@ export default function CardSearchPanel({ onAddCards }) {
       else setLoadMsg(`${all.length} stampe totali`);
     } catch (e) { setError("Errore di rete: " + e.message); }
     setLoading(false);
-  };
+  }, []);
 
-  const handleKey = (e) => {
+  const handleKey = useCallback((e) => {
     if (e.key === "Enter" && query.trim()) searchCard(query.trim());
     if (e.key === "Escape") setShowSugg(false);
-  };
+  }, [query, searchCard]);
 
   const grouped = useMemo(() => {
     const map = {};
@@ -143,45 +155,39 @@ export default function CardSearchPanel({ onAddCards }) {
   }, [prints]);
   const cardNames = Object.keys(grouped);
 
-  const togglePrint = (card) =>
+  const togglePrint = useCallback((card) =>
     setSelected(prev => prev[card.id]
       ? (() => { const n = { ...prev }; delete n[card.id]; return n; })()
       : { ...prev, [card.id]: { qty: 1, card } }
-    );
+    ), []);
 
-  const setQty = (id, v) =>
-    setSelected(prev => ({ ...prev, [id]: { ...prev[id], qty: Math.max(1, Math.min(20, Number(v))) } }));
+  const setQty = useCallback((id, v) =>
+    setSelected(prev => ({ ...prev, [id]: { ...prev[id], qty: Math.max(1, Math.min(20, Number(v))) } })), []);
 
-  const addSelected = async () => {
+  const addSelected = useCallback(async () => {
     const entries = Object.values(selected);
     if (!entries.length) return;
     const items = [];
     for (const { card, qty } of entries) {
-      // Prioritize High-Resolution for Printing (Large or PNG)
-      const imgUrl = card.image_uris?.large || card.image_uris?.png || card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.large;
-      if (!imgUrl) continue;
-      try {
-        const blob = await fetch(imgUrl).then(r => r.blob());
-        const lu = URL.createObjectURL(blob);
-        const file = new File([blob], `${card.name}.jpg`, { type: blob.type });
-        for (let i = 0; i < qty; i++) {
-          items.push({
-            id: card.id + "_" + i + "_" + Math.random(), name: card.name, url: lu, file, srcType: "scryfall",
-            thumb: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small, set: card.set_name
-          });
-        }
-      } catch {
-        for (let i = 0; i < qty; i++) {
-          items.push({
-            id: card.id + "_" + i + "_" + Math.random(), name: card.name, url: imgUrl, srcType: "scryfall",
-            thumb: card.image_uris?.small
-          });
-        }
+      const previewUrl = getScryfallPreviewUri(card);
+      const printUrl = getScryfallPrintUri(card);
+      if (!previewUrl && !printUrl) continue;
+      for (let i = 0; i < qty; i++) {
+        items.push({
+          id: card.id + "_" + i + "_" + Math.random(),
+          name: card.name,
+          url: previewUrl || printUrl,
+          previewUrl: previewUrl || printUrl,
+          printUrl: printUrl || previewUrl,
+          srcType: "scryfall",
+          thumb: previewUrl || printUrl,
+          set: card.set_name,
+        });
       }
     }
     onAddCards(items);
     setSelected({}); setPrints([]); setQuery(""); setSuggs([]);
-  };
+  }, [onAddCards, selected]);
 
   const selCount = Object.values(selected).reduce((a, { qty }) => a + qty, 0);
   const selPrints = Object.keys(selected).length;
@@ -244,7 +250,7 @@ export default function CardSearchPanel({ onAddCards }) {
               const cardPrints = grouped[cardName];
               const isExp = expandedName === cardName;
               const rep = cardPrints[0];
-              const repThumb = rep.image_uris?.small || rep.card_faces?.[0]?.image_uris?.small;
+              const repThumb = getScryfallPreviewUri(rep);
               const selForCard = cardPrints.filter(p => selected[p.id]);
               const totalQtyForCard = selForCard.reduce((s, p) => s + (selected[p.id]?.qty || 0), 0);
 
@@ -254,7 +260,7 @@ export default function CardSearchPanel({ onAddCards }) {
               return (
                 <div key={cardName} className="card-group">
                   <div onClick={() => setExpandedName(isExp ? null : cardName)} className={`card-group-header ${isExp ? 'expanded' : ''}`}>
-                    <img src={repThumb} alt={cardName} />
+                    <img src={repThumb} alt={cardName} loading="lazy" decoding="async" />
                     <div className="card-group-info">
                       <div className="card-group-title">{cardName}</div>
                       <div className="card-group-meta">

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { getScryfallPreviewUri, getScryfallPrintUri } from '../../utils/scryfallImages';
 import { jsPDF } from 'jspdf';
 import {
   ShieldCheck, AlertTriangle, FileText, Download,
@@ -298,7 +299,7 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
 
       setResults(verdict);
     } catch (e) {
-      console.error(e);
+      if (import.meta.env.DEV) console.error(e);
       alert(e.message || "Errore durante la verifica");
     }
     setChecking(false);
@@ -462,16 +463,19 @@ export default function DeckChecker({ onAddToQueue, initialDeck }) {
       try {
         const res = await fetch(`https://api.scryfall.com/cards/named?exact=${encodeURIComponent(card.name)}`);
         const data = await res.json();
-        const img = data.image_uris?.normal || data.card_faces?.[0]?.image_uris?.normal;
-        if (!img) continue;
+        const previewUrl = getScryfallPreviewUri(data);
+        const printUrl = getScryfallPrintUri(data);
+        if (!previewUrl && !printUrl) continue;
         for (let i = 0; i < card.qty; i++) {
           items.push({
             id: `${data.id}_${i}_${Math.random()}`,
             name: data.name,
-            url: img,
-            thumb: data.image_uris?.small || data.card_faces?.[0]?.image_uris?.small,
+            url: previewUrl || printUrl,
+            previewUrl: previewUrl || printUrl,
+            printUrl: printUrl || previewUrl,
+            thumb: previewUrl || printUrl,
             srcType: 'scryfall',
-            set: data.set_name
+            set: data.set_name,
           });
         }
       } catch { /* ignore */ }

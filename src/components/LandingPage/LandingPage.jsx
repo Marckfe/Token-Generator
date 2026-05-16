@@ -14,7 +14,7 @@ const LandingPage = () => {
       setError(null);
       await login();
     } catch (err) {
-      console.error("Login Error:", err);
+      if (import.meta.env.DEV) console.error("Login Error:", err);
       if (err.code === 'auth/popup-blocked') {
         alert(t('landing.popup_blocked'));
       } else if (err.code === 'auth/unauthorized-domain') {

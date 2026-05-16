@@ -46,13 +46,14 @@ export default async function handler(req, res) {
       finalPrompt = improveData.candidates?.[0]?.content?.parts?.[0]?.text || prompt;
     }
 
-    // 2. GENERATION LOGIC - Use Pollinations.ai as a FREE fallback
-    const generatedUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
+    // 2. GENERATION LOGIC - Use Pollinations.ai with FLUX and Card Ratio (5:7)
+    const seed = Math.floor(Math.random() * 1000000);
+    const generatedUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=1600&height=2240&nologo=true&seed=${seed}&model=flux&enhance=true`;
     
     return res.status(200).json({
       imageUrl: generatedUrl,
       improvedPrompt: finalPrompt,
-      provider: 'Pollinations (Free)'
+      provider: 'Pollinations Flux (Elite)'
     });
 
   } catch (e) {

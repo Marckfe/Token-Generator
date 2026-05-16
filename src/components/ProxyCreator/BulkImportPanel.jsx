@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { fetchAllPrints } from "../../utils/scryfallApi";
+import { getScryfallPreviewUri, getScryfallPrintUri } from "../../utils/scryfallImages";
 import { useLanguage } from "../../context/LanguageContext";
+import LazyInView from "../common/LazyInView";
 
 const LANGUAGES = [
   { code: 'en', name: 'Inglese' },
@@ -131,14 +133,14 @@ export default function BulkImportPanel({ onAddCards, toast, initialText = "", o
       const all = await fetchAllPrints(name, lang);
       setEntries(prev => prev.map((e, i) => i === idx ? { ...e, prints: all, lang: lang } : e));
     } catch (e) {
-      console.error(e);
+      if (import.meta.env.DEV) console.error(e);
     }
     setLoadMsg("");
   };
 
-  const updateQty = (i, val) => setEntries(prev => prev.map((e, idx) => idx === i ? { ...e, qty: Math.max(1, Math.min(100, Number(val))) } : e));
-  const toggleExclude = (i) => setEntries(prev => prev.map((e, idx) => idx === i ? { ...e, excluded: !e.excluded } : e));
-  const selectPrint = (entryIdx, card) => setEntries(prev => prev.map((e, i) => i === entryIdx ? { ...e, selectedPrint: card, card } : e));
+  const updateQty = useCallback((i, val) => setEntries(prev => prev.map((e, idx) => idx === i ? { ...e, qty: Math.max(1, Math.min(100, Number(val))) } : e)), []);
+  const toggleExclude = useCallback((i) => setEntries(prev => prev.map((e, idx) => idx === i ? { ...e, excluded: !e.excluded } : e)), []);
+  const selectPrint = useCallback((entryIdx, card) => setEntries(prev => prev.map((e, i) => i === entryIdx ? { ...e, selectedPrint: card, card } : e)), []);
 
   const addAll = async () => {
     const toAdd = entries.filter(e => e.status === "found" && !e.excluded);
@@ -150,16 +152,19 @@ export default function BulkImportPanel({ onAddCards, toast, initialText = "", o
       const chunk = toAdd.slice(i, i + 10);
       await Promise.all(chunk.map(async (entry) => {
         const card = entry.selectedPrint || entry.card;
-        // Prioritize High-Resolution for Printing (Large or PNG)
-        const imgUrl = card.image_uris?.large || card.image_uris?.png || card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.large;
-        if (!imgUrl) return;
-        try {
-          const blob = await fetch(imgUrl).then(r => r.blob());
-          const lu = URL.createObjectURL(blob);
-          const file = new File([blob], `${card.name}.jpg`, { type: blob.type });
-          for (let j = 0; j < entry.qty; j++) items.push({ id: card.id + "_" + j + "_" + Math.random(), name: card.name, url: lu, file, srcType: "provider", thumb: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small });
-        } catch {
-          for (let j = 0; j < entry.qty; j++) items.push({ id: card.id + "_" + j + "_" + Math.random(), name: card.name, url: imgUrl, srcType: "provider", thumb: card.image_uris?.small });
+        const previewUrl = getScryfallPreviewUri(card);
+        const printUrl = getScryfallPrintUri(card);
+        if (!previewUrl && !printUrl) return;
+        for (let j = 0; j < entry.qty; j++) {
+          items.push({
+            id: card.id + "_" + j + "_" + Math.random(),
+            name: card.name,
+            url: previewUrl || printUrl,
+            previewUrl: previewUrl || printUrl,
+            printUrl: printUrl || previewUrl,
+            srcType: "scryfall",
+            thumb: previewUrl || printUrl,
+          });
         }
         completed++;
         setLoadMsg(`Scarico immagini: ${completed}/${toAdd.length}`);
@@ -238,18 +243,22 @@ export default function BulkImportPanel({ onAddCards, toast, initialText = "", o
             <span className="text-muted text-xs ml-auto">Clicca "Scegli art" per selezionare la stampa preferita</span>
           </div>
 
-          <div className="bulk-list-container">
+          <div
+            className="bulk-list-container"
+            style={entries.length > 30 ? { maxHeight: "min(70vh, 900px)", overflowY: "auto" } : undefined}
+          >
             {entries.map((entry, i) => {
-              const thumb = (entry.selectedPrint || entry.card)?.image_uris?.small || (entry.selectedPrint || entry.card)?.card_faces?.[0]?.image_uris?.small;
+              const thumb = getScryfallPreviewUri(entry.selectedPrint || entry.card);
               let rowClass = "bulk-row";
               if (entry.excluded) rowClass += " excluded";
               else if (entry.status === "found") rowClass += " found";
               else rowClass += " not-found";
               return (
-                <div key={i} className={`bulk-item-wrapper ${entry.excluded ? 'excluded' : entry.status === 'found' ? 'found' : 'not-found'}`}>
+                <LazyInView key={i} listLength={entries.length} minHeight={88}>
+                <div className={`bulk-item-wrapper ${entry.excluded ? 'excluded' : entry.status === 'found' ? 'found' : 'not-found'}`}>
                   <div className={rowClass}>
                     {thumb ? (
-                      <img src={thumb} alt={entry.name} className="bulk-thumb" />
+                      <img src={thumb} alt={entry.name} className="bulk-thumb" loading="lazy" decoding="async" />
                     ) : (
                       <div className="bulk-thumb-placeholder">{entry.status === "not_found" ? "❓" : "⚠️"}</div>
                     )}
@@ -279,6 +288,7 @@ export default function BulkImportPanel({ onAddCards, toast, initialText = "", o
                     </div>
                   )}
                 </div>
+                </LazyInView>
               );
             })}
           </div>
@@ -328,11 +338,11 @@ export default function BulkImportPanel({ onAddCards, toast, initialText = "", o
                                 <div className="card-group-label">{cardName}</div>
                                 <div className="print-grid">
                                   {cardPrints.map(card => {
-                                    const t = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small;
+                                    const t = getScryfallPreviewUri(card);
                                     const isSel = (entry.selectedPrint || entry.card)?.id === card.id;
                                     return (
                                       <div key={card.id} onClick={() => { selectPrint(expandedArt, card); setExpandedArt(null); }} className={`print-card ${isSel ? "selected" : ""}`}>
-                                        <img src={t} alt={card.name} />
+                                        <img src={t} alt={card.name} loading="lazy" decoding="async" />
                                         <div className="print-info">
                                           <div className="print-set">{card.set_name} {card.released_at?.slice(2, 4) && `'${card.released_at.slice(2, 4)}`}</div>
                                           <div className="print-artist">{card.artist}</div>

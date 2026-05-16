@@ -3,7 +3,7 @@ import "./TokenCreator.css";
 import { useLanguage } from "./context/LanguageContext";
 import { useAuth } from "./context/AuthContext";
 import { saveUserToken, getUserTokens, deleteUserToken } from "./services/dbService";
-import { Cloud, Save, Trash2, Loader2 } from "lucide-react";
+import { Cloud, Save, Trash2, Loader2, Check } from "lucide-react";
 
 const ALL_FRAME_SETS = import.meta.glob(
   "/src/assets/frames/masterframes/*/*.{png,jpg,jpeg,webp,svg}",
@@ -458,16 +458,10 @@ const TOKEN_TEMPLATES = [
   { id: 'soldier',  name: 'Soldato',   icon: '🛡️', type: 'Token Creature — Soldier',  ability: '', pt: { power: '1', toughness: '1' },                       frame: 'tokenFrameWShort', ptFrame: 'm15PTW', frameSet: 'tokenshort', showPT: true  },
 ];
 
-export default function TokenPreviewSinglePtFrame({ state: externalState, onStateChange }) {
+export default function TokenPreviewSinglePtFrame() {
   const { t } = useLanguage();
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 900);
-  const [internalState, setInternalState] = useState(DEFAULT_STATE);
-  const state = externalState ?? internalState;
-
-  const commitState = useCallback((next) => {
-    if (onStateChange) onStateChange(next);
-    else setInternalState(next);
-  }, [onStateChange]);
+  const [state, setState] = useState(DEFAULT_STATE);
   const [history, setHistory] = useState([cloneState(DEFAULT_STATE)]);
   const [historyIdx, setHistoryIdx] = useState(0);
   
@@ -509,21 +503,22 @@ export default function TokenPreviewSinglePtFrame({ state: externalState, onStat
       let finalPrompt = "";
       if (resp.ok) {
         const data = await resp.json();
-        finalPrompt = (data.improvedPrompt || "").trim();
-      }
       if (!finalPrompt) {
         finalPrompt = `${currentVal}, epic fantasy oil painting, mtg style illustration, highly detailed, cinematic lighting, dramatic composition, professional digital art, hyperrealistic textures, masterpiece.`;
-        showToast(resp.ok ? "Prompt arricchito con stile MTG" : "Prompt arricchito (fallback locale)");
-      } else {
-        showToast("Prompt ottimizzato dall'AI");
+        showToast("Prompt arricchito con stile MTG");
       }
 
-      applyState({ ...state, aiPrompt: finalPrompt });
+      // ULTIMATE SYNC: use setState functional update to be 100% sure
+      setState(prev => {
+        const newState = { ...prev, aiPrompt: finalPrompt };
+        pushHistory(newState);
+        return newState;
+      });
 
     } catch (e) {
-      if (import.meta.env.DEV) console.error("Enhance error:", e);
+      console.error("Enhance error:", e);
       const fallback = `${currentVal}, epic fantasy, mtg style, hyper-detailed.`;
-      applyState({ ...state, aiPrompt: fallback });
+      setState(prev => ({ ...prev, aiPrompt: fallback }));
       showToast("Prompt arricchito (fallback)");
     } finally {
       setIsEnhancing(false);
@@ -558,9 +553,9 @@ export default function TokenPreviewSinglePtFrame({ state: externalState, onStat
   }, [historyIdx]);
 
   const applyState = useCallback((next, commit = true) => {
-    commitState(next);
+    setState(next);
     if (commit) pushHistory(next);
-  }, [commitState, pushHistory]);
+  }, [pushHistory]);
 
   const update = useCallback((key, patch) => {
     const next = { ...state, [key]: { ...state[key], ...patch } };
@@ -569,17 +564,15 @@ export default function TokenPreviewSinglePtFrame({ state: externalState, onStat
 
   const undo = () => {
     if (historyIdx > 0) {
-      const newIdx = historyIdx - 1;
-      setHistoryIdx(newIdx);
-      commitState(history[newIdx]);
+      setHistoryIdx(i => i - 1);
+      setState(history[historyIdx - 1]);
     }
   };
 
   const redo = () => {
     if (historyIdx < history.length - 1) {
-      const newIdx = historyIdx + 1;
-      setHistoryIdx(newIdx);
-      commitState(history[newIdx]);
+      setHistoryIdx(i => i + 1);
+      setState(history[historyIdx + 1]);
     }
   };
 
@@ -685,7 +678,7 @@ export default function TokenPreviewSinglePtFrame({ state: externalState, onStat
     if (!isMobile) {
       if (kind === 'name' || kind === 'type' || kind === 'ability') setActiveTab('text');
       else if (kind === 'pt') setActiveTab('pt');
-      else if (kind === 'infoLeft' || kind === 'artist' || kind === 'copyright') setActiveTab('info');
+      else if (kind === 'infoLeft' || kind === 'artist' || kind === 'copyright') setActiveTab('settings');
       else if (kind === 'art') setActiveTab('art');
     }
     
@@ -925,8 +918,8 @@ export default function TokenPreviewSinglePtFrame({ state: externalState, onStat
     loadMyTokens();
   };
 
-  const Icon = ({ d, size = 22 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>
+  const Icon = ({ d }) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>
   );
 
   return (
@@ -1689,6 +1682,7 @@ export default function TokenPreviewSinglePtFrame({ state: externalState, onStat
             <label className="checkbox-label" style={{ fontSize: '0.8rem' }}>
               <input type="checkbox" checked={showGuides} onChange={e => setShowGuides(e.target.checked)} className="custom-checkbox"/> {t('common.guides')}
             </label>
+            )}
           </div>
 
           <div className="editor-canvas-container">
@@ -1754,7 +1748,7 @@ export default function TokenPreviewSinglePtFrame({ state: externalState, onStat
                       if (!isMobile) {
                         if(k==='name'||k==='type'||k==='ability') setActiveTab('text'); 
                         else if (k==='pt') setActiveTab('pt'); 
-                        else if (k==='infoLeft'||k==='artist'||k==='copyright') setActiveTab('info'); 
+                        else if (k==='infoLeft'||k==='artist'||k==='copyright') setActiveTab('settings'); 
                       }
                     }}
                     style={{ position: 'absolute', left: b.x * pScale, top: b.y * pScale, width: b.w * pScale, height: b.h * pScale, cursor: 'move' }} 
