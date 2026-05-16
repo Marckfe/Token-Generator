@@ -479,9 +479,7 @@ export default function TokenPreviewSinglePtFrame() {
   // ARTWORK & AI STATES
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
-  const [magicPrompt, setMagicPrompt] = useState("");
   const [toastMsg, setToastMsg] = useState(null);
-  const aiPromptRef = useRef(null);
 
   const showToast = (msg) => {
     setToastMsg(msg);
@@ -1103,7 +1101,7 @@ export default function TokenPreviewSinglePtFrame() {
                   <div className="property-section-title">
                     <Icon d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /> Generatore IA
                   </div>
-                  {!isEnhancing && aiPrompt.trim().length > 0 && (
+                  {!isEnhancing && (state.aiPrompt || "").trim().length > 0 && (
                     <button 
                       className="enhance-btn-pulse"
                       onClick={(e) => {
@@ -1140,7 +1138,7 @@ export default function TokenPreviewSinglePtFrame() {
                       <div className="flex flex-col gap-3">
                         <button 
                           onClick={handleAIGenerate}
-                          disabled={isGeneratingAI || !aiPrompt.trim() || isEnhancing}
+                          disabled={isGeneratingAI || !(state.aiPrompt || "").trim() || isEnhancing}
                           className={`btn w-full py-2.5 text-[10px] font-black uppercase tracking-widest ${isGeneratingAI ? 'bg-white/10 opacity-50' : 'btn-primary'}`}
                         >
                           {isGeneratingAI ? (
