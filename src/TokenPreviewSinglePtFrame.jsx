@@ -502,25 +502,31 @@ export default function TokenPreviewSinglePtFrame() {
         body: JSON.stringify({ prompt: currentVal })
       });
       
+      let finalPrompt = "";
       if (resp.ok) {
         const data = await resp.json();
         if (data.improvedPrompt) {
-          setAiPrompt(data.improvedPrompt);
+          finalPrompt = data.improvedPrompt;
           showToast("Ottimizzazione completata!");
-          setIsEnhancing(false);
-          return;
         }
       }
       
-      // Fallback
-      const enhanced = `${currentVal}, epic fantasy oil painting, mtg style illustration, highly detailed, cinematic lighting, dramatic composition, professional digital art, hyperrealistic textures, masterpiece.`;
-      setAiPrompt(enhanced);
-      showToast("Prompt arricchito con stile MTG");
+      if (!finalPrompt) {
+        finalPrompt = `${currentVal}, epic fantasy oil painting, mtg style illustration, highly detailed, cinematic lighting, dramatic composition, professional digital art, hyperrealistic textures, masterpiece.`;
+        showToast("Prompt arricchito con stile MTG");
+      }
+
+      // ULTIMATE FAIL-SAFE: Direct DOM manipulation + State
+      setAiPrompt(finalPrompt);
+      const el = document.getElementById('ai-prompt-input');
+      if (el) el.value = finalPrompt;
 
     } catch (e) {
       console.error("Enhance error:", e);
-      const enhanced = `${currentVal}, epic fantasy, mtg style, hyper-detailed.`;
-      setAiPrompt(enhanced);
+      const fallback = `${currentVal}, epic fantasy, mtg style, hyper-detailed.`;
+      setAiPrompt(fallback);
+      const el = document.getElementById('ai-prompt-input');
+      if (el) el.value = fallback;
       showToast("Prompt arricchito (fallback)");
     } finally {
       setIsEnhancing(false);
@@ -645,8 +651,8 @@ export default function TokenPreviewSinglePtFrame() {
       }
     } catch (err) { }
 
-    // Using Flux model and 1280x960 (4:3) for professional card ratio
-    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(ultraPrompt)}?width=1280&height=960&nologo=true&seed=${seed}&model=flux`;
+    // Using 1600x2240 (5:7 ratio) to match EXACT Magic Card proportions (63mm x 88mm)
+    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(ultraPrompt)}?width=1600&height=2240&nologo=true&seed=${seed}&model=flux&cache=${Date.now()}`;
     processNewArt(fallbackUrl);
   };
 
@@ -1120,6 +1126,7 @@ export default function TokenPreviewSinglePtFrame() {
                     <div className="px-4 py-3 flex flex-col gap-3">
                       <div className="relative">
                         <textarea 
+                          id="ai-prompt-input"
                           className="property-textarea" 
                           placeholder="Cosa vuoi creare? (es: Un cavaliere oscuro)..."
                           value={aiPrompt}
